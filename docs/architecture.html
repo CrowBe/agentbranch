@@ -251,7 +251,7 @@
           <div class="chev">›</div>
           <div class="step"><div class="k">Analyze</div><div class="v">read → artifact</div><div class="m">Analyzer&lt;A&gt;</div></div>
           <div class="chev">›</div>
-          <div class="step"><div class="k">Artifact</div><div class="v">structured + spans</div><div class="m">Artifact / SourceSpan</div></div>
+          <div class="step"><div class="k">Artifact</div><div class="v">structured + spans</div><div class="m">Artifact&lt;ArtifactKind&gt; / SourceSpan</div></div>
           <div class="chev">›</div>
           <div class="step"><div class="k">Render</div><div class="v">artifact → surface</div><div class="m">Renderer&lt;A, S&gt;</div></div>
           <div class="chev">›</div>
@@ -403,8 +403,17 @@
         <div class="pill-row">
           <span class="pill">Result&lt;T,E&gt; · ok/err</span>
           <span class="pill">branded ids (SkillId, UserId…)</span>
-          <span class="pill">DomainError · notConfigured</span>
+          <span class="pill">DomainError (closed union) · domainError · notConfigured</span>
+          <span class="pill">ArtifactKind (closed union)</span>
           <span class="pill">SseEvent · encodeSse</span>
+        </div>
+        <div class="note" style="margin-top:10px">
+          <b>DomainError</b> is a <b>closed discriminated union</b> — callers switch on <code>tag</code> exhaustively.
+          Known tags: <code>not_configured</code> · <code>not_found</code> · <code>persistence_failed</code> ·
+          <code>auth_failed</code> · <code>model_unavailable</code> · <code>seam_analyze_failed</code>.
+          Add a tag in <code>src/shared/errors.ts</code>; free strings are a compile error.<br><br>
+          <b>ArtifactKind</b> is likewise closed — <code>"hero" | "skill-ir" | "export" | "test-run" | "triggering-eval"</code>.
+          New capabilities add their kind here before writing the artifact type.
         </div>
       </div>
 

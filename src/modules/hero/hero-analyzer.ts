@@ -28,16 +28,24 @@ function splitSections(body: string, raw: string): DocSection[] {
   const lines = body.split("\n");
   const sections: DocSection[] = [];
   let current: { heading: string; level: number; lines: string[] } | null = null;
+  // Scan-forward cursor: advances past each located needle so duplicate headings
+  // resolve to their correct occurrence rather than always the first.
+  let cursor = 0;
 
   const flush = (): void => {
     if (!current) return;
     const text = current.lines.join("\n").trim();
-    const start = raw.indexOf(current.heading === "" ? text : current.heading);
+    // Anchor headed sections on the heading text; preamble sections on the body.
+    const needle = current.heading !== "" ? current.heading : text;
+    const idx = needle ? raw.indexOf(needle, cursor) : -1;
+    const start = idx >= 0 ? idx : cursor;
+    const end = start + (needle ? needle.length : 0);
+    if (idx >= 0) cursor = end;
     sections.push({
       heading: current.heading,
       level: current.level,
       body: text,
-      span: { start: Math.max(start, 0), end: Math.max(start, 0) + text.length },
+      span: { start, end },
     });
   };
 

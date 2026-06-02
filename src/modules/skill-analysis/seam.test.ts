@@ -4,7 +4,8 @@ import type { Artifact, Analyzer, Renderer } from "./seam.types";
 import { makeSkill, parseSkillMd, type Skill } from "@/modules/skill";
 import { ok, unwrap, SkillId, UserId } from "@/shared";
 
-type WordCount = Artifact<"word-count"> & { readonly count: number };
+/** Minimal probe artifact — uses "test-run" kind so the type is valid in the taxonomy. */
+type WordCount = Artifact<"test-run"> & { readonly count: number };
 
 function fixtureSkill(): Skill {
   const source = unwrap(
@@ -20,9 +21,9 @@ function fixtureSkill(): Skill {
 }
 
 const analyzer: Analyzer<WordCount> = {
-  kind: "word-count",
+  kind: "test-run",
   async analyze(skill) {
-    return ok({ kind: "word-count", count: skill.source.body.split(/\s+/).length });
+    return ok({ kind: "test-run", count: skill.source.body.split(/\s+/).length });
   },
 };
 

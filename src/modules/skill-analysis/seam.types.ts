@@ -9,8 +9,20 @@ import type { Result, DomainError } from "@/shared";
  */
 export type SourceSpan = { readonly start: number; readonly end: number };
 
+/**
+ * Closed set of artifact kinds — one per capability on the seam. Adding a new
+ * capability means adding its kind here first; free-string kinds are not
+ * permitted so the compiler catches mismatched analyzer/renderer pairs.
+ */
+export type ArtifactKind =
+  | "hero"
+  | "skill-ir"
+  | "export"
+  | "test-run"
+  | "triggering-eval";
+
 /** The structured thing an analyzer emits. `kind` discriminates artifact types. */
-export type Artifact<Kind extends string = string> = { readonly kind: Kind };
+export type Artifact<K extends ArtifactKind = ArtifactKind> = { readonly kind: K };
 
 /**
  * Step one of the seam: read a skill → emit a structured artifact.
