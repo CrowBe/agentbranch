@@ -7,6 +7,7 @@
  * and Triggering eval are all Capabilities on this seam.
  */
 export type {
+  ArtifactKind,
   SourceSpan,
   Artifact,
   Analyzer,

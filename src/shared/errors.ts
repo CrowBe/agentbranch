@@ -1,27 +1,32 @@
 /**
- * Tagged domain errors. Each module narrows these into its own union; the
- * `tag` is the discriminant a caller switches on.
+ * All domain error kinds in one closed discriminated union. `tag` is the
+ * discriminant — callers switch on it exhaustively. New tags must be added here;
+ * free-string tags are not permitted so the compiler catches invalid usages.
+ *
+ * Add a member when a genuinely new failure kind is needed. Don't add one for
+ * every module — most failures map to an existing kind.
  */
-export type DomainError<Tag extends string = string> = {
-  readonly tag: Tag;
-  readonly message: string;
-  readonly cause?: unknown;
-};
+export type DomainError =
+  | { readonly tag: "not_configured";      readonly message: string; readonly cause?: unknown }
+  | { readonly tag: "not_found";           readonly message: string; readonly cause?: unknown }
+  | { readonly tag: "persistence_failed";  readonly message: string; readonly cause?: unknown }
+  | { readonly tag: "auth_failed";         readonly message: string; readonly cause?: unknown }
+  | { readonly tag: "model_unavailable";   readonly message: string; readonly cause?: unknown }
+  | { readonly tag: "seam_analyze_failed"; readonly message: string; readonly cause?: unknown };
 
-export function domainError<Tag extends string>(
-  tag: Tag,
+/** Construct a domain error. `tag` must be one of the known kinds above. */
+export function domainError(
+  tag: DomainError["tag"],
   message: string,
   cause?: unknown,
-): DomainError<Tag> {
+): DomainError {
   return { tag, message, cause };
 }
 
 /** Raised when an adapter is asked to act but the backing service is unconfigured. */
-export type NotConfiguredError = DomainError<"not_configured">;
-
-export function notConfigured(service: string): NotConfiguredError {
-  return domainError(
-    "not_configured",
-    `${service} is not configured. Add the relevant secret to .env.local.`,
-  );
+export function notConfigured(service: string): DomainError {
+  return {
+    tag: "not_configured",
+    message: `${service} is not configured. Add the relevant secret to .env.local.`,
+  };
 }
