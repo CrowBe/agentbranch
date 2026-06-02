@@ -34,10 +34,36 @@ Note: SkillBuilder authors / validates / exports skills — it does **not *deplo
 
 Bridge audience: technical builders **and** non-technical SMB owners. Identity is **warm-pro** — one approachable-but-credible system, not a fork. UI copy is sentence-case, plain language. **Terms must clear the least-technical user**, not the most — avoid jargon (sandbox, harness, registry, interceptor) in anything user-facing.
 
-## Stack (planned)
+## Stack
 
-Next.js (App Router) + TypeScript · Postgres (Prisma/Drizzle) · Clerk auth (Google+GitHub) · Vercel AI SDK · SSE streaming · Vercel + Neon/Supabase. The build loop lives in a route handler that owns the Anthropic key — it never touches the client.
+Next.js 16 (App Router) + TypeScript · **Postgres via Prisma 7** (driver-adapter `@prisma/adapter-pg`; config in `prisma.config.ts`) · **Clerk** auth (Google+GitHub) · **Vercel AI SDK** (`ai` + `@ai-sdk/anthropic`, default Claude models — never the Anthropic SDK directly) · SSE streaming · **Tailwind v4** (design tokens as CSS vars in `src/app/globals.css`) · Vitest. The build loop lives in `src/app/api/build/route.ts`, which owns the Anthropic key — it never touches the client.
+
+Package manager is **pnpm**. The app boots without any secrets: missing `DATABASE_URL` / Clerk keys / `ANTHROPIC_API_KEY` degrade to in-memory + stub adapters (see `src/server/container.ts`), so the shell runs offline.
+
+## Commands
+
+- `pnpm dev` — run the app · `pnpm build` · `pnpm start`
+- `pnpm test` (Vitest, run once) · `pnpm test:watch`
+- `pnpm typecheck` (tsc) · `pnpm lint` (eslint)
+- `pnpm db:generate` · `pnpm db:push` · `pnpm db:migrate` (Prisma; needs `DATABASE_URL`)
+
+Copy `.env.example` → `.env.local` and fill in to switch from stubs to real services.
+
+## Architecture map (DDD / deep modules)
+
+Hexagonal: pure **domain modules** depend on ports (interfaces); **infra** supplies adapters; a **composition root** wires them. Cross-module imports go through each module's `index.ts` barrel only — never deep paths.
+
+- `src/shared/` — kernel: `Result`, branded ids, `DomainError`, SSE envelope.
+- `src/modules/<domain>/` — the domain. Each is a deep module with an `index.ts` public surface + co-located tests:
+  - `skill` (the aggregate + lossless `SKILL.md` parse/serialize), `skill-analysis` (**the seam** — `defineCapability`/`runCapability`), `hero` (Rendered+Source renderers), `visualise` (skill IR → Mermaid), `test-run` (mock-tool registry + `execute_skill`), `triggering-eval`, `export` (Claude `.zip` manifest), `portability` (stub engine), `build-loop` (AI SDK + tools, `ModelProvider` port), `usage` (meter + tier caps), `auth` (`AuthPort`).
+- `src/infra/` — adapters: `prisma/`, `memory/` (offline default), `ai/` (Anthropic + stub providers), `clerk/` (real + stub auth).
+- `src/server/` — `config.ts` (env→flags), `container.ts` (composition root), `build-stream.ts` (loop→SSE).
+- `src/app/` — App Router presentation; `src/components/` — the shell (top bar, rail, hero, panel) dressed per `DESIGN.md`.
+
+New capability? It's almost always a **renderer on the skill-analysis seam** (`defineCapability`), not a new pipeline. New external service? A **port in the domain module + adapter in infra**, wired in `container.ts`.
+
+Most logic is real where it's pure and load-bearing (SKILL.md, the seam, usage caps, hero/visualise/export renderers); IO/model-driven bits (IR extraction, test-run/eval execution, portability) are **stubbed behind their real interfaces** — marked `STUB` in-file. Next step is iterating on this structure, then filling stubs to MVP.
 
 ## Keep this file accurate
 
-This file's framing assumes the repo is pre-implementation. **As we scaffold and build, update it to match reality** — drop "(planned)", add real run/test/build commands and setup steps, point at actual entrypoints. The README is present-tense product framing on purpose; this file must stay honest about repo state so an agent doesn't run commands that don't exist yet.
+**As we build, keep this matching reality** — update commands, entrypoints, and which modules are still stubbed vs. real. The README is present-tense product framing on purpose; this file must stay honest about repo state.

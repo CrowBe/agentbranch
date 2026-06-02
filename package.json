@@ -1,0 +1,70 @@
+{
+  "name": "skillbuilder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Build and test Claude Skills — author, visualise, test-run, validate triggering, and export.",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev"
+  },
+  "prisma": {
+    "schema": "prisma/schema.prisma"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "esbuild",
+      "@tailwindcss/oxide",
+      "@clerk/shared",
+      "unrs-resolver",
+      "sharp"
+    ]
+  },
+  "packageManager": "pnpm@10.33.0",
+  "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.81",
+    "@clerk/nextjs": "^7.4.2",
+    "@prisma/client": "^7.8.0",
+    "ai": "^6.0.194",
+    "next": "^16.2.7",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "server-only": "^0.0.1",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
+    "@tailwindcss/postcss": "^4.3.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^25.9.1",
+    "@types/pg": "^8.20.0",
+    "@types/react": "^19.2.16",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "@vitest/coverage-v8": "^4.1.8",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.7",
+    "jsdom": "^29.1.1",
+    "pg": "^8.21.0",
+    "postcss": "^8.5.15",
+    "prisma": "^7.8.0",
+    "tailwindcss": "^4.3.0",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  }
+}
