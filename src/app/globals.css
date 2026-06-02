@@ -1,0 +1,142 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   SkillBuilder design tokens — DESIGN.md.
+   Semantic role names are identical across themes; only the colour layer
+   swaps. Light is the default (the welcoming face); dark is a power-user
+   preference set via [data-theme="dark"].
+   --------------------------------------------------------------------------- */
+
+:root {
+  /* §4.1 Light theme — DEFAULT */
+  --background: #fbfbfd;
+  --surface: #ffffff;
+  --surface-high: #f1f3f9;
+  --on-surface: #141a24;
+  --on-surface-variant: #4b5366;
+  --outline: #737686;
+  --outline-variant: #dcdfe8;
+  --primary: #004ac6;
+  --on-primary: #ffffff;
+  --secondary: #006a61;
+  --on-secondary: #ffffff;
+  --tertiary: #b8730a;
+  --on-tertiary: #ffffff;
+  --error: #ba1a1a;
+  --on-error: #ffffff;
+  --overlay-shadow: 0 8px 24px rgba(11, 28, 48, 0.12);
+}
+
+[data-theme="dark"] {
+  /* §4.2 Dark theme — power-user option */
+  --background: #0f172a;
+  --surface: #1e293b;
+  --surface-high: #222a3d;
+  --on-surface: #dae2fd;
+  --on-surface-variant: #94a3b8;
+  --outline: #475569;
+  --outline-variant: #334155;
+  --primary: #2563eb;
+  --on-primary: #ffffff;
+  --secondary: #0d9488;
+  --on-secondary: #ffffff;
+  --tertiary: #f59e0b;
+  --on-tertiary: #0f172a;
+  --error: #ef4444;
+  --on-error: #ffffff;
+  --overlay-shadow: 0 10px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* Expose tokens to Tailwind's utility generator (§3 structural tokens). */
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-high: var(--surface-high);
+  --color-on-surface: var(--on-surface);
+  --color-on-surface-variant: var(--on-surface-variant);
+  --color-outline: var(--outline);
+  --color-outline-variant: var(--outline-variant);
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+  --color-secondary: var(--secondary);
+  --color-on-secondary: var(--on-secondary);
+  --color-tertiary: var(--tertiary);
+  --color-on-tertiary: var(--on-tertiary);
+  --color-error: var(--error);
+  --color-on-error: var(--on-error);
+
+  /* §3.1 Type families (wired to next/font CSS variables in layout.tsx) */
+  --font-display: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+
+  /* §3.4 Layout tokens (mapped to ARCHITECTURE §7) */
+  --spacing-topbar: 48px;
+  --spacing-rail: 56px;
+  --spacing-menu: 240px;
+  --spacing-panel: 300px;
+
+  /* §3.5 Radius */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--on-surface);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* §3.2 Type scale — the handful the shell uses. */
+.text-display-lg {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 48px;
+  line-height: 56px;
+  letter-spacing: -0.02em;
+}
+.text-headline-md {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 24px;
+  line-height: 32px;
+}
+.text-doc-rendered-h {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 28px;
+  letter-spacing: -0.01em;
+}
+.text-doc-rendered {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 26px;
+}
+.text-doc-source {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 22px;
+}
+.text-label {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 16px;
+  letter-spacing: 0.02em;
+}
+
+/* §3.6 Elevation — flat by default; shadow is overlay-only. */
+.elevation-overlay {
+  box-shadow: var(--overlay-shadow);
+}

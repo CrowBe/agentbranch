@@ -1,0 +1,109 @@
+// SkillBuilder data model — mirrors docs/ARCHITECTURE.md §6.
+// The schema is *export-agnostic*: export shapes are rendered from the skill
+// record, never stored. Persistence adapters live in src/infra/prisma.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// Identity, sourced from Clerk (Google / GitHub OAuth).
+model User {
+  id        String   @id // Clerk user id
+  email     String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  skills   Skill[]
+  usage    Usage?
+  testRuns TestRun[]
+  evalRuns EvalRun[]
+
+  @@map("users")
+}
+
+/// The persisted skill. Exports are rendered from this record.
+model Skill {
+  id              String   @id @default(cuid())
+  userId          String   @map("user_id")
+  name            String
+  description     String
+  body            String   @db.Text // the markdown body of SKILL.md
+  frontmatterJson Json     @map("frontmatter_json")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  versions SkillVersion[]
+  testRuns TestRun[]
+  evalRuns EvalRun[]
+
+  @@index([userId])
+  @@map("skills")
+}
+
+/// Append-only revisions of a skill. An export is a pure function of a
+/// version; this also enables future regression evals.
+model SkillVersion {
+  id              String   @id @default(cuid())
+  skillId         String   @map("skill_id")
+  revision        Int // monotonically increasing per skill
+  name            String
+  description     String
+  body            String   @db.Text
+  frontmatterJson Json     @map("frontmatter_json")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([skillId, revision])
+  @@map("skill_versions")
+}
+
+/// Per-user token + turn counters. Drives caps now; PAYG metering later.
+model Usage {
+  userId      String   @id @map("user_id")
+  tokensUsed  Int      @default(0) @map("tokens_used")
+  turnsUsed   Int      @default(0) @map("turns_used")
+  periodStart DateTime @default(now()) @map("period_start")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("usage")
+}
+
+/// Recorded triggering-eval results: did the skill fire on the right prompts?
+model EvalRun {
+  id        String   @id @default(cuid())
+  skillId   String   @map("skill_id")
+  userId    String   @map("user_id")
+  status    String // queued | running | passed | failed
+  resultJson Json    @map("result_json")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([skillId])
+  @@map("eval_runs")
+}
+
+/// Recorded test-run results: skill executed against the mock-tool registry.
+model TestRun {
+  id          String   @id @default(cuid())
+  skillId     String   @map("skill_id")
+  userId      String   @map("user_id")
+  status      String // queued | running | completed | failed
+  scenarioJson Json    @map("scenario_json")
+  transcriptJson Json  @map("transcript_json")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([skillId])
+  @@map("test_runs")
+}
