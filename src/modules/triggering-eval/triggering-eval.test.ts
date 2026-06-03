@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { runTriggeringEval, buildPromptBattery } from "./index";
 import { makeSkill, parseSkillMd, type Skill } from "@/modules/skill";
-import { unwrap, SkillId, UserId } from "@/shared";
+import type { ModelGateway } from "@/modules/model-gateway";
+import { ok, unwrap, SkillId, UserId } from "@/shared";
 
 function skillFor(description: string): Skill {
   const source = unwrap(parseSkillMd(`---\nname: t\ndescription: ${description}\n---\nbody`));
@@ -14,6 +15,32 @@ function skillFor(description: string): Skill {
   });
 }
 
+/**
+ * A deterministic fake gateway: selects the candidate (the first choice, which
+ * runTriggeringEval builds as the skill's own label) when the prompt shares a
+ * keyword with it, else null. Stands in for the model so the eval is testable
+ * offline — exercises the evaluator's *method*, not the model.
+ */
+function fakeGateway(): ModelGateway {
+  return {
+    hasModel: true,
+    async classify({ prompt, choices }) {
+      const candidate = choices[0] ?? "";
+      const words = new Set(candidate.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 4));
+      const fires = prompt
+        .toLowerCase()
+        .split(/[^a-z]+/)
+        .some((w) => words.has(w));
+      return ok({ choice: fires ? candidate : null, rationale: "probe" });
+    },
+    async runAgent() {
+      return ok({ transcript: [] });
+    },
+  };
+}
+
+const TAG = { kind: "account" as const, userId: UserId("u1") };
+
 describe("triggering eval", () => {
   it("builds a battery with both positive and negative cases", () => {
     const battery = buildPromptBattery(skillFor("Schedule meetings on the calendar."));
@@ -21,12 +48,26 @@ describe("triggering eval", () => {
     expect(battery.some((c) => c.expected === "silent")).toBe(true);
   });
 
-  it("returns a pass/fail result over every case", async () => {
-    const result = unwrap(await runTriggeringEval(skillFor("Schedule meetings on the calendar.")));
+  it("returns a pass/fail artifact over every case, composed via classify", async () => {
+    const result = unwrap(
+      await runTriggeringEval(skillFor("Schedule meetings on the calendar."), fakeGateway(), TAG),
+    );
+    expect(result.kind).toBe("triggering-eval");
     expect(result.cases).toHaveLength(4);
     expect(typeof result.passed).toBe("boolean");
     for (const c of result.cases) {
       expect(["fire", "silent"]).toContain(c.actual);
+      expect(typeof c.rationale).toBe("string");
     }
+  });
+
+  it("fires on a matching prompt and stays silent on an unrelated one", async () => {
+    const result = unwrap(
+      await runTriggeringEval(skillFor("Schedule meetings on the calendar."), fakeGateway(), TAG),
+    );
+    const positives = result.cases.filter((c) => c.expected === "fire");
+    const negatives = result.cases.filter((c) => c.expected === "silent");
+    expect(positives.every((c) => c.actual === "fire")).toBe(true);
+    expect(negatives.every((c) => c.actual === "silent")).toBe(true);
   });
 });

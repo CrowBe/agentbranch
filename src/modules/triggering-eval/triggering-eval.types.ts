@@ -1,4 +1,5 @@
 import type { Skill } from "@/modules/skill";
+import type { Artifact } from "@/modules/skill-analysis";
 import type { EvalRunId, UserId } from "@/shared";
 
 /** A skill the user's skill competes against for selection (ARCHITECTURE §4). */
@@ -17,11 +18,18 @@ export type PromptCase = {
 export type CaseResult = PromptCase & {
   readonly actual: "fire" | "silent";
   readonly pass: boolean;
+  /** The model's stated reason for this selection (from `classify`). */
+  readonly rationale: string;
 };
 
 export type EvalStatus = "queued" | "running" | "passed" | "failed";
 
-export type TriggeringResult = {
+/**
+ * The triggering eval's **evaluation result** — the run-record Artifact on the
+ * seam (CONTEXT.md → Evaluation result). Ephemeral; renders to Insights (step
+ * d). Distinct from the persisted `EvalRun` record below (split is step e).
+ */
+export type TriggeringResult = Artifact<"triggering-eval"> & {
   readonly cases: readonly CaseResult[];
   readonly passed: boolean;
 };

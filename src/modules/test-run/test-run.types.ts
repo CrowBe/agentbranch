@@ -1,4 +1,5 @@
 import type { Skill } from "@/modules/skill";
+import type { Artifact } from "@/modules/skill-analysis";
 import type { TestRunId, UserId } from "@/shared";
 
 /**
@@ -30,6 +31,17 @@ export type TranscriptStep =
   | { readonly kind: "model"; readonly text: string }
   | { readonly kind: "tool-call"; readonly tool: string; readonly input: unknown }
   | { readonly kind: "tool-result"; readonly tool: string; readonly output: unknown };
+
+/**
+ * The test run's **evaluation result** — the run-record Artifact on the seam
+ * (CONTEXT.md → Evaluation result). The transcript of what the skill did against
+ * the mock-tool registry. Ephemeral; renders to Insights (step d). Distinct from
+ * the persisted `TestRun` record below (split is step e).
+ */
+export type TestRunResult = Artifact<"test-run"> & {
+  readonly scenario: Scenario;
+  readonly transcript: readonly TranscriptStep[];
+};
 
 export type TestRunStatus = "queued" | "running" | "completed" | "failed";
 
