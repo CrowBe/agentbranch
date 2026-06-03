@@ -1,30 +1,53 @@
 import type { Skill } from "@/modules/skill";
-import { mapResult, type Result, type DomainError } from "@/shared";
-import type { Artifact, Analyzer, Renderer, Capability } from "./seam.types";
+import { mapResult, err, domainError, type Result, type DomainError } from "@/shared";
+import type {
+  Artifact,
+  Analyzer,
+  Evaluator,
+  Renderer,
+  EvaluationHarness,
+  AnalysisCapability,
+  EvaluationCapability,
+  Capability,
+} from "./seam.types";
 
 /**
- * Define a capability — the single place features compose an analyzer with its
- * renderers. Keeps the seam's shape honest: a feature is "an analyzer + named
- * renderers", nothing more.
+ * Define an ANALYSIS capability — an analyzer composed with its renderers.
+ * Keeps the seam's shape honest: a feature is "an analyzer + named renderers".
  */
 export function defineCapability<
   A extends Artifact,
   Surfaces extends Record<string, unknown>,
->(capability: Capability<A, Surfaces>): Capability<A, Surfaces> {
-  return capability;
+>(
+  capability: Omit<AnalysisCapability<A, Surfaces>, "mode">,
+): AnalysisCapability<A, Surfaces> {
+  return { mode: "analysis", ...capability };
 }
 
 /**
- * Run the seam end-to-end: skill → artifact (analyze) → surface (render).
- * This is *the pipeline*, built once. Features never re-implement it — they
- * pick a capability and a surface and call here.
+ * Define an EVALUATION capability — an evaluator composed with its renderers
+ * (the default surface is Insights). The evaluator owns its method; the harness
+ * (model + meter) is handed in at run time via `runEvaluation`.
+ */
+export function defineEvaluation<
+  A extends Artifact,
+  Surfaces extends Record<string, unknown>,
+>(
+  capability: Omit<EvaluationCapability<A, Surfaces>, "mode">,
+): EvaluationCapability<A, Surfaces> {
+  return { mode: "evaluation", ...capability };
+}
+
+/**
+ * Run an ANALYSIS capability end-to-end: skill → artifact (analyze) → surface
+ * (render). The static pipeline, built once. Runs offline — no harness needed.
  */
 export async function runCapability<
   A extends Artifact,
   Surfaces extends Record<string, unknown>,
   K extends keyof Surfaces,
 >(
-  capability: Capability<A, Surfaces>,
+  capability: AnalysisCapability<A, Surfaces>,
   surface: K,
   skill: Skill,
 ): Promise<Result<Surfaces[K], DomainError>> {
@@ -32,4 +55,40 @@ export async function runCapability<
   return mapResult(artifact, (a) => capability.renderers[surface].render(a));
 }
 
-export type { Artifact, Analyzer, Renderer, Capability };
+/**
+ * Run an EVALUATION capability end-to-end: skill → evaluation result (evaluate)
+ * → surface (render). The dynamic pipeline. Guards `model_unavailable` *here*,
+ * once — so no evaluator re-checks for a model; offline degrades gracefully.
+ */
+export async function runEvaluation<
+  A extends Artifact,
+  Surfaces extends Record<string, unknown>,
+  K extends keyof Surfaces,
+>(
+  capability: EvaluationCapability<A, Surfaces>,
+  surface: K,
+  skill: Skill,
+  harness: EvaluationHarness,
+): Promise<Result<Surfaces[K], DomainError>> {
+  if (!harness.hasModel) {
+    return err(
+      domainError(
+        "model_unavailable",
+        `"${capability.name}" needs a model connection to run. Test runs and triggering evals are unavailable offline.`,
+      ),
+    );
+  }
+  const result = await capability.evaluator.evaluate(skill, harness);
+  return mapResult(result, (a) => capability.renderers[surface].render(a));
+}
+
+export type {
+  Artifact,
+  Analyzer,
+  Evaluator,
+  Renderer,
+  EvaluationHarness,
+  AnalysisCapability,
+  EvaluationCapability,
+  Capability,
+};
