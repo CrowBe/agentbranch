@@ -1,0 +1,6 @@
+# Supply-chain hardening: refuse any package version published less than
+# `minimumReleaseAge` minutes ago. A compromised release is usually yanked or
+# flagged within this window before pnpm will install it. Value is in minutes.
+# Lockfile-pinned installs still resolve as-is; this bites when resolving NEW
+# versions (updates, fresh adds).
+minimumReleaseAge: 4320 # 3 days

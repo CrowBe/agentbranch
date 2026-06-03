@@ -35,7 +35,12 @@ One term per concept. Use these names everywhere — in docs, code, and UI copy.
 | **`SKILL.md`** | The skill's source file: YAML frontmatter (`name`, `description`) + markdown body (instructions, workflow, rules). |
 | **Skill record** | The persisted skill in our DB (see [§6](#6-data-model-sketch)). Exports are rendered *from* it. |
 | **Build loop** | The core agentic loop: Claude (via Vercel AI SDK) writes/edits the `SKILL.md` through the `write_skill`/`edit_skill` tools, streaming to the preview. |
-| **Skill-analysis seam** | The architectural spine. The shared pattern **read skill → emit a structured artifact → render it for a surface**. Built once; each feature is a new *renderer* on it, not a new pipeline. Distinct from the skill IR (below): the seam is the pattern, the IR is one artifact type on it. |
+| **Skill-analysis seam** | The architectural spine. The shared pattern **read skill → emit a structured artifact → render it for a surface**. Built once; each feature is a new *renderer* on it, not a new pipeline. Carries **two capability shapes** (below). Distinct from the skill IR: the seam is the pattern, the IR is one artifact type on it. |
+| **Analysis capability** | A *static* capability on the seam — derives a structured view from the skill's **text alone**. Pure, runs offline. Wraps an `Analyzer` (`analyze(skill)`). The Rendered/Source hero, Visualise and Export are analysis capabilities. |
+| **Evaluation capability** | A *dynamic* capability on the seam — **runs the skill through a model** and observes behaviour. Costs tokens, needs a model (fails `model_unavailable` offline). Wraps an `Evaluator` (`evaluate(skill, harness)`) that **owns its method, not its resources**: it builds its own conditions (Scenario / distractors / battery) but the model + meter are handed in via the **evaluation harness**. Test run and Triggering eval are evaluation capabilities. |
+| **Evaluation result** | The artifact an evaluation capability emits — the structured run-record. Ephemeral; **never shown raw**. Renders to **Insights** (and a detailed breakdown on demand). Distinct from the persisted **evaluation record** ([§6](#6-data-model-sketch)): the result is rendered now, the record is stored and re-rendered later. |
+| **Insights** | The default, plain-language rendered surface of an evaluation result — meaning the user can act on, not a data wall. The audience bridge ([§1](#1-product-thesis)) lives in the *renderer*; a detailed breakdown sits behind it for depth (same Rendered/Source duality as the hero). |
+| **Evaluation harness** | The thin port handed to an evaluator — wraps the model provider + the usage meter, exposing intent-level ops ("would this skill be selected for this prompt?") rather than the raw model, so AI-SDK plumbing and token metering stay in one adapter. |
 | **Skill IR** | *One specific* artifact type on the seam: visualise's intermediate representation — nodes + edges, each carrying a **source-span** back into `SKILL.md`. A visualise concept, not the whole seam. |
 | **Test run** | User-facing term for executing a skill against **mocked** tools to see how it behaves. The mechanism is the **mock-tool registry**; the agent tool is **`execute_skill`**. Nothing real is ever touched. (Always "test run" in user copy — never "sandbox": jargon that intimidates rather than informs.) |
 | **Mock-tool registry** | The mechanism behind a test run: when the skill calls a tool (e.g. "fetch unread email"), the registry returns generated mock data instead. The skill runs end-to-end against fake tools, so the user sees its behaviour without anything real happening. No code execution or containers — skills are instruction-only, so there's nothing to containerise. |
@@ -70,12 +75,20 @@ Browser (React)  ──SSE──▶  Next.js route handler (owns API key)
 
 Several capabilities are the **same shape**: *read the skill → emit a structured artifact → render it for a surface*. Build the seam once; each feature plugs in and gets richer by swapping the **renderer**, not the pipeline.
 
-| Capability | Extract | Render (v1) | Render (later) |
-|---|---|---|---|
-| **Rendered hero** | frontmatter + body | friendly structured document (sans-serif) | richer doc layout / inline editing |
-| **Visualise** | skill IR (nodes+edges+source-spans) | Mermaid | interactive canvas (React Flow) |
-| **Cross-primitive export** | instruction intent (via portability transform) | — (deferred) | Gem/GPT packages + import guides |
-| **Triggering eval** | trigger surface | pass/fail | scored / workflow / regression |
+The seam carries **two capability shapes** — same `artifact → render` tail, different head:
+
+- **Analysis** (static) — derives an artifact from the skill's **text alone**. Pure, runs offline. Wraps an `Analyzer` (`analyze(skill)`). Its artifact is *recomputed on demand*, never persisted. Rendered hero, Source view, Visualise, Export.
+- **Evaluation** (dynamic) — produces an artifact by **running the skill through a model**. Needs a model (fails `model_unavailable` offline), costs tokens. Wraps an `Evaluator` (`evaluate(skill, harness)`) that **owns its method, not its resources** — it builds its own conditions but is handed the **evaluation harness** (model + meter). Its artifact (an **evaluation result**) is *persisted* as an evaluation record and renders to **Insights**. Test run, Triggering eval.
+
+> The split is named so a new capability is classified **before** it's built: "is this analysis or evaluation?" decides whether it gets an `Analyzer` or an `Evaluator`, runs offline or needs the harness, recomputes or persists. The seam stays one spine; the two heads keep the model dependency and token cost out of the pure analysis surfaces.
+
+| Capability | Shape | Extract / run | Render (v1) | Render (later) |
+|---|---|---|---|---|
+| **Rendered hero** | analysis | frontmatter + body | friendly structured document (sans-serif) | richer doc layout / inline editing |
+| **Visualise** | analysis | skill IR (nodes+edges+source-spans) | Mermaid | interactive canvas (React Flow) |
+| **Cross-primitive export** | analysis | instruction intent (via portability transform) | — (deferred) | Gem/GPT packages + import guides |
+| **Test run** | evaluation | run skill vs. mock-tool registry → result | **Insights** (+ transcript on demand) | richer scenarios / multi-run |
+| **Triggering eval** | evaluation | run skill vs. distractors + battery → result | **Insights** (+ pass/fail breakdown) | scored / workflow / regression |
 
 This is what "build it flexible" means here: a **clean seam**, not a speculative v2 abstraction.
 
