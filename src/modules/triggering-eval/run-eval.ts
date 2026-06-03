@@ -1,36 +1,47 @@
 import type { Skill } from "@/modules/skill";
-import { skillDescription } from "@/modules/skill";
-import { ok, type Result, type DomainError } from "@/shared";
+import { skillName, skillDescription } from "@/modules/skill";
+import type { ModelGateway, AccountingTag } from "@/modules/model-gateway";
+import { ok, isErr, type Result, type DomainError } from "@/shared";
 import { buildPromptBattery } from "./prompt-battery";
+import { distractorLibrary } from "./distractor-library";
 import type { CaseResult, TriggeringResult } from "./triggering-eval.types";
 
 /**
  * Run the triggering eval: does the skill fire on the right prompts and stay
  * silent on the wrong ones? (ARCHITECTURE §4) — the cheapest eval, no judge model.
  *
- * STUB: v1 runs competitive selection of the skill against the distractor
- * library via the model. Here a naive keyword-overlap heuristic stands in so
- * the surface returns a real pass/fail shape offline. The model-backed selector
- * replaces `predictsFire` without changing the result contract.
+ * Method (the evaluator owns this): build the prompt battery + the competitive
+ * field (candidate skill vs. the distractor library), then for each case ask the
+ * gateway's `classify` primitive *which* skill the prompt selects. The candidate
+ * "fires" iff it wins; selecting a distractor or nothing = "silent". The gateway
+ * is pure resource — this composes the eval from one primitive.
  */
 export async function runTriggeringEval(
   skill: Skill,
+  gateway: ModelGateway,
+  tag: AccountingTag,
 ): Promise<Result<TriggeringResult, DomainError>> {
   const battery = buildPromptBattery(skill);
-  const description = skillDescription(skill).toLowerCase();
+  const candidate = candidateLabel(skill);
+  const choices = [candidate, ...distractorLibrary.map((d) => `${d.name}: ${d.description}`)];
 
-  const cases: CaseResult[] = battery.map((c) => {
-    const actual = predictsFire(c.prompt, description) ? "fire" : "silent";
-    return { ...c, actual, pass: actual === c.expected };
+  const cases: CaseResult[] = [];
+  for (const c of battery) {
+    const selected = await gateway.classify({ prompt: c.prompt, choices, tag });
+    if (isErr(selected)) return selected;
+    const actual = selected.value.choice === candidate ? "fire" : "silent";
+    cases.push({ ...c, actual, pass: actual === c.expected, rationale: selected.value.rationale });
+  }
+
+  return ok({
+    kind: "triggering-eval",
+    cases,
+    passed: cases.every((c) => c.pass),
   });
-
-  return ok({ cases, passed: cases.every((c) => c.pass) });
 }
 
-function predictsFire(prompt: string, description: string): boolean {
-  const words = new Set(description.split(/[^a-z]+/).filter((w) => w.length > 4));
-  return prompt
-    .toLowerCase()
-    .split(/[^a-z]+/)
-    .some((w) => words.has(w));
+/** The candidate's choice label — name + description, so the model can tell it
+ *  apart from the distractors (which use the same shape). */
+function candidateLabel(skill: Skill): string {
+  return `${skillName(skill)}: ${skillDescription(skill)}`;
 }

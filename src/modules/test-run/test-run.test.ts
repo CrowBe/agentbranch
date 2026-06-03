@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { executeSkill, defaultMockToolRegistry } from "./index";
 import { makeSkill, parseSkillMd, type Skill } from "@/modules/skill";
-import { unwrap, SkillId, UserId } from "@/shared";
+import type { ModelGateway, AgentStep } from "@/modules/model-gateway";
+import { ok, unwrap, SkillId, UserId } from "@/shared";
 
 function fixtureSkill(): Skill {
   const source = unwrap(parseSkillMd(`---\nname: t\ndescription: d\n---\nbody`));
@@ -14,21 +15,62 @@ function fixtureSkill(): Skill {
   });
 }
 
+/**
+ * A fake gateway whose `runAgent` drives the loop the way the real one does:
+ * it invokes each supplied tool handler once and records the calls/results into
+ * a transcript. This exercises the evaluator's *method* (mocks-as-handlers,
+ * nothing real touched) without a model.
+ */
+function fakeGateway(): ModelGateway {
+  return {
+    hasModel: true,
+    async classify() {
+      return ok({ choice: null, rationale: "n/a" });
+    },
+    async runAgent({ messages, tools }) {
+      const transcript: AgentStep[] = [
+        { kind: "model", text: `Reading: ${messages[0]?.content ?? ""}` },
+      ];
+      for (const t of tools) {
+        const output = await t.handler({});
+        transcript.push({ kind: "tool-call", tool: t.name, input: {} });
+        transcript.push({ kind: "tool-result", tool: t.name, output });
+      }
+      transcript.push({ kind: "model", text: "Done. Nothing real was touched." });
+      return ok({ transcript });
+    },
+  };
+}
+
+const TAG = { kind: "account" as const, userId: UserId("u1") };
+
 describe("test run", () => {
-  it("produces a transcript that calls each mock tool and touches nothing real", async () => {
-    const registry = defaultMockToolRegistry();
-    const transcript = unwrap(
+  it("produces a test-run artifact whose transcript calls each mock tool", async () => {
+    const result = unwrap(
       await executeSkill({
         skill: fixtureSkill(),
-        scenario: { prompt: "Clear my inbox", seedData: {} },
-        registry,
+        gateway: fakeGateway(),
+        tag: TAG,
+        registry: defaultMockToolRegistry(),
       }),
     );
-    expect(transcript.some((s) => s.kind === "tool-call" && s.tool === "read_email")).toBe(true);
-    expect(transcript.some((s) => s.kind === "tool-result")).toBe(true);
-    expect(transcript.at(-1)).toEqual({
-      kind: "model",
-      text: "Drafted a response. Nothing real was touched.",
-    });
+    expect(result.kind).toBe("test-run");
+    expect(
+      result.transcript.some((s) => s.kind === "tool-call" && s.tool === "read_email"),
+    ).toBe(true);
+    expect(result.transcript.some((s) => s.kind === "tool-result")).toBe(true);
+  });
+
+  it("builds its own world when no scenario/registry is supplied", async () => {
+    const result = unwrap(
+      await executeSkill({ skill: fixtureSkill(), gateway: fakeGateway(), tag: TAG }),
+    );
+    expect(result.kind).toBe("test-run");
+    // The evaluator's default scenario mentions the skill by name.
+    expect(result.scenario.prompt).toContain("skill");
+    // Default registry is the email mock, so its call shows up.
+    expect(
+      result.transcript.some((s) => s.kind === "tool-call" && s.tool === "read_email"),
+    ).toBe(true);
   });
 });

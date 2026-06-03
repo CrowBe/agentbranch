@@ -62,7 +62,7 @@ Hexagonal: pure **domain modules** depend on ports (interfaces); **infra** suppl
 
 New capability? It's almost always a **renderer on the skill-analysis seam** (`defineCapability`), not a new pipeline. New external service? A **port in the domain module + adapter in infra**, wired in `container.ts`.
 
-Most logic is real where it's pure and load-bearing (SKILL.md, the seam, usage caps, hero/visualise/export renderers); IO/model-driven bits (IR extraction, test-run/eval execution, portability) are **stubbed behind their real interfaces** — marked `STUB` in-file. Next step is iterating on this structure, then filling stubs to MVP.
+Most logic is real where it's pure and load-bearing (SKILL.md, the seam, usage caps, hero/visualise/export renderers). The two **evaluation capabilities** are now real `Evaluator`s on the seam (`triggeringEvalCapability`, `testRunCapability`) — each composes the model gateway's primitives (`classify` / `runAgent`) and emits an `Artifact<kind>`; their **Insights** renderer is still pending (build-out step d, they expose an interim `result` surface), and inputs (prompt battery, scenario, mock-tool inference) are still keyword/default **stubs** marked `STUB` in-file. Remaining IO/model-driven bits (IR extraction, portability) stay stubbed behind their real interfaces.
 
 ## Keep this file accurate
 
