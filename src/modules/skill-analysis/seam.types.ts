@@ -1,4 +1,5 @@
 import type { Skill } from "@/modules/skill";
+import type { ModelGateway } from "@/modules/model-gateway";
 import type { Result, DomainError } from "@/shared";
 
 /**
@@ -25,25 +26,8 @@ export type ArtifactKind =
 export type Artifact<K extends ArtifactKind = ArtifactKind> = { readonly kind: K };
 
 /**
- * The thin port handed to an Evaluator (ARCHITECTURE §3.1). It wraps the model
- * provider *and* the usage meter, exposing intent-level operations rather than
- * the raw model — so AI-SDK plumbing and token metering live in one adapter,
- * out of every evaluator. An evaluator owns its *method* (it builds its own
- * conditions) but never its *resources* (model + meter) — those are handed in
- * here. The concrete shape (select/run ops) lands with the harness adapter
- * (build-out step b); for now it carries only what the seam itself needs:
- * whether a model is available at all.
- *
- * STUB: surface is intentionally minimal until step (b) fills the intent ops.
- */
-export interface EvaluationHarness {
-  /** False when no model is configured (offline / no key) → model_unavailable. */
-  readonly hasModel: boolean;
-}
-
-/**
  * Step one of an ANALYSIS capability: read a skill → emit a structured artifact
- * from its text alone. Pure enough to run offline; no model, no harness. Async +
+ * from its text alone. Pure enough to run offline; no model, no gateway. Async +
  * Result because some analyzers (e.g. visualise's IR) may call a bounded model.
  */
 export interface Analyzer<A extends Artifact> {
@@ -54,13 +38,16 @@ export interface Analyzer<A extends Artifact> {
 /**
  * Step one of an EVALUATION capability: run the skill through a model and emit
  * a structured result. Owns its *method* — it builds its own conditions
- * (scenario / distractors / battery) — but is handed its *resources* via the
- * `harness` (model + meter). Fails `model_unavailable` when the harness has no
- * model; that guard lives once in `runEvaluation`, not in each evaluator.
+ * (scenario / distractors / battery) — but is handed its *resource*: model
+ * access, via the `gateway` (CONTEXT.md → Model gateway). The evaluator composes
+ * its method from the gateway's fine primitives (`classify` / `runAgent`); it
+ * never touches the raw model, the key, or token accounting. Fails
+ * `model_unavailable` when the gateway has no model; that guard lives once in
+ * `runEvaluation`, not in each evaluator.
  */
 export interface Evaluator<A extends Artifact> {
   readonly kind: A["kind"];
-  evaluate(skill: Skill, harness: EvaluationHarness): Promise<Result<A, DomainError>>;
+  evaluate(skill: Skill, gateway: ModelGateway): Promise<Result<A, DomainError>>;
 }
 
 /**

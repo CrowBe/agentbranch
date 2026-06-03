@@ -7,9 +7,9 @@
  * - **Analysis** (static, text-only) — `defineCapability` + `runCapability`.
  *   Runs offline. Hero (Rendered/Source), Visualise, Export.
  * - **Evaluation** (dynamic, runs the skill through a model) — `defineEvaluation`
- *   + `runEvaluation`. Needs the evaluation harness; guards `model_unavailable`.
- *   Test run, Triggering eval — their artifact is an evaluation result that
- *   renders to Insights.
+ *   + `runEvaluation`. Handed the **model gateway** (`@/modules/model-gateway`);
+ *   guards `model_unavailable`. Test run, Triggering eval — their artifact is an
+ *   evaluation result that renders to Insights.
  *
  * New capabilities ask "analysis or evaluation?" first, then "what renderer?".
  * They never grow a new pipeline.
@@ -21,7 +21,6 @@ export type {
   Analyzer,
   Evaluator,
   Renderer,
-  EvaluationHarness,
   AnalysisCapability,
   EvaluationCapability,
   Capability,

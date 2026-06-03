@@ -55,8 +55,8 @@ Hexagonal: pure **domain modules** depend on ports (interfaces); **infra** suppl
 
 - `src/shared/` — kernel: `Result`, branded ids, `DomainError`, SSE envelope.
 - `src/modules/<domain>/` — the domain. Each is a deep module with an `index.ts` public surface + co-located tests:
-  - `skill` (the aggregate + lossless `SKILL.md` parse/serialize), `skill-analysis` (**the seam** — `defineCapability`/`runCapability`), `hero` (Rendered+Source renderers), `visualise` (skill IR → Mermaid), `test-run` (mock-tool registry + `execute_skill`), `triggering-eval`, `export` (Claude `.zip` manifest), `portability` (stub engine), `build-loop` (AI SDK + tools, `ModelProvider` port), `usage` (meter + tier caps), `auth` (`AuthPort`).
-- `src/infra/` — adapters: `prisma/`, `memory/` (offline default), `ai/` (Anthropic + stub providers), `clerk/` (real + stub auth).
+  - `skill` (the aggregate + lossless `SKILL.md` parse/serialize), `skill-analysis` (**the seam** — two shapes: **analysis** `defineCapability`/`runCapability` (static, offline) and **evaluation** `defineEvaluation`/`runEvaluation` (dynamic, needs the model gateway)), `hero` (Rendered+Source renderers), `visualise` (skill IR → Mermaid), `test-run` (mock-tool registry + `execute_skill`), `triggering-eval`, `export` (Claude `.zip` manifest), `portability` (stub engine), `build-loop` (AI SDK + tools, `ModelProvider` port), `model-gateway` (**the platform's single metered entry to the model** — `classify`/`runAgent` primitives + `account`/`platform` accounting tag; depends on `usage`), `usage` (tier caps + accounting authority), `auth` (`AuthPort`).
+- `src/infra/` — adapters: `prisma/`, `memory/` (offline default), `ai/` (Anthropic provider + **model-gateway** adapter, each with an offline stub), `clerk/` (real + stub auth).
 - `src/server/` — `config.ts` (env→flags), `container.ts` (composition root), `build-stream.ts` (loop→SSE).
 - `src/app/` — App Router presentation; `src/components/` — the shell (top bar, rail, hero, panel) dressed per `DESIGN.md`.
 

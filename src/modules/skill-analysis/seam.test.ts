@@ -5,15 +5,27 @@ import {
   runCapability,
   runEvaluation,
 } from "./seam";
-import type {
-  Artifact,
-  Analyzer,
-  Evaluator,
-  Renderer,
-  EvaluationHarness,
-} from "./seam.types";
+import type { Artifact, Analyzer, Evaluator, Renderer } from "./seam.types";
+import type { ModelGateway } from "@/modules/model-gateway";
 import { makeSkill, parseSkillMd, type Skill } from "@/modules/skill";
-import { ok, isErr, unwrap, SkillId, UserId } from "@/shared";
+import { ok, err, domainError, isErr, unwrap, SkillId, UserId } from "@/shared";
+
+/** A fake gateway. `hasModel` toggles the offline guard; `classify` is canned. */
+function fakeGateway(hasModel: boolean): ModelGateway {
+  return {
+    hasModel,
+    async classify(input) {
+      if (!hasModel) return err(domainError("model_unavailable", "offline"));
+      // Trivial probe: "fire" if the candidate is among the choices.
+      const choice = input.choices.includes("fire") ? "fire" : null;
+      return ok({ choice, rationale: "probe" });
+    },
+    async runAgent() {
+      if (!hasModel) return err(domainError("model_unavailable", "offline"));
+      return ok({ transcript: [] });
+    },
+  };
+}
 
 /** Minimal probe artifact for the analysis side — "hero" is an analysis kind. */
 type WordCount = Artifact<"hero"> & { readonly count: number };
@@ -48,10 +60,17 @@ const countText: Renderer<WordCount, string> = {
 
 const evaluator: Evaluator<Verdict> = {
   kind: "triggering-eval",
-  // Owns its method: builds its own conditions here. Borrows the harness for
-  // model access (trivially in this probe). Resources handed in, method owned.
-  async evaluate(_skill, _harness) {
-    return ok({ kind: "triggering-eval", fired: true });
+  // Owns its method: builds its own conditions (the "fire" choice) and composes
+  // the verdict from the gateway's `classify` primitive. Resource handed in
+  // (the gateway), method owned (what to classify, how to read the result).
+  async evaluate(_skill, gateway) {
+    const c = await gateway.classify({
+      prompt: "summarise my inbox",
+      choices: ["fire", "other-skill"],
+      tag: { kind: "platform", reason: "probe" },
+    });
+    if (isErr(c)) return c;
+    return ok({ kind: "triggering-eval", fired: c.value.choice === "fire" });
   },
 };
 
@@ -93,14 +112,12 @@ describe("the seam — evaluation", () => {
   });
 
   it("runs evaluate → render when a model is available", async () => {
-    const harness: EvaluationHarness = { hasModel: true };
-    const result = await runEvaluation(cap, "insights", fixtureSkill(), harness);
+    const result = await runEvaluation(cap, "insights", fixtureSkill(), fakeGateway(true));
     expect(unwrap(result)).toBe("Fires on the right prompt");
   });
 
   it("fails model_unavailable offline — guarded once in the seam", async () => {
-    const harness: EvaluationHarness = { hasModel: false };
-    const result = await runEvaluation(cap, "insights", fixtureSkill(), harness);
+    const result = await runEvaluation(cap, "insights", fixtureSkill(), fakeGateway(false));
     expect(isErr(result)).toBe(true);
     if (isErr(result)) expect(result.error.tag).toBe("model_unavailable");
   });
