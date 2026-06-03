@@ -20,5 +20,6 @@ export type {
   AgentTurn,
   ClassifyInput,
   RunAgentInput,
+  GenerateInput,
   ModelGateway,
 } from "./gateway.types";

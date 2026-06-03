@@ -1,5 +1,5 @@
 import type { Skill } from "@/modules/skill";
-import type { Artifact } from "@/modules/skill-analysis";
+import type { Artifact, Insight } from "@/modules/skill-analysis";
 import type { EvalRunId, UserId } from "@/shared";
 
 /** A skill the user's skill competes against for selection (ARCHITECTURE §4). */
@@ -32,6 +32,8 @@ export type EvalStatus = "queued" | "running" | "passed" | "failed";
 export type TriggeringResult = Artifact<"triggering-eval"> & {
   readonly cases: readonly CaseResult[];
   readonly passed: boolean;
+  /** The model-written interpretation (CONTEXT.md → Insight); renders to Insights. */
+  readonly insight: Insight;
 };
 
 export type EvalRun = {

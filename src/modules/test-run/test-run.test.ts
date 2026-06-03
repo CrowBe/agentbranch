@@ -39,6 +39,18 @@ function fakeGateway(): ModelGateway {
       transcript.push({ kind: "model", text: "Done. Nothing real was touched." });
       return ok({ transcript });
     },
+    async generate({ schema }) {
+      // Validate a canned insight through the caller's schema so the generic
+      // return type is honoured — same contract the real adapter satisfies.
+      return ok(
+        schema.parse({
+          verdict: "good",
+          summary: "The skill read the inbox and drafted a sensible reply.",
+          findings: ["called the email tool"],
+          watch: [],
+        }),
+      );
+    },
   };
 }
 

@@ -1,9 +1,15 @@
 import type { Skill } from "@/modules/skill";
 import { skillName } from "@/modules/skill";
 import type { ModelGateway, AccountingTag, GatewayTool } from "@/modules/model-gateway";
-import { mapResult, type Result, type DomainError } from "@/shared";
+import { insightSchema } from "@/modules/skill-analysis";
+import { ok, isErr, type Result, type DomainError } from "@/shared";
 import { defaultMockToolRegistry } from "./mock-tool-registry";
-import type { MockToolRegistry, Scenario, TestRunResult } from "./test-run.types";
+import type {
+  MockToolRegistry,
+  Scenario,
+  TestRunResult,
+  TranscriptStep,
+} from "./test-run.types";
 
 /**
  * Run a skill against the mock-tool registry and return a test-run result.
@@ -41,17 +47,50 @@ export async function executeSkill(input: {
     tools,
     tag,
   });
+  if (isErr(turn)) return turn;
 
-  return mapResult(turn, (t) => ({
+  // Turn the raw transcript into a plain-language Insight (one bounded call).
+  const insight = await gateway.generate({
+    system: INSIGHT_SYSTEM,
+    prompt: insightPrompt(skillName(skill), scenario.prompt, turn.value.transcript),
+    schema: insightSchema,
+    tag,
+  });
+  if (isErr(insight)) return insight;
+
+  return ok({
     kind: "test-run",
     scenario,
-    transcript: t.transcript,
-  }));
+    transcript: turn.value.transcript,
+    insight: insight.value,
+  });
 }
 
 const SYSTEM_PROMPT = `You are running a skill in a test environment. Follow the
 skill's instructions against the user's request, calling the available tools as
 needed. The tools return mock data — nothing real is touched.`;
+
+const INSIGHT_SYSTEM = `You explain a skill's test-run to its author in plain
+language — warm, concrete, no jargon. The author may be non-technical. Say what
+the skill did with the request, whether it behaved sensibly, and flag anything
+worth adjusting.`;
+
+function insightPrompt(
+  name: string,
+  prompt: string,
+  transcript: readonly TranscriptStep[],
+): string {
+  const steps = transcript
+    .map((s) =>
+      s.kind === "model"
+        ? `model: ${s.text}`
+        : s.kind === "tool-call"
+          ? `tool-call: ${s.tool}(${JSON.stringify(s.input)})`
+          : `tool-result: ${s.tool} → ${JSON.stringify(s.output)}`,
+    )
+    .join("\n");
+  return `Skill "${name}" was test-run on: "${prompt}".\n\nWhat happened:\n${steps}`;
+}
 
 /** A default scenario derived from the skill (1 per run in v1, ARCHITECTURE §4). */
 function defaultScenario(skill: Skill): Scenario {

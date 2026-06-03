@@ -10,9 +10,15 @@
  * surface returns the raw artifact meanwhile).
  */
 import { defineEvaluation } from "@/modules/skill-analysis";
-import type { Evaluator } from "@/modules/skill-analysis";
+import type { Evaluator, Renderer, Insight } from "@/modules/skill-analysis";
 import { runTriggeringEval } from "./run-eval";
-import type { TriggeringResult } from "./triggering-eval.types";
+import type { CaseResult, TriggeringResult } from "./triggering-eval.types";
+
+/** The detailed-breakdown surface: the raw per-prompt cases + the pass flag. */
+export type TriggeringBreakdown = {
+  readonly passed: boolean;
+  readonly cases: readonly CaseResult[];
+};
 
 export type {
   Distractor,
@@ -34,11 +40,23 @@ const triggeringEvaluator: Evaluator<TriggeringResult> = {
     runTriggeringEval(skill, gateway, { kind: "account", userId: skill.userId }),
 };
 
+/** Insights — default, friendly: the model-written interpretation, shaped pure. */
+const insightsRenderer: Renderer<TriggeringResult, Insight> = {
+  target: "insights",
+  render: (a) => a.insight,
+};
+
+/** Breakdown — depth on demand: the raw per-prompt cases. */
+const breakdownRenderer: Renderer<TriggeringResult, TriggeringBreakdown> = {
+  target: "breakdown",
+  render: (a) => ({ passed: a.passed, cases: a.cases }),
+};
+
 export const triggeringEvalCapability = defineEvaluation({
   name: "triggering eval",
   evaluator: triggeringEvaluator,
   renderers: {
-    /** Interim raw-artifact surface; Insights renderer lands in step (d). */
-    result: { target: "result", render: (a: TriggeringResult) => a },
+    insights: insightsRenderer,
+    breakdown: breakdownRenderer,
   },
 });
