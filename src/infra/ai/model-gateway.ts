@@ -58,7 +58,11 @@ export function createModelGateway(deps: {
       const snapshot = await usage.get(tag.userId);
       if (isErr(snapshot)) return snapshot;
       const tier = await tierFor(tag.userId);
-      const decision = checkCap(snapshot.value, tier, "test-run");
+      // The caller declares which capability it is spending on; the cap it must
+      // clear is capability-specific (free allows `test-run` but not
+      // `triggering-eval`, ARCHITECTURE §8). The gateway forwards the tag — it
+      // never names an evaluation kind itself (CONTEXT.md → Model gateway).
+      const decision = checkCap(snapshot.value, tier, tag.capability);
       if (!decision.allowed) {
         return err(domainError("cap_reached", decision.reason));
       }

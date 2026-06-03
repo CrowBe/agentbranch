@@ -70,7 +70,7 @@ The richer future of insight-generation — a tool-using agent (`runAgent` + too
 _Avoid_: insight service, explainer (premature naming)
 
 **Accounting tag**:
-A label the *caller* declares on every gateway call — **`account`** (user-attributable work, subject to tier policy) or **`platform`** (the platform's own cost to enable a feature, never charged to a user's allowance). The caller declares it because only the caller knows *why* it is spending. The gateway carries the tag to the **usage** module, which applies the matching accounting stream.
+A label the *caller* declares on every gateway call — **`account`** (user-attributable work, subject to tier policy) or **`platform`** (the platform's own cost to enable a feature, never charged to a user's allowance). An `account` tag also names the **capability** it is spending on (`test-run`, `triggering-eval`, …), because the cap it must clear is capability-specific (free allows `test-run` but not `triggering-eval`, ARCHITECTURE §8) and only the caller knows which. The caller declares it because only the caller knows *why* it is spending. The gateway carries the tag to the **usage** module, which applies the matching accounting stream — it never names a capability itself.
 _Avoid_: billing flag, cost type, owner
 
 **Usage** (accounting authority):

@@ -64,19 +64,39 @@ domain. The composition root is the only outer-to-inner wiring point.
 (ARCHITECTURE §3.1).
 
 ```
-Skill ──▶ Analyzer<A>.analyze() ──▶ Artifact (carries SourceSpans) ──▶ Renderer<A,S>.render() ──▶ Surface
-                                         └────────────── runCapability(capability, surface, skill) ──────────────┘
+analysis  Skill ─▶ Analyzer<A>.analyze() ──▶ Artifact ──▶ Renderer<A,S>.render() ─▶ Surface
+                                       (carries SourceSpans)
+          └──────────────── runCapability(capability, surface, skill) ─────────────────┘
+
+evaluation Skill ─▶ Evaluator<A>.evaluate(skill, gateway) ─▶ Artifact ─▶ Renderer<A,S> ─▶ Surface
+                          (owns method, model handed in)   (+ Insight)
+          └────────── runEvaluation(capability, surface, skill, gateway) ──────────────┘
+                          (guards model_unavailable once, here)
 ```
+
+The seam carries **two capability shapes** (CONTEXT.md → Analysis / Evaluation):
+**analysis** is static and runs offline; **evaluation** runs the skill through
+the model gateway and may fail `model_unavailable`. Same `artifact → render`
+tail; different head.
 
 - **`ArtifactKind`** — closed union of valid kind strings (`"hero" | "skill-ir" | "export" | "test-run" | "triggering-eval"`). Add a new member here when a new capability needs its own artifact type. Free-string kinds are a compile error.
 - **`Artifact<K>`** — the base artifact type; `K` must be an `ArtifactKind`. Each capability extends this with its own fields.
 - **`Analyzer<A>`** — read a skill, emit a structured artifact. Async + `Result`
   (some analyzers call the model).
+- **`Evaluator<A>`** — run the skill through the model and emit a result
+  artifact. Owns its *method* (builds its own scenario / battery / distractors);
+  the **model gateway** is handed in (`evaluate(skill, gateway)`). Composes the
+  gateway's `classify` / `runAgent` / `generate` primitives; never touches the
+  key or token accounting.
 - **`Renderer<A, S>`** — pure, synchronous: artifact → one surface. Swapping the
-  renderer is how a capability gets richer (Mermaid → React Flow; pass/fail →
-  scored).
-- **`Capability`** — one analyzer + named renderers, created with
-  `defineCapability(...)`.
+  renderer is how a capability gets richer (Mermaid → React Flow; raw result →
+  Insights).
+- **`Insight`** — `{ verdict, summary, findings[], watch[] }`, the model-written
+  interpretation an evaluator stores on its result via `gateway.generate`. The
+  `insights` renderer (default, friendly) shapes it; `breakdown` exposes the raw
+  cases/transcript.
+- **`Capability`** — `defineCapability(...)` (analysis) or `defineEvaluation(...)`
+  (evaluation): an analyzer/evaluator + named renderers.
 - **`SourceSpan`** — `{ start, end }` back into `SKILL.md`. Carried by artifact
   nodes so "click → jump to source" (and later point-and-annotate) is free.
   Spans are computed with a scan-forward cursor, so duplicate headings resolve
@@ -84,15 +104,18 @@ Skill ──▶ Analyzer<A>.analyze() ──▶ Artifact (carries SourceSpans) �
 
 **Capabilities on the seam today:**
 
-| Capability | Module | Analyzer | Renderer(s) | Status |
-|---|---|---|---|---|
-| Hero | `hero` | hero (sections + spans) | `rendered`, `source` | real |
-| Visualise | `visualise` | IR extraction | `mermaid` | extract = stub, render = real |
-| Export | `export` | instruction intent | `claude` (manifest) | real |
-| Triggering eval | `triggering-eval` | — (own runner, not yet a Capability) | pass/fail | stub |
+| Capability | Shape | Module | Analyzer / Evaluator | Renderer(s) | Status |
+|---|---|---|---|---|---|
+| Hero | analysis | `hero` | hero (sections + spans) | `rendered`, `source` | real |
+| Visualise | analysis | `visualise` | IR extraction | `mermaid` | extract = stub, render = real |
+| Export | analysis | `export` | instruction intent | `claude` (manifest) | real |
+| Test run | evaluation | `test-run` | composes `gateway.runAgent` + mock-tool registry | `insights`, `breakdown` | run real; scenario/registry stubbed |
+| Triggering eval | evaluation | `triggering-eval` | composes `gateway.classify` over the field | `insights`, `breakdown` | run real; battery/distractors stubbed |
 
-Run any of them: `runCapability(heroCapability, "rendered", skill)` →
-`Result<RenderedDoc, DomainError>`.
+Run an analysis: `runCapability(heroCapability, "rendered", skill)` →
+`Result<RenderedDoc, DomainError>`. Run an evaluation:
+`runEvaluation(triggeringEvalCapability, "insights", skill, gateway)` →
+`Result<Insight, DomainError>` (fails `model_unavailable` offline).
 
 ---
 
@@ -112,8 +135,8 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **skill-analysis** | `defineCapability`, `runCapability`, `Analyzer/Renderer/Capability/SourceSpan/Artifact` | — | real |
 | **hero** | `heroCapability`, `HeroView`, doc types | — | real |
 | **visualise** | `visualiseCapability`, IR + Mermaid types | — | extract stub · render real |
-| **test-run** | `executeSkill`, `createMockToolRegistry`, `defaultMockToolRegistry`, `emailMockTool` | `TestRunRepository` | mechanism real · run stub |
-| **triggering-eval** | `runTriggeringEval`, `buildPromptBattery`, `distractorLibrary` | `EvalRunRepository` | stub heuristic |
+| **test-run** | `testRunCapability`, `executeSkill`, `createMockToolRegistry`, `defaultMockToolRegistry`, `emailMockTool` | `TestRunRepository` | evaluation capability · run real · scenario/registry stubbed |
+| **triggering-eval** | `triggeringEvalCapability`, `runTriggeringEval`, `buildPromptBattery`, `distractorLibrary` | `EvalRunRepository` | evaluation capability · run real · battery/distractors stubbed |
 | **export** | `exportCapability`, manifest types | — | real |
 | **portability** | `transformSkill`, types | — | stub (deferred engine) |
 | **build-loop** | `runBuildLoop`, `buildTools`, `BuildLoopEvent`, `ModelProvider` | `ModelProvider` | wired |
@@ -126,10 +149,15 @@ placeholder):**
 - `visualise/extract-ir.ts` — derives a deterministic linear flowchart from
   headings; v1 replaces with a model-emitted IR. The IR *shape* is the real
   contract.
-- `test-run/execute-skill.ts` — emits a deterministic transcript by invoking
-  each mock once; v1 drives this through the build loop's model + `execute_skill`.
-- `triggering-eval/run-eval.ts` — keyword-overlap heuristic for "did it fire?";
-  v1 runs competitive model selection against the distractor library.
+- `test-run/execute-skill.ts` — the *run* is real (composes `gateway.runAgent`
+  with the mock tools as handlers, then `gateway.generate` for the Insight). The
+  stub is the *inputs*: scenario + registry default to a single email mock
+  (`STUB` in-file); v1 infers the registry from the skill and generates a
+  stressing scenario.
+- `triggering-eval/run-eval.ts` — the *run* is real (composes `gateway.classify`
+  over candidate-vs-distractor field, then `gateway.generate` for the Insight).
+  The stub is the *inputs*: `prompt-battery.ts` + `distractor-library.ts` are
+  static/keyword (`STUB` in-file); v1 generates them.
 - `portability/portability-transform.ts` — returns `not_configured`; one engine,
   two surfaces, both deferred (ARCHITECTURE §9).
 
@@ -182,7 +210,8 @@ placeholder):**
 | `not_found` | resource look-up returned nothing |
 | `persistence_failed` | database operation failed |
 | `auth_failed` | identity could not be resolved |
-| `model_unavailable` | model provider not configured |
+| `model_unavailable` | no model configured (offline / no key) |
+| `cap_reached` | a model exists, but an `account` call hit a tier cap (the §8 graceful-degradation catch) |
 | `seam_analyze_failed` | analyzer threw during seam execution |
 
 Add a new tag to the union in `errors.ts` only when none of the above fits. Free-string tags are a compile error.

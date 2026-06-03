@@ -14,7 +14,11 @@ import { isErr, UserId } from "@/shared";
 const withModel: ModelProvider = { model: {} as ModelProvider["model"] };
 const noModel: ModelProvider = { model: null };
 
-const account = (id: string): AccountingTag => ({ kind: "account", userId: UserId(id) });
+const account = (id: string): AccountingTag => ({
+  kind: "account",
+  userId: UserId(id),
+  capability: "test-run",
+});
 const platform: AccountingTag = { kind: "platform", reason: "test" };
 
 describe("model gateway — accounting guard", () => {
@@ -48,6 +52,23 @@ describe("model gateway — accounting guard", () => {
       prompt: "x",
       choices: ["a"],
       tag: account(userId),
+    });
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) expect(result.error.tag).toBe("cap_reached");
+  });
+
+  it("gates against the capability the caller declares, not a fixed one", async () => {
+    // A user well under the free token + turn budget, but running a capability
+    // the free tier disallows (triggering-eval, ARCHITECTURE §8). The gateway
+    // must read the cap from the tag — gating it — rather than admitting it
+    // under some hardcoded capability.
+    const usage = createMemoryUsageRepository();
+    const gateway = createModelGateway({ provider: withModel, usage });
+
+    const result = await gateway.classify({
+      prompt: "x",
+      choices: ["a"],
+      tag: { kind: "account", userId: UserId("free-user"), capability: "triggering-eval" },
     });
     expect(isErr(result)).toBe(true);
     if (isErr(result)) expect(result.error.tag).toBe("cap_reached");
