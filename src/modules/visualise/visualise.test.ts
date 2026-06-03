@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { visualiseCapability } from "./index";
+import { irAnalyzer } from "./extract-ir";
 import { runCapability } from "@/modules/skill-analysis";
 import { makeSkill, parseSkillMd, type Skill } from "@/modules/skill";
-import { unwrap, SkillId, UserId } from "@/shared";
+import type { ModelGateway } from "@/modules/model-gateway";
+import { ok, unwrap, SkillId, UserId } from "@/shared";
 
 function fixtureSkill(): Skill {
   const source = unwrap(
@@ -29,4 +31,64 @@ describe("visualise capability", () => {
     expect(out.mermaid).toContain("[/Never auto-send/]");
     expect(out.mermaid).toContain("-->");
   });
+
+  it("uses a gateway-generated IR when model context is supplied", async () => {
+    const out = unwrap(
+      await runCapability(visualiseCapability, "mermaid", fixtureSkill(), {
+        gateway: fakeGateway(),
+        tag: { kind: "account", userId: UserId("u1"), capability: "visualise" },
+      }),
+    );
+
+    expect(out.mermaid).toMatch(/^stateDiagram-v2/);
+    expect(out.mermaid).toContain("branch: Decide whether to reply");
+  });
+
+  it("falls back to deterministic IR without a model", async () => {
+    const ir = unwrap(await irAnalyzer.analyze(fixtureSkill(), { gateway: offlineGateway() }));
+    expect(ir.diagram).toBe("flowchart");
+    expect(ir.nodes.map((node) => node.label)).toContain("Fetch mail");
+  });
 });
+
+function fakeGateway(): ModelGateway {
+  return {
+    hasModel: true,
+    async classify() {
+      return ok({ choice: null, rationale: "n/a" });
+    },
+    async runAgent() {
+      return ok({ transcript: [] });
+    },
+    async streamAgent() {
+      async function* empty() {}
+      return ok(empty());
+    },
+    async generate({ schema }) {
+      return ok(
+        schema.parse({
+          kind: "skill-ir",
+          diagram: "stateDiagram",
+          nodes: [
+            { id: "start", label: "Triggered", kind: "start", span: { start: 0, end: 0 } },
+            {
+              id: "branch",
+              label: "Decide whether to reply",
+              kind: "decision",
+              span: { start: 13, end: 30 },
+            },
+            { id: "end", label: "Done", kind: "end", span: { start: 0, end: 0 } },
+          ],
+          edges: [
+            { from: "start", to: "branch" },
+            { from: "branch", to: "end", label: "ready" },
+          ],
+        }),
+      );
+    },
+  };
+}
+
+function offlineGateway(): ModelGateway {
+  return { ...fakeGateway(), hasModel: false };
+}
