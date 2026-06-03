@@ -1,0 +1,89 @@
+import type { Result, DomainError, UserId } from "@/shared";
+
+/**
+ * Who pays for a model call. The *caller* declares this on every call, because
+ * only the caller knows *why* it is spending (CONTEXT.md → Accounting tag):
+ *
+ * - `account`  — user-attributable work, subject to tier policy (the build
+ *   loop's turns, a user's triggering eval). Runs through the usage authority.
+ * - `platform` — the platform's own cost to enable a feature (e.g. generating
+ *   mock data to stress *the* skill). Never charged to a user's allowance;
+ *   recorded to our own cost ledger (deferred in v1).
+ */
+export type AccountingTag =
+  | { readonly kind: "account"; readonly userId: UserId }
+  | { readonly kind: "platform"; readonly reason: string };
+
+/**
+ * A tool the model may call during `runAgent`. The caller supplies the
+ * `handler` — the gateway drives the loop, but the tool's *behaviour* is the
+ * caller's method (e.g. the test run backs `handler` with its mock-tool
+ * registry). `parameters` is a JSON-schema-shaped object the SDK validates.
+ */
+export type GatewayTool = {
+  readonly name: string;
+  readonly description: string;
+  readonly parameters: Readonly<Record<string, unknown>>;
+  handler(input: Readonly<Record<string, unknown>>): unknown | Promise<unknown>;
+};
+
+/** One step of an agent turn's transcript (mirrors test-run's TranscriptStep). */
+export type AgentStep =
+  | { readonly kind: "model"; readonly text: string }
+  | { readonly kind: "tool-call"; readonly tool: string; readonly input: unknown }
+  | { readonly kind: "tool-result"; readonly tool: string; readonly output: unknown };
+
+/** The result of `classify` — the winning label or null, plus the model's own reason. */
+export type Classification = {
+  /** The selected choice, or `null` when nothing fit ("stayed silent"). */
+  readonly choice: string | null;
+  /** The model's stated one-line reason — captured, not an invented confidence. */
+  readonly rationale: string;
+};
+
+/** The result of `runAgent` — the transcript only. Tokens are recorded internally. */
+export type AgentTurn = {
+  readonly transcript: readonly AgentStep[];
+};
+
+export type ClassifyInput = {
+  readonly prompt: string;
+  readonly choices: readonly string[];
+  readonly tag: AccountingTag;
+};
+
+export type RunAgentInput = {
+  readonly system: string;
+  readonly messages: readonly { readonly role: "user" | "assistant"; readonly content: string }[];
+  readonly tools: readonly GatewayTool[];
+  readonly tag: AccountingTag;
+};
+
+/**
+ * The platform's single, controlled entry to the model (CONTEXT.md → Model
+ * gateway). Pure *mechanism*: it owns the key + AI-SDK plumbing and exposes fine
+ * intent-level primitives that callers compose into their own method. It knows
+ * nothing about "selection", "scenario", or any evaluation kind.
+ *
+ * Every call carries an `AccountingTag`; the gateway routes accounting through
+ * the usage authority (records `account` tokens, no-ops `platform`/paid in v1).
+ *
+ * Failure modes (closed DomainError union):
+ * - `model_unavailable` — no model configured (offline / no key).
+ * - `cap_reached`       — a model exists, but an `account` call hit a tier cap
+ *   (the §8 graceful-degradation catch — "out of free usage today").
+ */
+export interface ModelGateway {
+  /** True when a model is configured. False → calls fail `model_unavailable`. */
+  readonly hasModel: boolean;
+
+  /** One structured single-shot pick from `choices` (or null = none fit). */
+  classify(input: ClassifyInput): Promise<Result<Classification, DomainError>>;
+
+  /**
+   * One metered agent turn. The gateway runs the loop; on a tool call it invokes
+   * the matching tool's caller-supplied `handler`. Token usage is recorded
+   * internally against the tag — the transcript comes back, tokens do not.
+   */
+  runAgent(input: RunAgentInput): Promise<Result<AgentTurn, DomainError>>;
+}

@@ -12,6 +12,7 @@ export type DomainError =
   | { readonly tag: "persistence_failed";  readonly message: string; readonly cause?: unknown }
   | { readonly tag: "auth_failed";         readonly message: string; readonly cause?: unknown }
   | { readonly tag: "model_unavailable";   readonly message: string; readonly cause?: unknown }
+  | { readonly tag: "cap_reached";         readonly message: string; readonly cause?: unknown }
   | { readonly tag: "seam_analyze_failed"; readonly message: string; readonly cause?: unknown };
 
 /** Construct a domain error. `tag` must be one of the known kinds above. */

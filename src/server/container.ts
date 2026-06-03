@@ -5,6 +5,7 @@ import type { TestRunRepository } from "@/modules/test-run";
 import type { EvalRunRepository } from "@/modules/triggering-eval";
 import type { AuthPort } from "@/modules/auth";
 import type { ModelProvider } from "@/modules/build-loop";
+import type { ModelGateway } from "@/modules/model-gateway";
 
 import { readConfig, type AppConfig } from "./config";
 import { createMemorySkillRepository } from "@/infra/memory/skill.memory-repository";
@@ -15,6 +16,8 @@ import { createPrismaClient } from "@/infra/prisma/client";
 import { createPrismaSkillRepository } from "@/infra/prisma/skill.prisma-repository";
 import { createPrismaUsageRepository } from "@/infra/prisma/usage.prisma-repository";
 import { createAnthropicProvider } from "@/infra/ai/anthropic-provider";
+import { createModelGateway } from "@/infra/ai/model-gateway";
+import { stubModelGateway } from "@/infra/ai/stub-model-gateway";
 import { createClerkAuth } from "@/infra/clerk/clerk-auth";
 import { createStubAuth } from "@/infra/clerk/stub-auth";
 
@@ -27,6 +30,7 @@ export type AppContainer = {
   readonly config: AppConfig;
   readonly auth: AuthPort;
   readonly modelProvider: ModelProvider;
+  readonly modelGateway: ModelGateway;
   readonly skills: SkillRepository;
   readonly usage: UsageRepository;
   readonly testRuns: TestRunRepository;
@@ -41,15 +45,26 @@ export function getContainer(): AppContainer {
 
   const prisma = config.databaseUrl ? createPrismaClient(config.databaseUrl) : null;
 
+  const modelProvider = createAnthropicProvider({
+    apiKey: config.anthropicApiKey,
+    modelId: config.modelId,
+  });
+  const usage = prisma ? createPrismaUsageRepository(prisma) : createMemoryUsageRepository();
+
+  // The model gateway is the platform's single metered entry to the model. It
+  // degrades to the offline stub when no model is configured, so evaluation
+  // capabilities fail cleanly with `model_unavailable` (CONTEXT.md → Model gateway).
+  const modelGateway: ModelGateway = modelProvider.model
+    ? createModelGateway({ provider: modelProvider, usage })
+    : stubModelGateway;
+
   cached = {
     config,
     auth: config.flags.hasAuth ? createClerkAuth() : createStubAuth(),
-    modelProvider: createAnthropicProvider({
-      apiKey: config.anthropicApiKey,
-      modelId: config.modelId,
-    }),
+    modelProvider,
+    modelGateway,
     skills: prisma ? createPrismaSkillRepository(prisma) : createMemorySkillRepository(),
-    usage: prisma ? createPrismaUsageRepository(prisma) : createMemoryUsageRepository(),
+    usage,
     // Test-run and eval persistence ship memory-only in this slice; their
     // Prisma adapters follow the same shape as skills/usage.
     testRuns: createMemoryTestRunRepository(),

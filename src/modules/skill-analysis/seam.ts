@@ -1,11 +1,11 @@
 import type { Skill } from "@/modules/skill";
+import type { ModelGateway } from "@/modules/model-gateway";
 import { mapResult, err, domainError, type Result, type DomainError } from "@/shared";
 import type {
   Artifact,
   Analyzer,
   Evaluator,
   Renderer,
-  EvaluationHarness,
   AnalysisCapability,
   EvaluationCapability,
   Capability,
@@ -26,8 +26,8 @@ export function defineCapability<
 
 /**
  * Define an EVALUATION capability — an evaluator composed with its renderers
- * (the default surface is Insights). The evaluator owns its method; the harness
- * (model + meter) is handed in at run time via `runEvaluation`.
+ * (the default surface is Insights). The evaluator owns its method; the model
+ * gateway is handed in at run time via `runEvaluation`.
  */
 export function defineEvaluation<
   A extends Artifact,
@@ -40,7 +40,7 @@ export function defineEvaluation<
 
 /**
  * Run an ANALYSIS capability end-to-end: skill → artifact (analyze) → surface
- * (render). The static pipeline, built once. Runs offline — no harness needed.
+ * (render). The static pipeline, built once. Runs offline — no gateway needed.
  */
 export async function runCapability<
   A extends Artifact,
@@ -68,9 +68,9 @@ export async function runEvaluation<
   capability: EvaluationCapability<A, Surfaces>,
   surface: K,
   skill: Skill,
-  harness: EvaluationHarness,
+  gateway: ModelGateway,
 ): Promise<Result<Surfaces[K], DomainError>> {
-  if (!harness.hasModel) {
+  if (!gateway.hasModel) {
     return err(
       domainError(
         "model_unavailable",
@@ -78,7 +78,7 @@ export async function runEvaluation<
       ),
     );
   }
-  const result = await capability.evaluator.evaluate(skill, harness);
+  const result = await capability.evaluator.evaluate(skill, gateway);
   return mapResult(result, (a) => capability.renderers[surface].render(a));
 }
 
@@ -87,7 +87,6 @@ export type {
   Analyzer,
   Evaluator,
   Renderer,
-  EvaluationHarness,
   AnalysisCapability,
   EvaluationCapability,
   Capability,
