@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { GatedCapability } from "@/modules/usage";
 import type { Result, DomainError, UserId } from "@/shared";
 
 /**
@@ -7,12 +8,17 @@ import type { Result, DomainError, UserId } from "@/shared";
  *
  * - `account`  — user-attributable work, subject to tier policy (the build
  *   loop's turns, a user's triggering eval). Runs through the usage authority.
+ *   Carries the `capability` it is spending on, because the cap it must clear is
+ *   capability-specific (free allows `test-run` but not `triggering-eval`,
+ *   ARCHITECTURE §8) — and only the caller knows *which* capability it is. The
+ *   gateway forwards it to the usage authority; it stays ignorant of what the
+ *   capability *means*.
  * - `platform` — the platform's own cost to enable a feature (e.g. generating
  *   mock data to stress *the* skill). Never charged to a user's allowance;
  *   recorded to our own cost ledger (deferred in v1).
  */
 export type AccountingTag =
-  | { readonly kind: "account"; readonly userId: UserId }
+  | { readonly kind: "account"; readonly userId: UserId; readonly capability: GatedCapability }
   | { readonly kind: "platform"; readonly reason: string };
 
 /**

@@ -51,7 +51,7 @@ function fakeGateway(): ModelGateway {
   };
 }
 
-const TAG = { kind: "account" as const, userId: UserId("u1") };
+const TAG = { kind: "account" as const, userId: UserId("u1"), capability: "triggering-eval" as const };
 
 describe("triggering eval", () => {
   it("builds a battery with both positive and negative cases", () => {

@@ -54,7 +54,7 @@ function fakeGateway(): ModelGateway {
   };
 }
 
-const TAG = { kind: "account" as const, userId: UserId("u1") };
+const TAG = { kind: "account" as const, userId: UserId("u1"), capability: "test-run" as const };
 
 describe("test run", () => {
   it("produces a test-run artifact whose transcript calls each mock tool", async () => {

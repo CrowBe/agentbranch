@@ -36,8 +36,14 @@ export type { EvalRunRepository } from "./eval.repository";
 const triggeringEvaluator: Evaluator<TriggeringResult> = {
   kind: "triggering-eval",
   evaluate: (skill, gateway) =>
-    // Triggering an eval is user-attributable work → `account` tag.
-    runTriggeringEval(skill, gateway, { kind: "account", userId: skill.userId }),
+    // Triggering an eval is user-attributable work → `account` tag, declaring the
+    // `triggering-eval` capability so usage gates it against the right cap (free
+    // disallows it entirely, ARCHITECTURE §8).
+    runTriggeringEval(skill, gateway, {
+      kind: "account",
+      userId: skill.userId,
+      capability: "triggering-eval",
+    }),
 };
 
 /** Insights — default, friendly: the model-written interpretation, shaped pure. */
