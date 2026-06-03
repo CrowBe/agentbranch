@@ -1,17 +1,20 @@
-import { generateObject, generateText, tool, stepCountIs, jsonSchema } from "ai";
-import type { LanguageModel } from "ai";
+import { generateObject, generateText, streamText, tool, stepCountIs, jsonSchema } from "ai";
+import type { LanguageModel, ToolSet } from "ai";
 import { z } from "zod";
-import type { ModelProvider } from "@/modules/build-loop";
 import { checkCap, type Tier, type UsageRepository } from "@/modules/usage";
 import type {
   ModelGateway,
+  ModelProvider,
   AccountingTag,
+  GatewayTool,
   ClassifyInput,
   RunAgentInput,
+  StreamAgentInput,
   GenerateInput,
   Classification,
   AgentTurn,
   AgentStep,
+  AgentStreamPart,
 } from "@/modules/model-gateway";
 import {
   ok,
@@ -114,23 +117,12 @@ export function createModelGateway(deps: {
       const admitted = await admit(input.tag);
       if (isErr(admitted)) return admitted;
 
-      const tools = Object.fromEntries(
-        input.tools.map((t) => [
-          t.name,
-          tool({
-            description: t.description,
-            inputSchema: jsonSchema(t.parameters),
-            execute: async (args: unknown) => t.handler(args as Record<string, unknown>),
-          }),
-        ]),
-      );
-
       try {
         const result = await generateText({
           model: admitted.value,
           system: input.system,
           messages: input.messages.map((m) => ({ role: m.role, content: m.content })),
-          tools,
+          tools: toSdkTools(input.tools),
           stopWhen: stepCountIs(8),
         });
         await record(input.tag, result.usage?.totalTokens ?? 0);
@@ -138,6 +130,70 @@ export function createModelGateway(deps: {
       } catch (cause) {
         return err(domainError("model_unavailable", "Agent turn failed.", cause));
       }
+    },
+
+    async streamAgent(
+      input: StreamAgentInput,
+    ): Promise<Result<AsyncGenerator<AgentStreamPart>, DomainError>> {
+      // Admit up front so cap_reached / model_unavailable surface as the outer
+      // Result before any part streams; the model is captured for the generator.
+      const admitted = await admit(input.tag);
+      if (isErr(admitted)) return admitted;
+      const model = admitted.value;
+      const { tag } = input;
+
+      async function* stream(): AsyncGenerator<AgentStreamPart> {
+        const result = streamText({
+          model,
+          system: input.system,
+          messages: input.messages.map((m) => ({ role: m.role, content: m.content })),
+          tools: toSdkTools(input.tools),
+          stopWhen: stepCountIs(8),
+        });
+        try {
+          for await (const rawPart of result.fullStream) {
+            const part = rawPart as { type: string } & Record<string, unknown>;
+            switch (part.type) {
+              case "text-delta": {
+                const delta = readString(part, "text") ?? readString(part, "textDelta");
+                if (delta) yield { kind: "text", delta };
+                break;
+              }
+              case "tool-call":
+                yield { kind: "tool-call", tool: readString(part, "toolName") ?? "" };
+                break;
+              case "tool-result":
+                yield {
+                  kind: "tool-result",
+                  tool: readString(part, "toolName") ?? "",
+                  output: part.output ?? part.result,
+                };
+                break;
+              case "finish":
+                yield { kind: "finish", finishReason: readString(part, "finishReason") ?? "stop" };
+                break;
+              case "error":
+                yield { kind: "error", message: String(part.error ?? "Unknown error") };
+                break;
+              default:
+                break;
+            }
+          }
+        } finally {
+          // Best-effort accounting once the stream settles. totalUsage resolves
+          // after the run; on a mid-stream failure we record what we can.
+          let tokens = 0;
+          try {
+            const totals = await result.totalUsage;
+            tokens = totals?.totalTokens ?? 0;
+          } catch {
+            tokens = 0;
+          }
+          await record(tag, tokens);
+        }
+      }
+
+      return ok(stream());
     },
 
     async generate<T>(input: GenerateInput<T>): Promise<Result<T, DomainError>> {
@@ -158,6 +214,25 @@ export function createModelGateway(deps: {
       }
     },
   };
+}
+
+/** Adapt the gateway's `GatewayTool`s to the AI SDK's tool map (shared by run/stream). */
+function toSdkTools(tools: readonly GatewayTool[]): ToolSet {
+  return Object.fromEntries(
+    tools.map((t) => [
+      t.name,
+      tool({
+        description: t.description,
+        inputSchema: jsonSchema(t.parameters),
+        execute: async (args: unknown) => t.handler(args as Record<string, unknown>),
+      }),
+    ]),
+  );
+}
+
+function readString(obj: Record<string, unknown>, key: string): string | undefined {
+  const value = obj[key];
+  return typeof value === "string" ? value : undefined;
 }
 
 function classifyPrompt(prompt: string, choices: readonly string[]): string {

@@ -24,6 +24,11 @@ function fakeGateway(hasModel: boolean): ModelGateway {
       if (!hasModel) return err(domainError("model_unavailable", "offline"));
       return ok({ transcript: [] });
     },
+    async streamAgent() {
+      if (!hasModel) return err(domainError("model_unavailable", "offline"));
+      async function* empty() {}
+      return ok(empty());
+    },
     async generate({ schema }) {
       if (!hasModel) return err(domainError("model_unavailable", "offline"));
       return ok(schema.parse({}));

@@ -1,13 +1,14 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
-import type { ModelProvider } from "@/modules/build-loop";
+import type { ModelProvider } from "@/modules/model-gateway";
 
 /**
  * The real model provider: Claude via the Vercel AI SDK's Anthropic provider
- * (NOT the Anthropic SDK directly — the build loop stays provider-swappable,
- * ARCHITECTURE §4). The server owns the key; it never reaches the client.
+ * (NOT the Anthropic SDK directly — the platform stays provider-swappable,
+ * ARCHITECTURE §4). The server owns the key; it never reaches the client. Only
+ * the model gateway consumes this provider.
  *
- * Returns a null-model provider when unconfigured so the build loop degrades to
- * a clear error instead of throwing at construction.
+ * Returns a null-model provider when unconfigured so the gateway degrades to a
+ * clear `model_unavailable` instead of throwing at construction.
  */
 export function createAnthropicProvider(params: {
   apiKey: string | undefined;

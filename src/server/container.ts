@@ -4,7 +4,6 @@ import type { UsageRepository } from "@/modules/usage";
 import type { TestRunRepository } from "@/modules/test-run";
 import type { EvalRunRepository } from "@/modules/triggering-eval";
 import type { AuthPort } from "@/modules/auth";
-import type { ModelProvider } from "@/modules/build-loop";
 import type { ModelGateway } from "@/modules/model-gateway";
 
 import { readConfig, type AppConfig } from "./config";
@@ -29,7 +28,8 @@ import { createStubAuth } from "@/infra/clerk/stub-auth";
 export type AppContainer = {
   readonly config: AppConfig;
   readonly auth: AuthPort;
-  readonly modelProvider: ModelProvider;
+  // No raw `modelProvider` is exposed: nothing above the gateway touches the
+  // model. The provider is an internal wiring detail of `modelGateway`.
   readonly modelGateway: ModelGateway;
   readonly skills: SkillRepository;
   readonly usage: UsageRepository;
@@ -61,7 +61,6 @@ export function getContainer(): AppContainer {
   cached = {
     config,
     auth: config.flags.hasAuth ? createClerkAuth() : createStubAuth(),
-    modelProvider,
     modelGateway,
     skills: prisma ? createPrismaSkillRepository(prisma) : createMemorySkillRepository(),
     usage,

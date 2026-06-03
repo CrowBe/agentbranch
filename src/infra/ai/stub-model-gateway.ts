@@ -15,6 +15,9 @@ export const stubModelGateway: ModelGateway = {
   async runAgent() {
     return err(domainError("model_unavailable", "No model is configured."));
   },
+  async streamAgent() {
+    return err(domainError("model_unavailable", "No model is configured."));
+  },
   async generate() {
     return err(domainError("model_unavailable", "No model is configured."));
   },

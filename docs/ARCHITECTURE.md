@@ -34,13 +34,13 @@ One term per concept. Use these names everywhere — in docs, code, and UI copy.
 | **Skill** | The product's unit of work: a reusable instruction set for a Claude agent. Instruction-only — no bundled runnable code. |
 | **`SKILL.md`** | The skill's source file: YAML frontmatter (`name`, `description`) + markdown body (instructions, workflow, rules). |
 | **Skill record** | The persisted skill in our DB (see [§6](#6-data-model-sketch)). Exports are rendered *from* it. |
-| **Build loop** | The core agentic loop: Claude (via Vercel AI SDK) writes/edits the `SKILL.md` through the `write_skill`/`edit_skill` tools, streaming to the preview. |
+| **Build loop** | The core agentic loop: Claude writes/edits the `SKILL.md` through the `write_skill`/`edit_skill` tools, streaming to the preview. Reaches the model only through the **model gateway** (`streamAgent`), so a build turn is gated + accounted like every other model call. |
 | **Skill-analysis seam** | The architectural spine. The shared pattern **read skill → emit a structured artifact → render it for a surface**. Built once; each feature is a new *renderer* on it, not a new pipeline. Carries **two capability shapes** (below). Distinct from the skill IR: the seam is the pattern, the IR is one artifact type on it. |
 | **Analysis capability** | A *static* capability on the seam — derives a structured view from the skill's **text alone**. Pure, runs offline. Wraps an `Analyzer` (`analyze(skill)`). The Rendered/Source hero, Visualise and Export are analysis capabilities. |
 | **Evaluation capability** | A *dynamic* capability on the seam — **runs the skill through a model** and observes behaviour. Costs tokens, needs a model (fails `model_unavailable` offline). Wraps an `Evaluator` (`evaluate(skill, gateway)`) that **owns its method, not its resources**: it builds its own conditions (Scenario / distractors / battery) but model access is handed in via the **model gateway**. Test run and Triggering eval are evaluation capabilities. |
 | **Evaluation result** | The artifact an evaluation capability emits — the structured run-record. Ephemeral; **never shown raw**. Renders to **Insights** (and a detailed breakdown on demand). Distinct from the persisted **evaluation record** ([§6](#6-data-model-sketch)): the result is rendered now, the record is stored and re-rendered later. |
 | **Insights** | The default, plain-language rendered surface of an evaluation result — meaning the user can act on, not a data wall. The audience bridge ([§1](#1-product-thesis)) lives in the *renderer*; a detailed breakdown sits behind it for depth (same Rendered/Source duality as the hero). |
-| **Model gateway** | The platform's **single, controlled entry to the model** — its own module. Owns the Anthropic key + AI-SDK plumbing; exposes fine intent-level primitives `classify`/`runAgent` that callers compose into their own method. Pure mechanism — knows no evaluation kinds. Every call carries an **accounting tag** (`account` \| `platform`); the gateway routes accounting through the **usage** authority. Consumers: evaluation now; the portability transform, mock-data generation and the build loop later. |
+| **Model gateway** | The platform's **single, controlled entry to the model** — its own module. Owns the Anthropic key + AI-SDK plumbing; exposes fine intent-level primitives `classify`/`runAgent`/`streamAgent`/`generate` that callers compose into their own method. Pure mechanism — knows no capability kinds. Every call carries an **accounting tag** (`account` \| `platform`); the gateway routes accounting through the **usage** authority. Consumers: the build loop (via `streamAgent`) and evaluation. The portability transform and mock-data generation route through it next (future work). |
 | **Accounting tag** | Declared by the *caller* on every model-gateway call: **`account`** (user-attributable, subject to tier policy) or **`platform`** (the platform's own cost to enable a feature — e.g. generating mock data — never charged to a user's allowance). Three accounting streams: free+account = structural caps + provider cap-catch (no token counting, [§8](#8-free-tier)); paid+account = token-spend stream (deferred); platform = our own cost ledger (deferred). A model call denied by a cap fails `cap_reached` (distinct from `model_unavailable` = no model at all). |
 | **Skill IR** | *One specific* artifact type on the seam: visualise's intermediate representation — nodes + edges, each carrying a **source-span** back into `SKILL.md`. A visualise concept, not the whole seam. |
 | **Test run** | User-facing term for executing a skill against **mocked** tools to see how it behaves. The mechanism is the **mock-tool registry**; the agent tool is **`execute_skill`**. Nothing real is ever touched. (Always "test run" in user copy — never "sandbox": jargon that intimidates rather than informs.) |
@@ -56,19 +56,19 @@ One term per concept. Use these names everywhere — in docs, code, and UI copy.
 A single **server-side agentic harness** (Vercel AI SDK + Claude) with a **tool registry**. Not N services — one agent loop, many tools.
 
 ```
-Browser (React)  ──SSE──▶  Next.js route handler (owns API key)
+Browser (React)  ──SSE──▶  Next.js route handler
        ▲                          │
        │ stream tool output       ▼
-   preview / viz / chat     Build loop (Vercel AI SDK + Claude)
-                                  │
-                                  ▼
-                            Tool registry:
-                              write_skill, edit_skill,
+   preview / viz / chat     Build loop  ──streamAgent──▶  Model gateway
+                                  │                      (owns key + accounting)
+                                  ▼                              │
+                            Tool registry:                       ▼
+                              write_skill, edit_skill,     Claude (Vercel AI SDK)
                               visualise_skill, execute_skill,
                               + mock-tool registry integrations
 ```
 
-- The **server owns the Anthropic API key**; it never touches the client.
+- The **model gateway owns the Anthropic API key** and accounting; nothing above it (the build loop, the route handler) touches the raw model or the client.
 - Tool-call output streams to the client over **SSE**.
 - `execute_skill` runs against the **mock-tool registry** ([§2](#2-glossary--the-domain-language)): a test run, not real execution.
 
@@ -101,7 +101,7 @@ Current choices and the reasoning behind them. Live — open to revision while w
 
 | Branch | Decision | Why |
 |---|---|---|
-| Build loop | Claude on our key (Anthropic) via **Vercel AI SDK** | Skill primitive is Claude-tuned; we meter & bill; one harness, provider-swappable later |
+| Build loop | Claude on our key (Anthropic) via **Vercel AI SDK**, reached through the **model gateway** (`streamAgent`) | Skill primitive is Claude-tuned; routing through the gateway means build turns are gated + metered by the one accounting authority, like every other model call; one harness, provider-swappable later |
 | Skill scope | **Instruction-only** (`SKILL.md` + reference docs); no bundled runnable code | A test run becomes a mock-tool registry, not a container — removes all code-exec/isolation infra |
 | Write / edit | `write_skill({content})` streams the whole doc on first draft; `edit_skill({old,new})` applies a highlighted diff on revisions | Mirrors Claude Code's Write+Edit; cheaper tokens; preview is a doc model supporting replace+patch |
 | Visualise | Model emits a **skill IR** (nodes+edges, each with a **source-span** into `SKILL.md`); v1 thin **IR→Mermaid** renderer; diagram type model-chosen; 1 generation | IR is the stable contract; the later canvas reuses it; node↔source mapping paid once |
@@ -115,7 +115,7 @@ Current choices and the reasoning behind them. Live — open to revision while w
 | Authoring screen layout | **Preview-primary**: the streaming skill document is the hero; interaction is a **demoted control surface**, not a co-equal chat panel | The skill artifact is the product, not the conversation |
 | Hero render mode | Hero has **two views: Rendered (default) + Source (toggle)** — see [§2](#2-glossary--the-domain-language). Default Rendered for newcomers; Source one click away | Bridge audience ([§1](#1-product-thesis)): raw monospace `SKILL.md` is the biggest "this is for programmers" signal. Rendered-default removes that wall without hiding the artifact. **Reuses the seam — Rendered is just another renderer**, so it's cheap |
 | App shell | **Thin branded top bar** (chrome only, no nav links) + **left slideout menu** (all primary nav + account footer; collapsed icon rail by default, expands on demand) wrapping the hero + slim right interaction panel. Tool surfaces are **chips** on the hero header | Top bar stays clean framing; nav consolidated in the menu; hero gets max width by default |
-| Stack | Next.js (App Router) + TS · Postgres (Prisma/Drizzle) · **Clerk** auth (Google+GitHub) · Vercel AI SDK · SSE · Vercel + Neon/Supabase | One language end-to-end; fastest empty-repo-to-deployed; the build loop lives in a route handler that already holds the key |
+| Stack | Next.js (App Router) + TS · Postgres (Prisma/Drizzle) · **Clerk** auth (Google+GitHub) · Vercel AI SDK · SSE · Vercel + Neon/Supabase | One language end-to-end; fastest empty-repo-to-deployed; the build loop streams from a route handler, reaching the model through the gateway that holds the key |
 | Billing v1 | **Subscription tiers** (Free / Pro) via Clerk Billing; token meter built day one; PAYG/overage via Stripe Billing Meters later | Clerk PAYG not GA (mid-2026); the meter exists anyway for caps; reuse it for PAYG later, honour transparent margin then |
 | Free-tier aggregate cost | **Provider-side spend/rate cap** (Anthropic Console); app **catches the limit-hit response** → flips free sessions to "out of free usage today, back in X" | Provider is source of truth; a catch (not a predictive counter) avoids double-accounting and fails safe |
 
@@ -126,7 +126,7 @@ Current choices and the reasoning behind them. Live — open to revision while w
 The build loop is **not thin** — it's the core and must feel good. Everything else is the minimum that proves the shape.
 
 1. **Auth + meter** — Clerk (Google+GitHub), Postgres, per-turn + per-token counter. Thin = no admin UI, enforced caps only.
-2. **Build loop** — Vercel AI SDK + Claude; `write_skill`/`edit_skill`; SSE to preview. **Polished, not thin.**
+2. **Build loop** — Claude via the model gateway's `streamAgent`; `write_skill`/`edit_skill`; SSE to preview. **Polished, not thin.**
 3. **Visualise** — model emits skill IR; thin IR→Mermaid renderer; 1 generation; no diagram editing.
 4. **Test run** — single run, 1 generated scenario, mock-tool registry with 1–2 mock integrations (email first), Claude only.
 5. **Triggering eval** — small distractor library (~10), small prompt battery, "did it fire?" boolean. No judge model yet.

@@ -1,7 +1,7 @@
-import { streamText, type ModelMessage } from "ai";
 import { parseSkillMd } from "@/modules/skill";
+import type { ModelGateway } from "@/modules/model-gateway";
+import { isErr, type UserId } from "@/shared";
 import { buildTools } from "./tools";
-import type { ModelProvider } from "./model-provider";
 import type { BuildLoopInput, BuildLoopEvent } from "./build-loop.types";
 
 const SYSTEM_PROMPT = `You are SkillBuilder's authoring agent. You help a user
@@ -16,60 +16,50 @@ instructions only.`;
  * Run the build loop and stream typed events.
  *
  * This is the spine of the product (ARCHITECTURE §3): one server-side agentic
- * harness (Vercel AI SDK + Claude) with a tool registry. The mapping from the
- * SDK's stream parts to our `BuildLoopEvent`s is a deliberately loose adapter
- * boundary — it absorbs SDK-version field churn so the rest of the app sees a
- * stable, typed event contract. Wired for real; degrades to one error event
- * when no model key is configured.
+ * harness with a tool registry. The model is reached only through the **model
+ * gateway** (`streamAgent`) — the platform's single metered entry — so a build
+ * turn is gated against the user's tier and its tokens accounted, exactly like
+ * an evaluation. The gateway hands back a stable `AgentStreamPart` stream; this
+ * loop maps those parts to `BuildLoopEvent`s, owning only the *domain* meaning
+ * (parse the tool's SKILL.md), not the SDK's wire shape. Degrades to one error
+ * event when the gateway can't open a stream (no key → `model_unavailable`, or
+ * over the build cap → `cap_reached`).
  */
 export async function* runBuildLoop(
   input: BuildLoopInput,
-  provider: ModelProvider,
+  gateway: ModelGateway,
+  userId: UserId,
 ): AsyncGenerator<BuildLoopEvent> {
-  if (!provider.model) {
-    yield {
-      event: "error",
-      data: { message: "Model provider not configured — add ANTHROPIC_API_KEY." },
-    };
+  const opened = await gateway.streamAgent({
+    system: SYSTEM_PROMPT,
+    messages: input.messages.map((m) => ({ role: m.role, content: m.content })),
+    tools: buildTools,
+    // The build loop spends a user's allowance under the `build` capability; the
+    // gateway clears it against the tier cap before any part streams.
+    tag: { kind: "account", userId, capability: "build" },
+  });
+  if (isErr(opened)) {
+    yield { event: "error", data: { message: opened.error.message } };
     return;
   }
 
-  const messages: ModelMessage[] = input.messages.map((m) => ({
-    role: m.role,
-    content: m.content,
-  }));
-
-  const result = streamText({
-    model: provider.model,
-    system: SYSTEM_PROMPT,
-    messages,
-    tools: buildTools,
-  });
-
-  for await (const rawPart of result.fullStream) {
-    const part = rawPart as { type: string } & Record<string, unknown>;
-    switch (part.type) {
-      case "text-delta": {
-        const delta = readString(part, "text") ?? readString(part, "textDelta");
-        if (delta) yield { event: "text", data: { delta } };
+  for await (const part of opened.value) {
+    switch (part.kind) {
+      case "text":
+        if (part.delta) yield { event: "text", data: { delta: part.delta } };
         break;
-      }
       case "tool-call":
-        yield { event: "tool", data: { name: readString(part, "toolName") ?? "", phase: "call" } };
+        yield { event: "tool", data: { name: part.tool, phase: "call" } };
         break;
-      case "tool-result": {
-        const name = readString(part, "toolName") ?? "";
-        yield { event: "tool", data: { name, phase: "result" } };
-        yield* mapToolResult(name, part.output ?? part.result);
+      case "tool-result":
+        yield { event: "tool", data: { name: part.tool, phase: "result" } };
+        yield* mapToolResult(part.tool, part.output);
         break;
-      }
       case "finish":
-        yield { event: "done", data: { finishReason: readString(part, "finishReason") ?? "stop" } };
+        yield { event: "done", data: { finishReason: part.finishReason } };
         break;
       case "error":
-        yield { event: "error", data: { message: String(part.error ?? "Unknown error") } };
-        break;
-      default:
+        yield { event: "error", data: { message: part.message } };
         break;
     }
   }
@@ -88,9 +78,4 @@ function* mapToolResult(name: string, output: unknown): Generator<BuildLoopEvent
   if (name === "edit_skill" && typeof out.oldStr === "string" && typeof out.newStr === "string") {
     yield { event: "skill-edit", data: { oldStr: out.oldStr, newStr: out.newStr } };
   }
-}
-
-function readString(obj: Record<string, unknown>, key: string): string | undefined {
-  const value = obj[key];
-  return typeof value === "string" ? value : undefined;
 }
