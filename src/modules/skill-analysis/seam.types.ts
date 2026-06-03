@@ -1,5 +1,5 @@
 import type { Skill } from "@/modules/skill";
-import type { ModelGateway } from "@/modules/model-gateway";
+import type { AccountingTag, ModelGateway } from "@/modules/model-gateway";
 import type { Result, DomainError } from "@/shared";
 
 /**
@@ -44,13 +44,22 @@ export type Insight = {
 export type Artifact<K extends ArtifactKind = ArtifactKind> = { readonly kind: K };
 
 /**
+ * Optional resources for analyzers that can improve a static artifact with a
+ * bounded model call while retaining deterministic offline behaviour.
+ */
+export type AnalysisContext = {
+  readonly gateway?: ModelGateway;
+  readonly tag?: AccountingTag;
+};
+
+/**
  * Step one of an ANALYSIS capability: read a skill → emit a structured artifact
  * from its text alone. Pure enough to run offline; no model, no gateway. Async +
  * Result because some analyzers (e.g. visualise's IR) may call a bounded model.
  */
 export interface Analyzer<A extends Artifact> {
   readonly kind: A["kind"];
-  analyze(skill: Skill): Promise<Result<A, DomainError>>;
+  analyze(skill: Skill, context?: AnalysisContext): Promise<Result<A, DomainError>>;
 }
 
 /**

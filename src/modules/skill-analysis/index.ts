@@ -18,6 +18,7 @@ export type {
   ArtifactKind,
   SourceSpan,
   Artifact,
+  AnalysisContext,
   Insight,
   Analyzer,
   Evaluator,

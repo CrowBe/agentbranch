@@ -3,6 +3,7 @@ import type { ModelGateway } from "@/modules/model-gateway";
 import { mapResult, err, domainError, type Result, type DomainError } from "@/shared";
 import type {
   Artifact,
+  AnalysisContext,
   Analyzer,
   Evaluator,
   Renderer,
@@ -50,8 +51,9 @@ export async function runCapability<
   capability: AnalysisCapability<A, Surfaces>,
   surface: K,
   skill: Skill,
+  context?: AnalysisContext,
 ): Promise<Result<Surfaces[K], DomainError>> {
-  const artifact = await capability.analyzer.analyze(skill);
+  const artifact = await capability.analyzer.analyze(skill, context);
   return mapResult(artifact, (a) => capability.renderers[surface].render(a));
 }
 
@@ -84,6 +86,7 @@ export async function runEvaluation<
 
 export type {
   Artifact,
+  AnalysisContext,
   Analyzer,
   Evaluator,
   Renderer,
