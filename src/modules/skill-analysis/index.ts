@@ -18,6 +18,7 @@ export type {
   ArtifactKind,
   SourceSpan,
   Artifact,
+  Insight,
   Analyzer,
   Evaluator,
   Renderer,
@@ -31,3 +32,4 @@ export {
   runCapability,
   runEvaluation,
 } from "./seam";
+export { insightSchema } from "./insight-schema";

@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { z } from "zod";
 import { createModelGateway } from "./model-gateway";
 import { stubModelGateway } from "./stub-model-gateway";
 import { createMemoryUsageRepository } from "@/infra/memory/usage.memory-repository";
@@ -78,7 +79,14 @@ describe("stub model gateway", () => {
     expect(stubModelGateway.hasModel).toBe(false);
     const c = await stubModelGateway.classify({ prompt: "x", choices: ["a"], tag: platform });
     const r = await stubModelGateway.runAgent({ system: "", messages: [], tools: [], tag: platform });
+    const g = await stubModelGateway.generate({
+      system: "",
+      prompt: "x",
+      schema: z.object({ ok: z.boolean() }),
+      tag: platform,
+    });
     expect(isErr(c) && c.error.tag).toBe("model_unavailable");
     expect(isErr(r) && r.error.tag).toBe("model_unavailable");
+    expect(isErr(g) && g.error.tag).toBe("model_unavailable");
   });
 });

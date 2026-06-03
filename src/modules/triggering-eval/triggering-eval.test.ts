@@ -36,6 +36,18 @@ function fakeGateway(): ModelGateway {
     async runAgent() {
       return ok({ transcript: [] });
     },
+    async generate({ schema }) {
+      // Validate a canned insight through the caller's schema so the generic
+      // return type is honoured — same contract the real adapter satisfies.
+      return ok(
+        schema.parse({
+          verdict: "good",
+          summary: "Fires on the right prompts.",
+          findings: ["targets its keyword"],
+          watch: [],
+        }),
+      );
+    },
   };
 }
 
@@ -59,6 +71,9 @@ describe("triggering eval", () => {
       expect(["fire", "silent"]).toContain(c.actual);
       expect(typeof c.rationale).toBe("string");
     }
+    // The evaluator populates a plain-language Insight from generate().
+    expect(["good", "needs-attention", "failing"]).toContain(result.insight.verdict);
+    expect(typeof result.insight.summary).toBe("string");
   });
 
   it("fires on a matching prompt and stays silent on an unrelated one", async () => {

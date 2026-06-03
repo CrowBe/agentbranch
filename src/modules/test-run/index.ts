@@ -12,9 +12,15 @@
  * build-out step d; the `result` surface returns the raw artifact meanwhile).
  */
 import { defineEvaluation } from "@/modules/skill-analysis";
-import type { Evaluator } from "@/modules/skill-analysis";
+import type { Evaluator, Renderer, Insight } from "@/modules/skill-analysis";
 import { executeSkill } from "./execute-skill";
-import type { TestRunResult } from "./test-run.types";
+import type { Scenario, TestRunResult, TranscriptStep } from "./test-run.types";
+
+/** The detailed-breakdown surface: the scenario + the raw transcript. */
+export type TestRunBreakdown = {
+  readonly scenario: Scenario;
+  readonly transcript: readonly TranscriptStep[];
+};
 
 export type {
   MockTool,
@@ -41,11 +47,23 @@ const testRunEvaluator: Evaluator<TestRunResult> = {
     executeSkill({ skill, gateway, tag: { kind: "account", userId: skill.userId } }),
 };
 
+/** Insights — default, friendly: the model-written interpretation, shaped pure. */
+const insightsRenderer: Renderer<TestRunResult, Insight> = {
+  target: "insights",
+  render: (a) => a.insight,
+};
+
+/** Breakdown — depth on demand: the scenario + raw transcript. */
+const breakdownRenderer: Renderer<TestRunResult, TestRunBreakdown> = {
+  target: "breakdown",
+  render: (a) => ({ scenario: a.scenario, transcript: a.transcript }),
+};
+
 export const testRunCapability = defineEvaluation({
   name: "test run",
   evaluator: testRunEvaluator,
   renderers: {
-    /** Interim raw-artifact surface; Insights renderer lands in step (d). */
-    result: { target: "result", render: (a: TestRunResult) => a },
+    insights: insightsRenderer,
+    breakdown: breakdownRenderer,
   },
 });

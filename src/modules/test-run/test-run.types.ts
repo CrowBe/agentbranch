@@ -1,5 +1,5 @@
 import type { Skill } from "@/modules/skill";
-import type { Artifact } from "@/modules/skill-analysis";
+import type { Artifact, Insight } from "@/modules/skill-analysis";
 import type { TestRunId, UserId } from "@/shared";
 
 /**
@@ -41,6 +41,8 @@ export type TranscriptStep =
 export type TestRunResult = Artifact<"test-run"> & {
   readonly scenario: Scenario;
   readonly transcript: readonly TranscriptStep[];
+  /** The model-written interpretation (CONTEXT.md → Insight); renders to Insights. */
+  readonly insight: Insight;
 };
 
 export type TestRunStatus = "queued" | "running" | "completed" | "failed";

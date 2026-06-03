@@ -8,6 +8,7 @@ import type {
   AccountingTag,
   ClassifyInput,
   RunAgentInput,
+  GenerateInput,
   Classification,
   AgentTurn,
   AgentStep,
@@ -132,6 +133,24 @@ export function createModelGateway(deps: {
         return ok({ transcript: transcriptFromSteps(result.steps) });
       } catch (cause) {
         return err(domainError("model_unavailable", "Agent turn failed.", cause));
+      }
+    },
+
+    async generate<T>(input: GenerateInput<T>): Promise<Result<T, DomainError>> {
+      const admitted = await admit(input.tag);
+      if (isErr(admitted)) return admitted;
+
+      try {
+        const { object, usage: u } = await generateObject({
+          model: admitted.value,
+          schema: input.schema,
+          system: input.system,
+          prompt: input.prompt,
+        });
+        await record(input.tag, u?.totalTokens ?? 0);
+        return ok(object);
+      } catch (cause) {
+        return err(domainError("model_unavailable", "Generation call failed.", cause));
       }
     },
   };

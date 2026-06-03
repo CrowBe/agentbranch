@@ -41,11 +41,11 @@ _Avoid_: output, result, payload, IR (the IR is one artifact kind, not the categ
 _Avoid_: graph, AST, model (it is not the whole seam)
 
 **Evaluation result**:
-The Artifact an Evaluation capability emits — the structured run-record (which prompts fired, pass/fail, the mock-tool transcript). Ephemeral, lives on the seam, *never shown raw*. Internal term; never user copy.
+The Artifact an Evaluation capability emits — the structured run-record (which prompts fired, pass/fail, the mock-tool transcript) **plus an `insight`** (the model-written interpretation, see **Insight**). Ephemeral, lives on the seam, *never shown raw*. Internal term; never user copy.
 _Avoid_: report (smells like a data wall), results table, output, log
 
 **Insights**:
-*User-facing term* for the default rendered surface of an Evaluation result — a meaningful, plain-language presentation the user can act on ("fires on the right prompts, watch this one"). The interpreted view, not the raw run-record. A second renderer (a detailed breakdown) sits behind it for technical depth — the same Rendered/Source duality as the hero.
+*User-facing term* for the default rendered surface of an Evaluation result — a meaningful, plain-language presentation the user can act on ("fires on the right prompts, watch this one"). The **Insights renderer** is *pure*: it shapes the result's `insight` field (the model interpretation, produced by the evaluator via `gateway.generate`) into a display view-model. A second renderer — the **breakdown** — sits behind it for technical depth (the raw cases / transcript), the same Rendered/Source duality as the hero. One artifact, two pure renderers.
 _Avoid_: report, results, test output, eval data
 
 **Model gateway**:
@@ -53,12 +53,21 @@ The platform's *single, controlled* entry point to the model — its own module 
 _Avoid_: harness (evaluation-narrow + banned jargon), engine (that's the portability transform), runner, the SDK, model provider (that's the raw `LanguageModel` port the gateway wraps)
 
 **Gateway primitive**:
-A single intent-level model operation on the gateway. Two in v1:
-- **`classify({ prompt, choices })`** → `Result<{ choice: string | null, rationale: string }>`. One structured single-shot pick. `choice` is the winning label or `null` (nothing fit). `rationale` is the model's *own* one-line reason, captured — not an invented confidence number (a chat model can't honestly give one). Triggering eval composes "would this skill fire, vs. the distractors?" from it (candidate + distractors are the `choices`; `null` = stayed silent), and `rationale` feeds Insights' *why*.
+A single intent-level model operation on the gateway. Three in v1:
+- **`classify({ prompt, choices })`** → `Result<{ choice: string | null, rationale: string }>`. One structured single-shot pick. `choice` is the winning label or `null` (nothing fit). `rationale` is the model's *own* one-line reason, captured — not an invented confidence number (a chat model can't honestly give one). Triggering eval composes "would this skill fire, vs. the distractors?" from it (candidate + distractors are the `choices`; `null` = stayed silent).
 - **`runAgent({ system, messages, tools })`** → `Result<{ transcript }>`. One metered agent turn. The **gateway runs the loop**; each `tool` carries a caller-supplied `handler(input) → output`, so on a tool call the gateway invokes the caller's handler — loop is mechanism, tool *behaviour* is the caller's method. Test run passes handlers backed by its mock-tool registry. The gateway **records token usage internally** against the accounting tag (via the usage dep); the transcript comes back, tokens do not — the evaluator never touches them.
+- **`generate({ system, prompt, schema })`** → `Result<T>`. One metered free-form structured-output call (schema-validated). Distinct from `classify` (which picks from a fixed choice set): `generate` produces arbitrary structured data. An evaluator uses it to turn its *raw* result into a plain-language **Insight** after the run. Token usage recorded internally against the tag, like the others.
 
 Fine, not capability-shaped: keeping primitives fine is what keeps **method** in the caller and the gateway fixed-size as callers multiply.
 _Avoid_: tool, op, command, wouldSelect/runScenario (those are caller methods, not gateway primitives)
+
+**Insight**:
+The structured, plain-language interpretation of an Evaluation result — `{ verdict: "good" | "needs-attention" | "failing", summary, findings[], watch[] }`. The evaluator produces it via `gateway.generate` *after* its raw run and stores it **on the Evaluation result**; the **Insights** renderer (pure) shapes it for display. `verdict` drives the headline tone, `summary` is 1–2 plain sentences, `findings` is what's working, `watch` is the act-on-it part ("also fired on 'draft a reply'"). This is where "Insights is *more than* structured copy" comes from — it's real model interpretation, captured as data, not prose baked into a renderer.
+_Avoid_: summary, analysis, explanation (those name parts of it), verdict (that's one field)
+
+**Insight agent** (deferred, §9):
+The richer future of insight-generation — a tool-using agent (`runAgent` + tools) that *investigates* an Evaluation result (re-runs cases, inspects the skill) before explaining it. Cross-cutting: it would explain *any* evaluation kind, reusing the seam. v1 ships the bounded `generate`-based Insight instead; the agent replaces that call later without changing the `Insight` shape or the renderer.
+_Avoid_: insight service, explainer (premature naming)
 
 **Accounting tag**:
 A label the *caller* declares on every gateway call — **`account`** (user-attributable work, subject to tier policy) or **`platform`** (the platform's own cost to enable a feature, never charged to a user's allowance). The caller declares it because only the caller knows *why* it is spending. The gateway carries the tag to the **usage** module, which applies the matching accounting stream.

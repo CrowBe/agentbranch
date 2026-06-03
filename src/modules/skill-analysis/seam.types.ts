@@ -22,6 +22,24 @@ export type ArtifactKind =
   | "test-run"
   | "triggering-eval";
 
+/**
+ * The plain-language interpretation of an Evaluation result (CONTEXT.md →
+ * Insight). The evaluator produces this via `gateway.generate` *after* its raw
+ * run and stores it on the result; the Insights renderer (pure) shapes it for
+ * display. This is the seam's interpretation layer — shared by every evaluation
+ * kind, so it lives here next to the evaluation contract.
+ */
+export type Insight = {
+  /** Drives the headline tone. */
+  readonly verdict: "good" | "needs-attention" | "failing";
+  /** 1–2 plain-language sentences the user reads first. */
+  readonly summary: string;
+  /** What's working well. */
+  readonly findings: readonly string[];
+  /** Things to look at / act on (e.g. "also fired on 'draft a reply'"). */
+  readonly watch: readonly string[];
+};
+
 /** The structured thing an analyzer/evaluator emits. `kind` discriminates artifact types. */
 export type Artifact<K extends ArtifactKind = ArtifactKind> = { readonly kind: K };
 

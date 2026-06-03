@@ -1,3 +1,4 @@
+import type { z } from "zod";
 import type { Result, DomainError, UserId } from "@/shared";
 
 /**
@@ -59,6 +60,14 @@ export type RunAgentInput = {
   readonly tag: AccountingTag;
 };
 
+export type GenerateInput<T> = {
+  readonly system: string;
+  readonly prompt: string;
+  /** Zod schema the structured output is validated against; infers `T`. */
+  readonly schema: z.ZodType<T>;
+  readonly tag: AccountingTag;
+};
+
 /**
  * The platform's single, controlled entry to the model (CONTEXT.md → Model
  * gateway). Pure *mechanism*: it owns the key + AI-SDK plumbing and exposes fine
@@ -86,4 +95,11 @@ export interface ModelGateway {
    * internally against the tag — the transcript comes back, tokens do not.
    */
   runAgent(input: RunAgentInput): Promise<Result<AgentTurn, DomainError>>;
+
+  /**
+   * One metered free-form structured-output call, validated against `schema`.
+   * Unlike `classify` (a fixed pick), this produces arbitrary structured data —
+   * an evaluator uses it to turn its raw result into a plain-language Insight.
+   */
+  generate<T>(input: GenerateInput<T>): Promise<Result<T, DomainError>>;
 }
