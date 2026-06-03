@@ -27,6 +27,11 @@ function fakeGateway(): ModelGateway {
     async classify() {
       return ok({ choice: null, rationale: "n/a" });
     },
+    async streamAgent() {
+      // The build loop's primitive; unused by the test-run evaluator.
+      async function* empty() {}
+      return ok(empty());
+    },
     async runAgent({ messages, tools }) {
       const transcript: AgentStep[] = [
         { kind: "model", text: `Reading: ${messages[0]?.content ?? ""}` },

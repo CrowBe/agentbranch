@@ -33,6 +33,11 @@ function fakeGateway(): ModelGateway {
         .some((w) => words.has(w));
       return ok({ choice: fires ? candidate : null, rationale: "probe" });
     },
+    async streamAgent() {
+      // The build loop's primitive; unused by the triggering-eval evaluator.
+      async function* empty() {}
+      return ok(empty());
+    },
     async runAgent() {
       return ok({ transcript: [] });
     },

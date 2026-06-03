@@ -4,8 +4,7 @@ import { createModelGateway } from "./model-gateway";
 import { stubModelGateway } from "./stub-model-gateway";
 import { createMemoryUsageRepository } from "@/infra/memory/usage.memory-repository";
 import { TIER_LIMITS } from "@/modules/usage";
-import type { ModelProvider } from "@/modules/build-loop";
-import type { AccountingTag } from "@/modules/model-gateway";
+import type { ModelProvider, AccountingTag } from "@/modules/model-gateway";
 import { isErr, UserId } from "@/shared";
 
 /** A provider with a truthy model — enough to pass the no-model guard. The
@@ -100,6 +99,7 @@ describe("stub model gateway", () => {
     expect(stubModelGateway.hasModel).toBe(false);
     const c = await stubModelGateway.classify({ prompt: "x", choices: ["a"], tag: platform });
     const r = await stubModelGateway.runAgent({ system: "", messages: [], tools: [], tag: platform });
+    const s = await stubModelGateway.streamAgent({ system: "", messages: [], tools: [], tag: platform });
     const g = await stubModelGateway.generate({
       system: "",
       prompt: "x",
@@ -108,6 +108,7 @@ describe("stub model gateway", () => {
     });
     expect(isErr(c) && c.error.tag).toBe("model_unavailable");
     expect(isErr(r) && r.error.tag).toBe("model_unavailable");
+    expect(isErr(s) && s.error.tag).toBe("model_unavailable");
     expect(isErr(g) && g.error.tag).toBe("model_unavailable");
   });
 });

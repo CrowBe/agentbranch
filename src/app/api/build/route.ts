@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { getContainer } from "@/server/container";
 import { buildLoopResponse } from "@/server/build-stream";
-import { checkCap } from "@/modules/usage";
 
 export const runtime = "nodejs";
 
@@ -22,9 +21,12 @@ const bodySchema = z.object({
 });
 
 /**
- * The build-loop route handler — owns the Anthropic key, never the client
- * (ARCHITECTURE §3). Resolves identity, checks the build cap, then streams the
- * loop's events as SSE.
+ * The build-loop route handler. Resolves identity, then streams the loop's
+ * events as SSE. The build cap is no longer pre-checked here: the loop runs
+ * through the **model gateway**, which gates the `build` capability against the
+ * user's tier before any token is spent and surfaces `cap_reached` as a streamed
+ * error event ("out of free usage today", ARCHITECTURE §8). The gateway owns the
+ * Anthropic key, never the client (ARCHITECTURE §3).
  */
 export async function POST(request: Request): Promise<Response> {
   const container = getContainer();
@@ -34,18 +36,10 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "Sign in to build a skill." }, { status: 401 });
   }
 
-  const usage = await container.usage.get(identity.value.userId);
-  if (usage.ok) {
-    const decision = checkCap(usage.value, "free", "build");
-    if (!decision.allowed) {
-      return Response.json({ error: decision.reason }, { status: 429 });
-    }
-  }
-
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return Response.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  return buildLoopResponse(parsed.data, container.modelProvider);
+  return buildLoopResponse(parsed.data, container.modelGateway, identity.value.userId);
 }

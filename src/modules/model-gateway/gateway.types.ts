@@ -40,6 +40,19 @@ export type AgentStep =
   | { readonly kind: "tool-call"; readonly tool: string; readonly input: unknown }
   | { readonly kind: "tool-result"; readonly tool: string; readonly output: unknown };
 
+/**
+ * One part of a *streaming* agent turn (`streamAgent`). The gateway maps the
+ * AI-SDK's stream parts onto this stable, intent-level shape — absorbing
+ * SDK-version field churn at the gateway boundary so callers (the build loop)
+ * map *domain* meaning (parse a SKILL.md) rather than SDK internals.
+ */
+export type AgentStreamPart =
+  | { readonly kind: "text"; readonly delta: string }
+  | { readonly kind: "tool-call"; readonly tool: string }
+  | { readonly kind: "tool-result"; readonly tool: string; readonly output: unknown }
+  | { readonly kind: "finish"; readonly finishReason: string }
+  | { readonly kind: "error"; readonly message: string };
+
 /** The result of `classify` — the winning label or null, plus the model's own reason. */
 export type Classification = {
   /** The selected choice, or `null` when nothing fit ("stayed silent"). */
@@ -66,6 +79,9 @@ export type RunAgentInput = {
   readonly tag: AccountingTag;
 };
 
+/** Input to `streamAgent` — same shape as a one-shot agent turn, streamed. */
+export type StreamAgentInput = RunAgentInput;
+
 export type GenerateInput<T> = {
   readonly system: string;
   readonly prompt: string;
@@ -78,7 +94,7 @@ export type GenerateInput<T> = {
  * The platform's single, controlled entry to the model (CONTEXT.md → Model
  * gateway). Pure *mechanism*: it owns the key + AI-SDK plumbing and exposes fine
  * intent-level primitives that callers compose into their own method. It knows
- * nothing about "selection", "scenario", or any evaluation kind.
+ * nothing about "selection", "scenario", a build turn, or any capability kind.
  *
  * Every call carries an `AccountingTag`; the gateway routes accounting through
  * the usage authority (records `account` tokens, no-ops `platform`/paid in v1).
@@ -101,6 +117,17 @@ export interface ModelGateway {
    * internally against the tag — the transcript comes back, tokens do not.
    */
   runAgent(input: RunAgentInput): Promise<Result<AgentTurn, DomainError>>;
+
+  /**
+   * One metered *streaming* agent turn. Admits against the tag's cap up front —
+   * so `cap_reached` / `model_unavailable` surface as the outer `Result` *before*
+   * any part streams — then returns a generator of `AgentStreamPart`s. Tokens are
+   * recorded internally once the stream completes. This is the build loop's entry
+   * to the model: the hero preview needs deltas as they arrive, not a final turn.
+   */
+  streamAgent(
+    input: StreamAgentInput,
+  ): Promise<Result<AsyncGenerator<AgentStreamPart>, DomainError>>;
 
   /**
    * One metered free-form structured-output call, validated against `schema`.
