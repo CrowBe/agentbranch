@@ -1,4 +1,4 @@
-import { serializeSkillMd, type Skill } from "@/modules/skill";
+import { serializeSkillMd, type Skill, type SkillSource } from "@/modules/skill";
 import type { Analyzer } from "@/modules/skill-analysis";
 import { ok } from "@/shared";
 import type { HeroArtifact, DocSection } from "./hero.types";
@@ -11,15 +11,19 @@ import type { HeroArtifact, DocSection } from "./hero.types";
 export const heroAnalyzer: Analyzer<HeroArtifact> = {
   kind: "hero",
   async analyze(skill: Skill) {
-    const raw = serializeSkillMd(skill.source);
-    return ok({
-      kind: "hero" as const,
-      source: skill.source,
-      raw,
-      sections: splitSections(skill.source.body, raw),
-    });
+    return ok(createHeroArtifact(skill.source));
   },
 };
+
+export function createHeroArtifact(source: SkillSource): HeroArtifact {
+  const raw = serializeSkillMd(source);
+  return {
+    kind: "hero" as const,
+    source,
+    raw,
+    sections: splitSections(source.body, raw),
+  };
+}
 
 const HEADING = /^(#{1,6})\s+(.*)$/;
 

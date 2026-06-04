@@ -19,5 +19,7 @@ export const heroCapability = defineCapability<
   renderers: { rendered: renderedRenderer, source: sourceRenderer },
 });
 
+export { createHeroArtifact } from "./hero-analyzer";
+export { renderedRenderer, sourceRenderer } from "./renderers";
 export type { HeroArtifact, RenderedDoc, SourceDoc, DocSection } from "./hero.types";
 export type HeroView = "rendered" | "source";
