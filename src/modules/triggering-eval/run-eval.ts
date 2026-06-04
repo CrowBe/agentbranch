@@ -3,7 +3,7 @@ import { skillName, skillDescription } from "@/modules/skill";
 import type { ModelGateway, AccountingTag } from "@/modules/model-gateway";
 import { insightSchema } from "@/modules/skill-analysis";
 import { ok, isErr, type Result, type DomainError } from "@/shared";
-import { buildPromptBattery } from "./prompt-battery";
+import { generatePromptBattery } from "./prompt-battery";
 import { distractorLibrary } from "./distractor-library";
 import type { CaseResult, TriggeringResult } from "./triggering-eval.types";
 
@@ -22,12 +22,14 @@ export async function runTriggeringEval(
   gateway: ModelGateway,
   tag: AccountingTag,
 ): Promise<Result<TriggeringResult, DomainError>> {
-  const battery = buildPromptBattery(skill);
+  const battery = await generatePromptBattery(skill, gateway, tag);
+  if (isErr(battery)) return battery;
+
   const candidate = candidateLabel(skill);
   const choices = [candidate, ...distractorLibrary.map((d) => `${d.name}: ${d.description}`)];
 
   const cases: CaseResult[] = [];
-  for (const c of battery) {
+  for (const c of battery.value) {
     const selected = await gateway.classify({ prompt: c.prompt, choices, tag });
     if (isErr(selected)) return selected;
     const actual = selected.value.choice === candidate ? "fire" : "silent";

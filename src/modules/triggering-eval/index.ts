@@ -29,7 +29,7 @@ export type {
   EvalStatus,
 } from "./triggering-eval.types";
 export { distractorLibrary } from "./distractor-library";
-export { buildPromptBattery } from "./prompt-battery";
+export { buildPromptBattery, generatePromptBattery } from "./prompt-battery";
 export { runTriggeringEval } from "./run-eval";
 export type { EvalRunRepository } from "./eval.repository";
 

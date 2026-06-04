@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { runTriggeringEval, buildPromptBattery } from "./index";
+import { runTriggeringEval, buildPromptBattery, generatePromptBattery } from "./index";
 import { makeSkill, parseSkillMd, type Skill } from "@/modules/skill";
-import type { ModelGateway } from "@/modules/model-gateway";
+import type { GenerateInput, ModelGateway } from "@/modules/model-gateway";
 import { ok, unwrap, SkillId, UserId } from "@/shared";
 
 function skillFor(description: string): Skill {
@@ -21,7 +21,15 @@ function skillFor(description: string): Skill {
  * keyword with it, else null. Stands in for the model so the eval is testable
  * offline — exercises the evaluator's *method*, not the model.
  */
-function fakeGateway(): ModelGateway {
+type FakeGatewayOptions = {
+  readonly generatedBattery?: {
+    readonly positive: readonly string[];
+    readonly negative: readonly string[];
+  };
+  readonly generateCalls?: GenerateInput<unknown>[];
+};
+
+function fakeGateway(options: FakeGatewayOptions = {}): ModelGateway {
   return {
     hasModel: true,
     async classify({ prompt, choices }) {
@@ -41,11 +49,30 @@ function fakeGateway(): ModelGateway {
     async runAgent() {
       return ok({ transcript: [] });
     },
-    async generate({ schema }) {
+    async generate(input) {
+      options.generateCalls?.push(input as GenerateInput<unknown>);
+      if (input.prompt.includes("Return 3 positive prompts and 3 negative prompts.")) {
+        return ok(
+          input.schema.parse(
+            options.generatedBattery ?? {
+              positive: [
+                "Schedule a planning meeting on my calendar.",
+                "Find calendar time for a customer call next week.",
+                "Move my calendar block to Friday.",
+              ],
+              negative: [
+                "Summarize the notes from my meeting.",
+                "Write a follow-up email after the call.",
+                "What is the weather like tomorrow?",
+              ],
+            },
+          ),
+        );
+      }
       // Validate a canned insight through the caller's schema so the generic
       // return type is honoured — same contract the real adapter satisfies.
       return ok(
-        schema.parse({
+        input.schema.parse({
           verdict: "good",
           summary: "Fires on the right prompts.",
           findings: ["targets its keyword"],
@@ -66,17 +93,25 @@ describe("triggering eval", () => {
   });
 
   it("returns a pass/fail artifact over every case, composed via classify", async () => {
+    const generateCalls: GenerateInput<unknown>[] = [];
     const result = unwrap(
-      await runTriggeringEval(skillFor("Schedule meetings on the calendar."), fakeGateway(), TAG),
+      await runTriggeringEval(
+        skillFor("Schedule meetings on the calendar."),
+        fakeGateway({ generateCalls }),
+        TAG,
+      ),
     );
     expect(result.kind).toBe("triggering-eval");
-    expect(result.cases).toHaveLength(4);
+    expect(result.cases).toHaveLength(6);
     expect(typeof result.passed).toBe("boolean");
     for (const c of result.cases) {
       expect(["fire", "silent"]).toContain(c.actual);
       expect(typeof c.rationale).toBe("string");
     }
     // The evaluator populates a plain-language Insight from generate().
+    expect(generateCalls).toHaveLength(2);
+    expect(generateCalls[0]?.tag).toEqual(TAG);
+    expect(generateCalls[0]?.prompt).toContain("Return 3 positive prompts");
     expect(["good", "needs-attention", "failing"]).toContain(result.insight.verdict);
     expect(typeof result.insight.summary).toBe("string");
   });
@@ -89,5 +124,26 @@ describe("triggering eval", () => {
     const negatives = result.cases.filter((c) => c.expected === "silent");
     expect(positives.every((c) => c.actual === "fire")).toBe(true);
     expect(negatives.every((c) => c.actual === "silent")).toBe(true);
+  });
+
+  it("generates and caches the prompt battery per skill version", async () => {
+    const generateCalls: GenerateInput<unknown>[] = [];
+    const skill = skillFor("Coordinate calendar bookings for workshops.");
+    const gateway = fakeGateway({ generateCalls });
+
+    const first = unwrap(await generatePromptBattery(skill, gateway, TAG));
+    const second = unwrap(await generatePromptBattery(skill, gateway, TAG));
+
+    expect(first).toEqual(second);
+    expect(first).toContainEqual({
+      prompt: "Schedule a planning meeting on my calendar.",
+      expected: "fire",
+    });
+    expect(first).toContainEqual({
+      prompt: "Summarize the notes from my meeting.",
+      expected: "silent",
+    });
+    expect(generateCalls).toHaveLength(1);
+    expect(generateCalls[0]?.tag).toEqual(TAG);
   });
 });
