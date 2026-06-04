@@ -1,5 +1,5 @@
 import type { SkillSource } from "@/modules/skill";
-import type { SseEvent } from "@/shared";
+import type { SkillId, SseEvent } from "@/shared";
 
 /** A chat turn driving the build loop. */
 export type BuildMessage = {
@@ -11,6 +11,13 @@ export type BuildLoopInput = {
   readonly messages: readonly BuildMessage[];
   /** The skill being revised, if any (absent on first draft). */
   readonly current?: SkillSource;
+  readonly currentSkillId?: SkillId;
+};
+
+export type BuildLoopDone = {
+  readonly finishReason: string;
+  readonly skillId?: SkillId;
+  readonly revision?: number;
 };
 
 /**
@@ -23,5 +30,5 @@ export type BuildLoopEvent =
   | SseEvent<"skill", { readonly source: SkillSource }>
   | SseEvent<"skill-edit", { readonly oldStr: string; readonly newStr: string }>
   | SseEvent<"tool", { readonly name: string; readonly phase: "call" | "result" }>
-  | SseEvent<"done", { readonly finishReason: string }>
+  | SseEvent<"done", BuildLoopDone>
   | SseEvent<"error", { readonly message: string }>;

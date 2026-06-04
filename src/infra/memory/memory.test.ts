@@ -13,6 +13,8 @@ describe("in-memory adapters", () => {
     const v2 = unwrap(parseSkillMd(`---\nname: t\ndescription: d2\n---\nbody2`));
     const saved = unwrap(await repo.save({ id: created.id, source: v2 }));
     expect(saved.source.frontmatter.description).toBe("d2");
+    expect(created.latestRevision).toBe(1);
+    expect(saved.latestRevision).toBe(2);
     expect(saved.updatedAt.getTime()).toBeGreaterThanOrEqual(created.createdAt.getTime());
 
     const mine = unwrap(await repo.listByUser(UserId("u1")));

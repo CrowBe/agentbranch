@@ -1,5 +1,11 @@
 import { encodeSse, type UserId } from "@/shared";
-import { runBuildLoop, type BuildLoopInput } from "@/modules/build-loop";
+import {
+  parseSkillMd,
+  serializeSkillMd,
+  type SkillRepository,
+  type SkillSource,
+} from "@/modules/skill";
+import { runBuildLoop, type BuildLoopInput, type BuildLoopEvent } from "@/modules/build-loop";
 import type { ModelGateway } from "@/modules/model-gateway";
 
 /**
@@ -10,13 +16,54 @@ import type { ModelGateway } from "@/modules/model-gateway";
 export function buildLoopResponse(
   input: BuildLoopInput,
   gateway: ModelGateway,
+  skills: SkillRepository,
   userId: UserId,
 ): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      let latestSource = input.current;
       try {
         for await (const event of runBuildLoop(input, gateway, userId)) {
+          if (event.event === "skill") {
+            latestSource = event.data.source;
+            controller.enqueue(encoder.encode(encodeSse(event)));
+            continue;
+          }
+
+          if (event.event === "skill-edit") {
+            latestSource = applySkillEdit(latestSource, event.data.oldStr, event.data.newStr);
+            controller.enqueue(encoder.encode(encodeSse(event)));
+            continue;
+          }
+
+          if (event.event === "done" && latestSource) {
+            const persisted = input.currentSkillId
+              ? await skills.save({ id: input.currentSkillId, source: latestSource })
+              : await skills.create({ userId, source: latestSource });
+            if (!persisted.ok) {
+              controller.enqueue(
+                encoder.encode(
+                  encodeSse({ event: "error", data: { message: persisted.error.message } }),
+                ),
+              );
+              continue;
+            }
+            controller.enqueue(
+              encoder.encode(
+                encodeSse({
+                  event: "done",
+                  data: {
+                    ...event.data,
+                    skillId: persisted.value.id,
+                    revision: persisted.value.latestRevision,
+                  },
+                } satisfies BuildLoopEvent),
+              ),
+            );
+            continue;
+          }
+
           controller.enqueue(encoder.encode(encodeSse(event)));
         }
       } catch (cause) {
@@ -36,4 +83,17 @@ export function buildLoopResponse(
       Connection: "keep-alive",
     },
   });
+}
+
+function applySkillEdit(
+  current: SkillSource | undefined,
+  oldStr: string,
+  newStr: string,
+): SkillSource | undefined {
+  if (!current) return current;
+  const raw = serializeSkillMd(current);
+  const nextRaw = raw.replace(oldStr, newStr);
+  if (nextRaw === raw) return current;
+  const parsed = parseSkillMd(nextRaw);
+  return parsed.ok ? parsed.value : current;
 }

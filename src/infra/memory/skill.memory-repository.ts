@@ -18,7 +18,14 @@ export function createMemorySkillRepository(): SkillRepository {
   return {
     async create({ userId, source }) {
       const now = new Date();
-      const skill = makeSkill({ id: SkillId(crypto.randomUUID()), userId, source, createdAt: now, updatedAt: now });
+      const skill = makeSkill({
+        id: SkillId(crypto.randomUUID()),
+        userId,
+        source,
+        latestRevision: 1,
+        createdAt: now,
+        updatedAt: now,
+      });
       skills.set(skill.id, skill);
       return ok(skill);
     },
