@@ -38,6 +38,26 @@ export function buildLoopResponse(
           }
 
           if (event.event === "done" && latestSource) {
+            if (input.currentSkillId) {
+              const existing = await skills.findById(input.currentSkillId);
+              if (!existing.ok) {
+                controller.enqueue(
+                  encoder.encode(
+                    encodeSse({ event: "error", data: { message: existing.error.message } }),
+                  ),
+                );
+                continue;
+              }
+              if (!existing.value || existing.value.userId !== userId) {
+                controller.enqueue(
+                  encoder.encode(
+                    encodeSse({ event: "error", data: { message: "Skill not found." } }),
+                  ),
+                );
+                continue;
+              }
+            }
+
             const persisted = input.currentSkillId
               ? await skills.save({ id: input.currentSkillId, source: latestSource })
               : await skills.create({ userId, source: latestSource });
