@@ -1,13 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { executeSkill, defaultMockToolRegistry } from "./index";
 import { makeSkill, parseSkillMd, type Skill } from "@/modules/skill";
-import type { ModelGateway, AgentStep } from "@/modules/model-gateway";
+import type { ModelGateway, AgentStep, GenerateInput } from "@/modules/model-gateway";
 import { ok, unwrap, SkillId, UserId } from "@/shared";
 
-function fixtureSkill(): Skill {
+function fixtureSkill(id = "s1"): Skill {
   const source = unwrap(parseSkillMd(`---\nname: t\ndescription: d\n---\nbody`));
   return makeSkill({
-    id: SkillId("s1"),
+    id: SkillId(id),
     userId: UserId("u1"),
     source,
     createdAt: new Date(0),
@@ -21,7 +21,7 @@ function fixtureSkill(): Skill {
  * a transcript. This exercises the evaluator's *method* (mocks-as-handlers,
  * nothing real touched) without a model.
  */
-function fakeGateway(): ModelGateway {
+function fakeGateway(calls: { generate: GenerateInput<unknown>[] } = { generate: [] }): ModelGateway {
   return {
     hasModel: true,
     async classify() {
@@ -44,11 +44,38 @@ function fakeGateway(): ModelGateway {
       transcript.push({ kind: "model", text: "Done. Nothing real was touched." });
       return ok({ transcript });
     },
-    async generate({ schema }) {
+    async generate(input) {
+      calls.generate.push(input);
+      if (input.system.includes("deterministic test-run inputs")) {
+        return ok(
+          input.schema.parse({
+            scenario: {
+              prompt: "Summarise the recent customer tickets and identify the riskiest one.",
+              seedData: { customer: "Acme" },
+            },
+            mockTools: [
+              {
+                name: "search_tickets",
+                description: "Returns mocked customer support tickets.",
+                response: {
+                  tickets: [
+                    {
+                      id: "T-100",
+                      subject: "Production deploy blocked",
+                      priority: "high",
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+        );
+      }
+
       // Validate a canned insight through the caller's schema so the generic
       // return type is honoured — same contract the real adapter satisfies.
       return ok(
-        schema.parse({
+        input.schema.parse({
           verdict: "good",
           summary: "The skill read the inbox and drafted a sensible reply.",
           findings: ["called the email tool"],
@@ -68,6 +95,7 @@ describe("test run", () => {
         skill: fixtureSkill(),
         gateway: fakeGateway(),
         tag: TAG,
+        scenario: { prompt: "Check the inbox.", seedData: {} },
         registry: defaultMockToolRegistry(),
       }),
     );
@@ -79,15 +107,33 @@ describe("test run", () => {
   });
 
   it("builds its own world when no scenario/registry is supplied", async () => {
+    const calls: { generate: GenerateInput<unknown>[] } = { generate: [] };
     const result = unwrap(
-      await executeSkill({ skill: fixtureSkill(), gateway: fakeGateway(), tag: TAG }),
+      await executeSkill({ skill: fixtureSkill(), gateway: fakeGateway(calls), tag: TAG }),
     );
     expect(result.kind).toBe("test-run");
-    // The evaluator's default scenario mentions the skill by name.
-    expect(result.scenario.prompt).toContain("skill");
-    // Default registry is the email mock, so its call shows up.
+    expect(result.scenario.prompt).toContain("customer tickets");
+    // The evaluator infers a matching mock from the generated world.
     expect(
-      result.transcript.some((s) => s.kind === "tool-call" && s.tool === "read_email"),
+      result.transcript.some((s) => s.kind === "tool-call" && s.tool === "search_tickets"),
     ).toBe(true);
+    expect(calls.generate[0]?.tag).toEqual({
+      kind: "platform",
+      reason: "test-run mock world generation",
+    });
+  });
+
+  it("reuses the generated world for deterministic reruns of the same skill version", async () => {
+    const skill = fixtureSkill("s2");
+    const calls: { generate: GenerateInput<unknown>[] } = { generate: [] };
+    const gateway = fakeGateway(calls);
+
+    unwrap(await executeSkill({ skill, gateway, tag: TAG }));
+    unwrap(await executeSkill({ skill, gateway, tag: TAG }));
+
+    const worldGenerations = calls.generate.filter((call) =>
+      call.system.includes("deterministic test-run inputs"),
+    );
+    expect(worldGenerations).toHaveLength(1);
   });
 });
