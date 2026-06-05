@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getContainer } from "@/server/container";
 import { buildLoopResponse } from "@/server/build-stream";
+import { SkillId } from "@/shared";
 
 export const runtime = "nodejs";
 
@@ -18,6 +19,7 @@ const bodySchema = z.object({
       body: z.string(),
     })
     .optional(),
+  currentSkillId: z.string().optional(),
 });
 
 /**
@@ -41,5 +43,13 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  return buildLoopResponse(parsed.data, container.modelGateway, identity.value.userId);
+  return buildLoopResponse(
+    {
+      ...parsed.data,
+      currentSkillId: parsed.data.currentSkillId ? SkillId(parsed.data.currentSkillId) : undefined,
+    },
+    container.modelGateway,
+    container.skills,
+    identity.value.userId,
+  );
 }

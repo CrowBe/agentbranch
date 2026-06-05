@@ -19,7 +19,7 @@ type SkillRow = {
 };
 
 /** Rehydrate the Skill aggregate from a persisted row. */
-function toSkill(row: SkillRow): Skill {
+function toSkill(row: SkillRow, latestRevision: number): Skill {
   return makeSkill({
     id: SkillId(row.id),
     userId: UserId(row.userId),
@@ -31,6 +31,7 @@ function toSkill(row: SkillRow): Skill {
       },
       body: row.body,
     },
+    latestRevision,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   });
@@ -57,7 +58,7 @@ export function createPrismaSkillRepository(prisma: PrismaClient): SkillReposito
           versions: { create: { revision: 1, ...columns(source) } },
         },
       });
-      return ok(toSkill(skill as SkillRow));
+      return ok(toSkill(skill as SkillRow, 1));
     },
 
     async save({ id, source }: { id: SkillIdT; source: SkillSource }) {
@@ -66,27 +67,32 @@ export function createPrismaSkillRepository(prisma: PrismaClient): SkillReposito
         orderBy: { revision: "desc" },
         select: { revision: true },
       });
+      const nextRevision = (latest?.revision ?? 0) + 1;
       const skill = await prisma.skill.update({
         where: { id },
         data: {
           ...columns(source),
-          versions: { create: { revision: (latest?.revision ?? 0) + 1, ...columns(source) } },
+          versions: { create: { revision: nextRevision, ...columns(source) } },
         },
       });
-      return ok(toSkill(skill as SkillRow));
+      return ok(toSkill(skill as SkillRow, nextRevision));
     },
 
     async findById(id) {
-      const row = await prisma.skill.findUnique({ where: { id } });
-      return ok(row ? toSkill(row as SkillRow) : null);
+      const row = await prisma.skill.findUnique({
+        where: { id },
+        include: { versions: { orderBy: { revision: "desc" }, take: 1, select: { revision: true } } },
+      });
+      return ok(row ? toSkill(row as SkillRow, row.versions[0]?.revision ?? 0) : null);
     },
 
     async listByUser(userId) {
       const rows = await prisma.skill.findMany({
         where: { userId },
         orderBy: { createdAt: "desc" },
+        include: { versions: { orderBy: { revision: "desc" }, take: 1, select: { revision: true } } },
       });
-      return ok(rows.map((r) => toSkill(r as SkillRow)));
+      return ok(rows.map((r) => toSkill(r as SkillRow, r.versions[0]?.revision ?? 0)));
     },
   };
 }

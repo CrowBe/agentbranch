@@ -34,6 +34,7 @@ export function AppShell({
   const [status, setStatus] = useState<string | null>(null);
   const [heroDocs, setHeroDocs] = useState({ rendered, source });
   const [current, setCurrent] = useState<SkillSource | null>(null);
+  const [currentSkillId, setCurrentSkillId] = useState<string | null>(null);
   const [messages, setMessages] = useState<BuildMessage[]>([]);
   const [entries, setEntries] = useState<InteractionEntry[]>([]);
   const [busy, setBusy] = useState(false);
@@ -55,6 +56,7 @@ export function AppShell({
         body: JSON.stringify({
           messages: nextMessages,
           current: latestSource ?? undefined,
+          currentSkillId: currentSkillId ?? undefined,
         }),
       });
       if (!res.ok) {
@@ -102,6 +104,7 @@ export function AppShell({
           setStatus(friendlyError(event.data.message));
           setEntries((prev) => [...prev, entry(friendlyError(event.data.message), "error")]);
         } else if (event.event === "done") {
+          if (event.data.skillId) setCurrentSkillId(event.data.skillId);
           setStatus("Build complete.");
         }
       }

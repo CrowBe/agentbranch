@@ -30,6 +30,7 @@ export type Skill = {
   readonly id: SkillId;
   readonly userId: UserId;
   readonly source: SkillSource;
+  readonly latestRevision: number;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 };

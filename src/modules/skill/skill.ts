@@ -10,6 +10,7 @@ export function makeSkill(params: {
   id: SkillId;
   userId: UserId;
   source: SkillSource;
+  latestRevision?: number;
   createdAt: Date;
   updatedAt: Date;
 }): Skill {
@@ -17,6 +18,7 @@ export function makeSkill(params: {
     id: params.id,
     userId: params.userId,
     source: params.source,
+    latestRevision: params.latestRevision ?? 1,
     createdAt: params.createdAt,
     updatedAt: params.updatedAt,
   };
@@ -24,7 +26,7 @@ export function makeSkill(params: {
 
 /** Apply an edited source to a skill, bumping `updatedAt`. */
 export function reviseSkill(skill: Skill, source: SkillSource, now: Date): Skill {
-  return { ...skill, source, updatedAt: now };
+  return { ...skill, source, latestRevision: skill.latestRevision + 1, updatedAt: now };
 }
 
 /** Convenience accessors so callers don't reach through `source.frontmatter`. */
