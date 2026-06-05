@@ -15,6 +15,7 @@ import { createPrismaClient } from "@/infra/prisma/client";
 import { createPrismaSkillRepository } from "@/infra/prisma/skill.prisma-repository";
 import { createPrismaUsageRepository } from "@/infra/prisma/usage.prisma-repository";
 import { createAnthropicProvider } from "@/infra/ai/anthropic-provider";
+import { createNousProvider } from "@/infra/ai/nous-provider";
 import { createModelGateway } from "@/infra/ai/model-gateway";
 import { stubModelGateway } from "@/infra/ai/stub-model-gateway";
 import { createClerkAuth } from "@/infra/clerk/clerk-auth";
@@ -45,10 +46,17 @@ export function getContainer(): AppContainer {
 
   const prisma = config.databaseUrl ? createPrismaClient(config.databaseUrl) : null;
 
-  const modelProvider = createAnthropicProvider({
-    apiKey: config.anthropicApiKey,
-    modelId: config.modelId,
-  });
+  const modelProvider =
+    config.modelProvider === "nous"
+      ? createNousProvider({
+          apiKey: config.nousApiKey,
+          modelId: config.modelId,
+          baseUrl: config.nousBaseUrl,
+        })
+      : createAnthropicProvider({
+          apiKey: config.anthropicApiKey,
+          modelId: config.modelId,
+        });
   const usage = prisma ? createPrismaUsageRepository(prisma) : createMemoryUsageRepository();
 
   // The model gateway is the platform's single metered entry to the model. It

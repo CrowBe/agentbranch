@@ -255,12 +255,13 @@ pnpm test       # vitest (run once)     pnpm test:watch
 pnpm db:generate / db:push / db:migrate # Prisma (needs DATABASE_URL)
 ```
 
-- **Boots with no secrets.** Missing `DATABASE_URL` / Clerk keys /
-  `ANTHROPIC_API_KEY` ⇒ memory + stub adapters. Copy `.env.example` →
-  `.env.local` to switch to real services.
+- **Boots with no secrets.** Missing `DATABASE_URL` / Clerk keys / selected
+  model-provider key (`ANTHROPIC_API_KEY` or `NOUS_API_KEY`) ⇒ memory + stub
+  adapters. Copy `.env.example` → `.env.local` to switch to real services.
 - Stack: Next 16 (App Router) · React 19 · Prisma 7 (pg driver adapter,
-  `prisma.config.ts`) · Clerk 7 · Vercel AI SDK 6 (`@ai-sdk/anthropic`, Claude
-  default — never the Anthropic SDK directly) · Tailwind 4 · Vitest 4 · pnpm.
+  `prisma.config.ts`) · Clerk 7 · Vercel AI SDK 6 (`@ai-sdk/anthropic`,
+  `@ai-sdk/openai-compatible`, Claude default with optional Nous Portal) ·
+  Tailwind 4 · Vitest 4 · pnpm.
 - Data model lives in `prisma/schema.prisma` (ARCHITECTURE §6): `users`,
   `skills`, `skill_versions` (append-only), `usage`, `test_runs`, `eval_runs`.
 

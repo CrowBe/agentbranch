@@ -36,9 +36,9 @@ Bridge audience: technical builders **and** non-technical SMB owners. Identity i
 
 ## Stack
 
-Next.js 16 (App Router) + TypeScript · **Postgres via Prisma 7** (driver-adapter `@prisma/adapter-pg`; config in `prisma.config.ts`) · **Clerk** auth (Google+GitHub) · **Vercel AI SDK** (`ai` + `@ai-sdk/anthropic`, default Claude models — never the Anthropic SDK directly) · SSE streaming · **Tailwind v4** (design tokens as CSS vars in `src/app/globals.css`) · Vitest. The build loop streams from `src/app/api/build/route.ts`, reaching the model through the **model gateway** — which owns the Anthropic key and never touches the client.
+Next.js 16 (App Router) + TypeScript · **Postgres via Prisma 7** (driver-adapter `@prisma/adapter-pg`; config in `prisma.config.ts`) · **Clerk** auth (Google+GitHub) · **Vercel AI SDK** (`ai` + `@ai-sdk/anthropic` / `@ai-sdk/openai-compatible`, default Claude models with optional Nous Portal) · SSE streaming · **Tailwind v4** (design tokens as CSS vars in `src/app/globals.css`) · Vitest. The build loop streams from `src/app/api/build/route.ts`, reaching the model through the **model gateway** — which owns the provider key and never touches the client.
 
-Package manager is **pnpm**. The app boots without any secrets: missing `DATABASE_URL` / Clerk keys / `ANTHROPIC_API_KEY` degrade to in-memory + stub adapters (see `src/server/container.ts`), so the shell runs offline.
+Package manager is **pnpm**. The app boots without any secrets: missing `DATABASE_URL` / Clerk keys / selected model-provider key degrade to in-memory + stub adapters (see `src/server/container.ts`), so the shell runs offline.
 
 ## Commands
 
@@ -47,7 +47,7 @@ Package manager is **pnpm**. The app boots without any secrets: missing `DATABAS
 - `pnpm typecheck` (tsc) · `pnpm lint` (eslint)
 - `pnpm db:generate` · `pnpm db:push` · `pnpm db:migrate` (Prisma; needs `DATABASE_URL`)
 
-Copy `.env.example` → `.env.local` and fill in to switch from stubs to real services.
+Copy `.env.example` → `.env.local` and fill in to switch from stubs to real services. For Nous Portal, set `SKILLBUILDER_MODEL_PROVIDER=nous`, `NOUS_API_KEY`, and a Nous model such as `Hermes-4.3-36B`.
 
 ## Architecture map (DDD / deep modules)
 
@@ -56,7 +56,7 @@ Hexagonal: pure **domain modules** depend on ports (interfaces); **infra** suppl
 - `src/shared/` — kernel: `Result`, branded ids, `DomainError`, SSE envelope.
 - `src/modules/<domain>/` — the domain. Each is a deep module with an `index.ts` public surface + co-located tests:
   - `skill` (the aggregate + lossless `SKILL.md` parse/serialize), `skill-analysis` (**the seam** — two shapes: **analysis** `defineCapability`/`runCapability` (static, offline) and **evaluation** `defineEvaluation`/`runEvaluation` (dynamic, needs the model gateway)), `hero` (Rendered+Source renderers), `visualise` (skill IR → Mermaid), `test-run` (mock-tool registry + `execute_skill`), `triggering-eval`, `export` (Claude `.zip` manifest), `portability` (stub engine), `build-loop` (tools + event mapping; streams through the gateway's `streamAgent`, no raw model access), `model-gateway` (**the platform's single metered entry to the model** — `classify`/`runAgent`/`streamAgent`/`generate` primitives + `account`/`platform` accounting tag; owns the `ModelProvider` port; depends on `usage`), `usage` (tier caps + accounting authority), `auth` (`AuthPort`).
-- `src/infra/` — adapters: `prisma/`, `memory/` (offline default), `ai/` (Anthropic provider + **model-gateway** adapter, each with an offline stub), `clerk/` (real + stub auth).
+- `src/infra/` — adapters: `prisma/`, `memory/` (offline default), `ai/` (Anthropic/Nous providers + **model-gateway** adapter, each with an offline stub), `clerk/` (real + stub auth).
 - `src/server/` — `config.ts` (env→flags), `container.ts` (composition root), `build-stream.ts` (loop→SSE).
 - `src/app/` — App Router presentation; `src/components/` — the shell (top bar, rail, hero, panel) dressed per `DESIGN.md`.
 
