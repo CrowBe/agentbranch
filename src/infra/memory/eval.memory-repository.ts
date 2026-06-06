@@ -1,5 +1,5 @@
 import type { EvalRun, EvalRunRepository } from "@/modules/triggering-eval";
-import { ok, EvalRunId, type SkillId } from "@/shared";
+import { ok, EvalRunId, type SkillId, type UserId } from "@/shared";
 
 /** In-memory EvalRunRepository — the offline default. */
 export function createMemoryEvalRunRepository(): EvalRunRepository {
@@ -16,6 +16,9 @@ export function createMemoryEvalRunRepository(): EvalRunRepository {
     },
     async listBySkill(skillId: SkillId) {
       return ok([...runs.values()].filter((r) => r.skillId === skillId));
+    },
+    async listByUser(userId: UserId) {
+      return ok([...runs.values()].filter((r) => r.userId === userId));
     },
   };
 }

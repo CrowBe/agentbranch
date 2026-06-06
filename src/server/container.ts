@@ -14,6 +14,8 @@ import { createMemoryEvalRunRepository } from "@/infra/memory/eval.memory-reposi
 import { createPrismaClient } from "@/infra/prisma/client";
 import { createPrismaSkillRepository } from "@/infra/prisma/skill.prisma-repository";
 import { createPrismaUsageRepository } from "@/infra/prisma/usage.prisma-repository";
+import { createPrismaTestRunRepository } from "@/infra/prisma/test-run.prisma-repository";
+import { createPrismaEvalRunRepository } from "@/infra/prisma/eval.prisma-repository";
 import { createUserProvisioningAuth } from "@/infra/prisma/user-provisioning-auth";
 import { createAnthropicProvider } from "@/infra/ai/anthropic-provider";
 import { createNousProvider } from "@/infra/ai/nous-provider";
@@ -75,10 +77,8 @@ export function getContainer(): AppContainer {
     modelGateway,
     skills: prisma ? createPrismaSkillRepository(prisma) : createMemorySkillRepository(),
     usage,
-    // Test-run and eval persistence ship memory-only in this slice; their
-    // Prisma adapters follow the same shape as skills/usage.
-    testRuns: createMemoryTestRunRepository(),
-    evalRuns: createMemoryEvalRunRepository(),
+    testRuns: prisma ? createPrismaTestRunRepository(prisma) : createMemoryTestRunRepository(),
+    evalRuns: prisma ? createPrismaEvalRunRepository(prisma) : createMemoryEvalRunRepository(),
   };
   return cached;
 }
