@@ -14,6 +14,7 @@ import { createMemoryEvalRunRepository } from "@/infra/memory/eval.memory-reposi
 import { createPrismaClient } from "@/infra/prisma/client";
 import { createPrismaSkillRepository } from "@/infra/prisma/skill.prisma-repository";
 import { createPrismaUsageRepository } from "@/infra/prisma/usage.prisma-repository";
+import { createUserProvisioningAuth } from "@/infra/prisma/user-provisioning-auth";
 import { createAnthropicProvider } from "@/infra/ai/anthropic-provider";
 import { createNousProvider } from "@/infra/ai/nous-provider";
 import { createModelGateway } from "@/infra/ai/model-gateway";
@@ -66,9 +67,11 @@ export function getContainer(): AppContainer {
     ? createModelGateway({ provider: modelProvider, usage })
     : stubModelGateway;
 
+  const auth = config.flags.hasAuth ? createClerkAuth() : createStubAuth();
+
   cached = {
     config,
-    auth: config.flags.hasAuth ? createClerkAuth() : createStubAuth(),
+    auth: prisma && config.flags.hasAuth ? createUserProvisioningAuth(auth, prisma) : auth,
     modelGateway,
     skills: prisma ? createPrismaSkillRepository(prisma) : createMemorySkillRepository(),
     usage,
