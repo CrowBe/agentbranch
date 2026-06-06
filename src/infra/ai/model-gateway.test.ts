@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
 import { z } from "zod";
 import { createModelGateway } from "./model-gateway";
 import { stubModelGateway } from "./stub-model-gateway";
@@ -6,6 +6,25 @@ import { createMemoryUsageRepository } from "@/infra/memory/usage.memory-reposit
 import { TIER_LIMITS } from "@/modules/usage";
 import type { ModelProvider, AccountingTag } from "@/modules/model-gateway";
 import { isErr, UserId } from "@/shared";
+
+const aiMocks = vi.hoisted(() => ({
+  streamText: vi.fn(),
+  generateObject: vi.fn(async () => {
+    throw new Error("mock generateObject failure");
+  }),
+  generateText: vi.fn(async () => {
+    throw new Error("mock generateText failure");
+  }),
+}));
+
+vi.mock("ai", () => ({
+  generateObject: aiMocks.generateObject,
+  generateText: aiMocks.generateText,
+  streamText: aiMocks.streamText,
+  tool: vi.fn((definition) => definition),
+  stepCountIs: vi.fn((count: number) => ({ count })),
+  jsonSchema: vi.fn((schema) => schema),
+}));
 
 /** A provider with a truthy model — enough to pass the no-model guard. The
  *  accounting checks under test all resolve *before* any SDK call, so the model
@@ -19,6 +38,10 @@ const account = (id: string): AccountingTag => ({
   capability: "test-run",
 });
 const platform: AccountingTag = { kind: "platform", reason: "test" };
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe("model gateway — accounting guard", () => {
   it("fails model_unavailable when no model is configured", async () => {
@@ -94,6 +117,93 @@ describe("model gateway — accounting guard", () => {
   });
 });
 
+describe("model gateway — stream accounting", () => {
+  it("records stream usage once after a clean settle", async () => {
+    aiMocks.streamText.mockReturnValueOnce({
+      fullStream: parts([
+        { type: "text-delta", text: "hello" },
+        { type: "finish", finishReason: "stop" },
+      ]),
+      totalUsage: Promise.resolve({ totalTokens: 31 }),
+    });
+    const usage = createMemoryUsageRepository();
+    const userId = UserId("stream-clean");
+    const gateway = createModelGateway({ provider: withModel, usage });
+
+    const opened = await gateway.streamAgent({
+      system: "",
+      messages: [],
+      tools: [],
+      tag: { kind: "account", userId, capability: "test-run" },
+    });
+
+    expect(isErr(opened)).toBe(false);
+    if (!isErr(opened)) {
+      expect(await collect(opened.value)).toEqual([
+        { kind: "text", delta: "hello" },
+        { kind: "finish", finishReason: "stop" },
+      ]);
+    }
+    const snapshot = await usage.get(userId);
+    expect(isErr(snapshot)).toBe(false);
+    if (!isErr(snapshot)) expect(snapshot.value).toMatchObject({ tokensUsed: 31, turnsUsed: 1 });
+  });
+
+  it("records the latest known stream usage when the stream throws", async () => {
+    aiMocks.streamText.mockReturnValueOnce({
+      fullStream: throwingParts([
+        { type: "text-delta", text: "before", usage: { totalTokens: 12 } },
+      ]),
+      totalUsage: Promise.reject(new Error("usage unavailable")),
+    });
+    const usage = createMemoryUsageRepository();
+    const userId = UserId("stream-error");
+    const gateway = createModelGateway({ provider: withModel, usage });
+
+    const opened = await gateway.streamAgent({
+      system: "",
+      messages: [],
+      tools: [],
+      tag: { kind: "account", userId, capability: "test-run" },
+    });
+
+    expect(isErr(opened)).toBe(false);
+    if (!isErr(opened)) await expect(collect(opened.value)).rejects.toThrow("stream failed");
+    const snapshot = await usage.get(userId);
+    expect(isErr(snapshot)).toBe(false);
+    if (!isErr(snapshot)) expect(snapshot.value).toMatchObject({ tokensUsed: 12, turnsUsed: 1 });
+  });
+
+  it("records the latest known stream usage when the client stops consuming", async () => {
+    aiMocks.streamText.mockReturnValueOnce({
+      fullStream: parts([
+        { type: "text-delta", text: "partial", usage: { totalTokens: 9 } },
+        { type: "text-delta", text: "unread", usage: { totalTokens: 20 } },
+      ]),
+      totalUsage: Promise.reject(new Error("aborted")),
+    });
+    const usage = createMemoryUsageRepository();
+    const userId = UserId("stream-abort");
+    const gateway = createModelGateway({ provider: withModel, usage });
+
+    const opened = await gateway.streamAgent({
+      system: "",
+      messages: [],
+      tools: [],
+      tag: { kind: "account", userId, capability: "test-run" },
+    });
+
+    expect(isErr(opened)).toBe(false);
+    if (!isErr(opened)) {
+      await opened.value.next();
+      await opened.value.return(undefined);
+    }
+    const snapshot = await usage.get(userId);
+    expect(isErr(snapshot)).toBe(false);
+    if (!isErr(snapshot)) expect(snapshot.value).toMatchObject({ tokensUsed: 9, turnsUsed: 1 });
+  });
+});
+
 describe("stub model gateway", () => {
   it("is offline and fails both primitives with model_unavailable", async () => {
     expect(stubModelGateway.hasModel).toBe(false);
@@ -112,3 +222,18 @@ describe("stub model gateway", () => {
     expect(isErr(g) && g.error.tag).toBe("model_unavailable");
   });
 });
+
+async function* parts(values: ReadonlyArray<Record<string, unknown>>) {
+  for (const value of values) yield value;
+}
+
+async function* throwingParts(values: ReadonlyArray<Record<string, unknown>>) {
+  for (const value of values) yield value;
+  throw new Error("stream failed");
+}
+
+async function collect(generator: AsyncGenerator<unknown>): Promise<unknown[]> {
+  const out: unknown[] = [];
+  for await (const part of generator) out.push(part);
+  return out;
+}

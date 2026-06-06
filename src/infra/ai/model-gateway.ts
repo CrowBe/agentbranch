@@ -150,9 +150,17 @@ export function createModelGateway(deps: {
           tools: toSdkTools(input.tools),
           stopWhen: stepCountIs(8),
         });
+        let latestKnownTokens = 0;
+        let recorded = false;
+        const recordOnce = async () => {
+          if (recorded) return;
+          recorded = true;
+          await record(tag, await readStreamTokens(result, latestKnownTokens));
+        };
         try {
           for await (const rawPart of result.fullStream) {
             const part = rawPart as { type: string } & Record<string, unknown>;
+            latestKnownTokens = Math.max(latestKnownTokens, readTotalTokens(part) ?? 0);
             switch (part.type) {
               case "text-delta": {
                 const delta = readString(part, "text") ?? readString(part, "textDelta");
@@ -180,16 +188,10 @@ export function createModelGateway(deps: {
             }
           }
         } finally {
-          // Best-effort accounting once the stream settles. totalUsage resolves
-          // after the run; on a mid-stream failure we record what we can.
-          let tokens = 0;
-          try {
-            const totals = await result.totalUsage;
-            tokens = totals?.totalTokens ?? 0;
-          } catch {
-            tokens = 0;
-          }
-          await record(tag, tokens);
+          // Record once even when the consumer disconnects or the stream throws.
+          // Prefer SDK totals, but fall back to the latest usage attached to a
+          // stream part when the final usage promise is unavailable.
+          await recordOnce();
         }
       }
 
@@ -233,6 +235,39 @@ function toSdkTools(tools: readonly GatewayTool[]): ToolSet {
 function readString(obj: Record<string, unknown>, key: string): string | undefined {
   const value = obj[key];
   return typeof value === "string" ? value : undefined;
+}
+
+async function readStreamTokens(
+  result: { totalUsage?: PromiseLike<unknown>; usage?: PromiseLike<unknown> },
+  fallback: number,
+): Promise<number> {
+  for (const usage of [result.totalUsage, result.usage]) {
+    if (!usage) continue;
+    try {
+      const tokens = readTotalTokens(await usage);
+      if (tokens !== undefined) return tokens;
+    } catch {
+      // Fall through to any known in-stream usage.
+    }
+  }
+  return fallback;
+}
+
+function readTotalTokens(value: unknown): number | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const obj = value as Record<string, unknown>;
+  const direct = readNumber(obj, "totalTokens") ?? readNumber(obj, "total_tokens");
+  if (direct !== undefined) return direct;
+  return (
+    readTotalTokens(obj.usage) ??
+    readTotalTokens(obj.totalUsage) ??
+    readTotalTokens(obj.experimental_providerMetadata)
+  );
+}
+
+function readNumber(obj: Record<string, unknown>, key: string): number | undefined {
+  const value = obj[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function classifyPrompt(prompt: string, choices: readonly string[]): string {
