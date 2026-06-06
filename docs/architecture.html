@@ -158,7 +158,8 @@
         supplies adapters; a <b style="color:#7c3aed">composition root</b> wires them; the
         <b class="accent-p">presentation</b> shell renders. Cross-module imports cross only through each
         module's <code>index.ts</code> barrel. The <b class="accent-s">skill-analysis seam</b> is the spine —
-        new capability ≈ a new renderer, not a new pipeline.
+        new capability ≈ a new renderer, not a new pipeline — and the <b class="accent-s">model gateway</b> is
+        the single metered entry to the model that every model call (build loop + evaluation) routes through.
       </p>
 
       <div class="legend">
@@ -183,7 +184,7 @@
             <ul>
               <li><span class="api">page.tsx</span> — server: builds demo skill → seam → shell</li>
               <li><span class="api">layout.tsx</span> — fonts, conditional ClerkProvider</li>
-              <li><span class="api">api/build/route.ts</span> — SSE build endpoint (owns the key)</li>
+              <li><span class="api">api/build/route.ts</span> — SSE build endpoint (auth → stream; the gateway owns the key)</li>
               <li><span class="api">globals.css</span> — DESIGN tokens as CSS vars</li>
               <li><span class="api">proxy.ts</span> — Clerk / passthrough (Next 16)</li>
             </ul>
@@ -245,11 +246,13 @@
 
       <!-- THE SEAM -->
       <div class="band domain">
-        <div class="band-h"><h2 class="accent-s">The skill-analysis seam — the spine</h2><span class="sub">src/modules/skill-analysis (ARCH §3.1) · built once</span></div>
+        <div class="band-h"><h2 class="accent-s">The skill-analysis seam — the spine</h2><span class="sub">src/modules/skill-analysis (ARCH §3.1) · built once · two capability shapes, one <code>artifact → render</code> tail</span></div>
+
+        <div class="dir" style="justify-content:flex-start; margin:2px 0 4px"><span class="badge b-real">analysis</span><span style="font-style:normal">static · text-only · runs offline · <code>defineCapability</code> / <code>runCapability</code></span></div>
         <div class="flow">
           <div class="step"><div class="k">Skill</div><div class="v">the aggregate</div><div class="m">SKILL.md → source</div></div>
           <div class="chev">›</div>
-          <div class="step"><div class="k">Analyze</div><div class="v">read → artifact</div><div class="m">Analyzer&lt;A&gt;</div></div>
+          <div class="step"><div class="k">Analyze</div><div class="v">read → artifact</div><div class="m">Analyzer&lt;A&gt;.analyze(skill)</div></div>
           <div class="chev">›</div>
           <div class="step"><div class="k">Artifact</div><div class="v">structured + spans</div><div class="m">Artifact&lt;ArtifactKind&gt; / SourceSpan</div></div>
           <div class="chev">›</div>
@@ -257,16 +260,36 @@
           <div class="chev">›</div>
           <div class="step"><div class="k">Surface</div><div class="v">view / diagram / zip</div><div class="m">runCapability()</div></div>
         </div>
+
+        <div class="dir" style="justify-content:flex-start; margin:12px 0 4px"><span class="badge b-wired">evaluation</span><span style="font-style:normal">dynamic · runs the skill through the model gateway · <code>defineEvaluation</code> / <code>runEvaluation</code> (guards <code>model_unavailable</code>)</span></div>
+        <div class="flow">
+          <div class="step"><div class="k">Skill</div><div class="v">the aggregate</div><div class="m">SKILL.md → source</div></div>
+          <div class="chev">›</div>
+          <div class="step"><div class="k">Evaluate</div><div class="v">run via gateway</div><div class="m">Evaluator&lt;A&gt;.evaluate(skill, gateway)</div></div>
+          <div class="chev">›</div>
+          <div class="step"><div class="k">Result + Insight</div><div class="v">run-record + interpretation</div><div class="m">gateway.generate → Insight</div></div>
+          <div class="chev">›</div>
+          <div class="step"><div class="k">Render</div><div class="v">insights · breakdown</div><div class="m">Renderer&lt;A, S&gt;</div></div>
+          <div class="chev">›</div>
+          <div class="step"><div class="k">Surface</div><div class="v">insights (default) / raw</div><div class="m">runEvaluation()</div></div>
+        </div>
+
         <div class="caps">
           <span class="cap"><b>hero</b> → rendered · source</span>
           <span class="cap"><b>visualise</b> → mermaid</span>
           <span class="cap"><b>export</b> → claude zip</span>
-          <span class="cap" style="opacity:.7"><b>triggering-eval</b> → pass/fail (own runner)</span>
+          <span class="cap"><b>test-run</b> → insights · breakdown</span>
+          <span class="cap"><b>triggering-eval</b> → insights · breakdown</span>
         </div>
         <div class="note">
           <b>Extend here first.</b> A new capability is almost always
-          <code>defineCapability({ analyzer, renderers })</code> on this seam — not a new service. The IR's
-          source-spans are the contract the later React-Flow canvas + point-and-annotate reuse for free.
+          <code>defineCapability({ analyzer, renderers })</code> (analysis) or
+          <code>defineEvaluation({ evaluator, renderers })</code> (evaluation) on this seam — not a new
+          service. Classify it <i>before</i> building: analysis gets an <code>Analyzer</code> and runs
+          offline; evaluation gets an <code>Evaluator</code>, is handed the model gateway, and persists its
+          result. The IR's source-spans are the contract the later React-Flow canvas + point-and-annotate
+          reuse for free. <b>ArtifactKind</b> (the closed union of kinds) and <b>Insight</b> live here in the
+          seam, not the kernel.
         </div>
       </div>
 
@@ -288,8 +311,8 @@
           <div class="card seam">
             <h3>skill-analysis <span class="badge b-real">real</span></h3>
             <div class="path">modules/skill-analysis</div>
-            <div class="api">defineCapability · runCapability</div>
-            <ul><li>Analyzer / Renderer / Capability / SourceSpan</li><li>the seam every renderer plugs into</li></ul>
+            <div class="api">defineCapability · runCapability · defineEvaluation · runEvaluation</div>
+            <ul><li>Analyzer / Evaluator / Renderer / Insight / SourceSpan / ArtifactKind</li><li>the seam every renderer plugs into (two shapes)</li></ul>
           </div>
 
           <div class="card">
@@ -307,17 +330,17 @@
           </div>
 
           <div class="card">
-            <h3>test-run <span class="badge b-stub">stub</span></h3>
+            <h3>test-run <span class="badge b-real">run real</span><span class="badge b-stub">inputs stub</span></h3>
             <div class="path">modules/test-run</div>
-            <div class="api">executeSkill · defaultMockToolRegistry</div>
-            <ul><li>mock-tool registry (email mock) real</li><li>execution stubbed; port: <span class="api">TestRunRepository</span></li></ul>
+            <div class="api">testRunCapability · executeSkill · createMockToolRegistry</div>
+            <ul><li>evaluation capability: composes <code>gateway.runAgent</code> + mock tools, then <code>generate</code> → Insight</li><li>scenario + registry stubbed (email mock); port: <span class="api">TestRunRepository</span></li></ul>
           </div>
 
           <div class="card">
-            <h3>triggering-eval <span class="badge b-stub">stub</span></h3>
+            <h3>triggering-eval <span class="badge b-real">run real</span><span class="badge b-stub">inputs stub</span></h3>
             <div class="path">modules/triggering-eval</div>
-            <div class="api">runTriggeringEval · distractorLibrary</div>
-            <ul><li>battery + distractors real; selection heuristic stubbed</li><li>port: <span class="api">EvalRunRepository</span></li></ul>
+            <div class="api">triggeringEvalCapability · runTriggeringEval · buildPromptBattery · distractorLibrary</div>
+            <ul><li>evaluation capability: composes <code>gateway.classify</code> over candidate-vs-distractor, then <code>generate</code> → Insight</li><li>battery + distractors stubbed; port: <span class="api">EvalRunRepository</span></li></ul>
           </div>
 
           <div class="card">
@@ -335,17 +358,24 @@
           </div>
 
           <div class="card">
-            <h3>build-loop <span class="badge b-wired">wired</span></h3>
+            <h3>build-loop <span class="badge b-real">real</span></h3>
             <div class="path">modules/build-loop</div>
             <div class="api">runBuildLoop · buildTools</div>
-            <ul><li>Vercel AI SDK + Claude; write_skill/edit_skill</li><li>port: <span class="api">ModelProvider</span></li></ul>
+            <ul><li>write_skill/edit_skill, streams to preview</li><li>reaches the model only via <code>gateway.streamAgent</code> — never the raw model or key</li></ul>
+          </div>
+
+          <div class="card seam">
+            <h3>model-gateway <span class="badge b-real">real</span></h3>
+            <div class="path">modules/model-gateway</div>
+            <div class="api">classify · runAgent · streamAgent · generate</div>
+            <ul><li>the platform's single metered entry to the model; owns the <span class="api">ModelProvider</span> port + the <code>AccountingTag</code> (account · platform)</li><li>routes accounting through <b>usage</b>; consumers: build loop + evaluation</li></ul>
           </div>
 
           <div class="card">
             <h3>usage <span class="badge b-real">real</span></h3>
             <div class="path">modules/usage</div>
             <div class="api">checkCap · applyTurn · TIER_LIMITS</div>
-            <ul><li>token/turn meter + tier caps (pure)</li><li>port: <span class="api">UsageRepository</span></li></ul>
+            <ul><li>token/turn meter + tier caps + accounting authority (pure)</li><li>port: <span class="api">UsageRepository</span></li></ul>
           </div>
 
           <div class="card">
@@ -380,12 +410,12 @@
           <div class="card">
             <h3>prisma <span class="badge b-real">real</span></h3>
             <div class="path">infra/prisma</div>
-            <ul><li>client (pg driver adapter)</li><li>skill + usage repos</li><li>test-run/eval repos: later</li></ul>
+            <ul><li>client (pg driver adapter, Prisma 7)</li><li>skill + usage repos · user-provisioning-auth</li><li>test-run/eval repos: later</li></ul>
           </div>
           <div class="card">
             <h3>ai <span class="badge b-wired">wired</span></h3>
             <div class="path">infra/ai</div>
-            <ul><li>anthropic-provider (Claude, guarded)</li><li>stub-provider (no key)</li></ul>
+            <ul><li>model-gateway (the ModelGateway adapter) + stub-model-gateway (offline)</li><li>anthropic-provider · nous-provider (ModelProvider, guarded) · stub-provider</li></ul>
           </div>
           <div class="card">
             <h3>clerk <span class="badge b-wired">wired</span></h3>
@@ -404,30 +434,30 @@
           <span class="pill">Result&lt;T,E&gt; · ok/err</span>
           <span class="pill">branded ids (SkillId, UserId…)</span>
           <span class="pill">DomainError (closed union) · domainError · notConfigured</span>
-          <span class="pill">ArtifactKind (closed union)</span>
           <span class="pill">SseEvent · encodeSse</span>
         </div>
         <div class="note" style="margin-top:10px">
           <b>DomainError</b> is a <b>closed discriminated union</b> — callers switch on <code>tag</code> exhaustively.
           Known tags: <code>not_configured</code> · <code>not_found</code> · <code>persistence_failed</code> ·
-          <code>auth_failed</code> · <code>model_unavailable</code> · <code>seam_analyze_failed</code>.
-          Add a tag in <code>src/shared/errors.ts</code>; free strings are a compile error.<br><br>
-          <b>ArtifactKind</b> is likewise closed — <code>"hero" | "skill-ir" | "export" | "test-run" | "triggering-eval"</code>.
-          New capabilities add their kind here before writing the artifact type.
+          <code>auth_failed</code> · <code>model_unavailable</code> · <code>cap_reached</code> ·
+          <code>seam_analyze_failed</code>. Add a tag in <code>src/shared/errors.ts</code>; free strings are a
+          compile error.<br><br>
+          <b>ArtifactKind</b> and <b>Insight</b> are <i>not</i> here — they live in the
+          <code>skill-analysis</code> seam (closer to the contract they shape), not the kernel.
         </div>
       </div>
 
       <!-- BUILD LOOP FLOW -->
       <div class="band presentation">
-        <div class="band-h"><h2 class="accent-p">Runtime path — the build loop</h2><span class="sub">the server owns the key; typed events stream to the preview (ARCH §3)</span></div>
+        <div class="band-h"><h2 class="accent-p">Runtime path — the build loop</h2><span class="sub">the model gateway owns the key + accounting; typed events stream to the preview (ARCH §3)</span></div>
         <div class="flow">
           <div class="step"><div class="k">Client</div><div class="v">interaction panel</div><div class="m">POST /api/build</div></div>
           <div class="chev">›</div>
-          <div class="step"><div class="k">Route</div><div class="v">auth + cap check</div><div class="m">getContainer()</div></div>
+          <div class="step"><div class="k">Route</div><div class="v">auth check</div><div class="m">getContainer()</div></div>
           <div class="chev">›</div>
-          <div class="step"><div class="k">Loop</div><div class="v">AI SDK + Claude</div><div class="m">runBuildLoop(provider)</div></div>
+          <div class="step"><div class="k">Loop</div><div class="v">runBuildLoop(gateway)</div><div class="m">write / edit skill via buildTools</div></div>
           <div class="chev">›</div>
-          <div class="step"><div class="k">Tools</div><div class="v">write / edit skill</div><div class="m">buildTools</div></div>
+          <div class="step"><div class="k">Gateway</div><div class="v">cap check + Claude</div><div class="m">streamAgent (account / build)</div></div>
           <div class="chev">›</div>
           <div class="step"><div class="k">SSE</div><div class="v">typed events</div><div class="m">BuildLoopEvent</div></div>
         </div>
