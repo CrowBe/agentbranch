@@ -139,7 +139,8 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **triggering-eval** | `triggeringEvalCapability`, `runTriggeringEval`, `buildPromptBattery`, `distractorLibrary` | `EvalRunRepository` | evaluation capability · run real · battery/distractors stubbed |
 | **export** | `exportCapability`, manifest types | — | real |
 | **portability** | `transformSkill`, types | — | stub (deferred engine) |
-| **build-loop** | `runBuildLoop`, `buildTools`, `BuildLoopEvent`, `ModelProvider` | `ModelProvider` | wired |
+| **build-loop** | `runBuildLoop`, `buildTools`, `BuildToolName`, `BuildLoopEvent` | — (consumes `ModelGateway`) | real |
+| **model-gateway** | `ModelGateway` (`classify`/`runAgent`/`streamAgent`/`generate`), `AccountingTag`, `GatewayTool`, `ModelProvider` | `ModelProvider` | real |
 | **usage** | `checkCap`, `applyTurn`, `TIER_LIMITS`, types | `UsageRepository` | real |
 | **auth** | `AuthPort`, `AuthIdentity` | `AuthPort` | port |
 
@@ -168,7 +169,11 @@ placeholder):**
 | `memory/{skill,usage,test-run,eval}.memory-repository.ts` | the four repos | **offline default**, tested |
 | `prisma/client.ts` | — | PrismaClient + `@prisma/adapter-pg` (Prisma 7 driver adapter) |
 | `prisma/{skill,usage}.prisma-repository.ts` | `SkillRepository`, `UsageRepository` | real; test-run/eval Prisma repos follow same shape (todo) |
+| `prisma/user-provisioning-auth.ts` | `AuthPort` | wraps Clerk auth, provisions the `users` row on first sight |
+| `ai/model-gateway.ts` | `ModelGateway` | the metered gateway over a `ModelProvider`; routes accounting through `usage` |
+| `ai/stub-model-gateway.ts` | `ModelGateway` | offline default; every primitive fails `model_unavailable` |
 | `ai/anthropic-provider.ts` | `ModelProvider` | Claude via `@ai-sdk/anthropic`; `model: null` when no key |
+| `ai/nous-provider.ts` | `ModelProvider` | Nous Portal via `@ai-sdk/openai-compatible`; `model: null` when no key |
 | `ai/stub-provider.ts` | `ModelProvider` | always `model: null` |
 | `clerk/clerk-auth.ts` | `AuthPort` | real Clerk server auth |
 | `clerk/stub-auth.ts` | `AuthPort` | fixed dev identity |
@@ -185,7 +190,8 @@ placeholder):**
 
 - `app/page.tsx` (server) builds a demo skill and renders it through
   `heroCapability` → `AppShell`.
-- `app/api/build/route.ts` — owns the key: auth → cap check → stream.
+- `app/api/build/route.ts` — auth → stream; the **model gateway** owns the key
+  and gates the `build` cap (the route never touches the raw model).
 - `app/layout.tsx` — next/font + conditional `ClerkProvider`; `globals.css`
   holds the DESIGN tokens as CSS variables; `proxy.ts` is Clerk/passthrough.
 - `components/` — `app-shell`, `top-bar`, `side-rail`, `hero-panel`,
