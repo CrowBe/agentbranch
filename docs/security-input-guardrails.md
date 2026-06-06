@@ -32,6 +32,10 @@ it **is** the product. The design goal is not to scrub that surface but to
 | R3 | **Untrusted-when-shared content** | `import`/`export` capabilities (`src/modules/usage/meter.ts:29`) | A skill you author is trusted to you. The moment a `SKILL.md` crosses users via import, its body + frontmatter are untrusted input to *someone else's* model run and browser. |
 | R4 | **Eval re-interpolation** | `classifyPrompt` (`src/infra/ai/model-gateway.ts:273`); insight prompts in `test-run` / `triggering-eval` | Skill content **and model output** (rationales, transcripts) get spliced back into *new* prompts. Rationale/transcript lengths are unbounded → cost inflation + content bleeding across the system/user boundary. |
 | R5 | **Output rendering (XSS)** | Hero Rendered view | *Currently safe* — `hero-panel.tsx:50` interpolates `{section.body}` via JSX (React auto-escapes); no `dangerouslySetInnerHTML` anywhere. Listed to **protect the invariant**, especially once R3 (imported content) lands. |
+| R6 | **Second-order SQL injection** | future readers of `skills` / `skill_versions` | *Not live today* (no raw SQL — see §4). But stored skill strings become a stored SQLi payload the moment anyone adds `$queryRawUnsafe`/template-literal SQL for search/admin/analytics. The risk is a future erosion of the parameterized-only convention, so it must be a guardrail, not a hope. |
+| R7 | **Broken access control / IDOR** | `findById` (`skill.prisma-repository.ts:82`); `TestRun`/`EvalRun` `findById` | Ownership is re-checked in the *caller* (`build-stream.ts:51`), not the *query*. Any future route that calls `findById` and forgets the check leaks another user's skill. Test/eval `findById` are scoped only by run id — a leaked CUID exposes another user's scenario/transcript. This is the most plausible cross-user data leak. |
+| R8 | **JSON column abuse** | `frontmatterJson` (`extra: Record<string, unknown>`) | Stored as a Json column, unbounded — arbitrary nested/huge JSON → storage bloat (cost/DoS), and prototype pollution (`__proto__`/`constructor` keys) if ever deep-merged. |
+| R9 | **Sensitive content in logs** | `domainError(msg, cause)`; any stdout / observability | Skill bodies or prompts leaking into error causes or platform logs is an exfil path that bypasses the DB entirely. |
 
 ### Current guardrails (already in place — keep)
 
@@ -43,6 +47,14 @@ it **is** the product. The design goal is not to scrub that surface but to
 - Lossless, validated `SKILL.md` YAML parse (rejects malformed/non-object).
 - Classification output guarded against hallucinated labels (`model-gateway.ts:108`).
 - Output auto-escaped by React in the Rendered view.
+- **Persistence is parameterized-only** — all writes go through Prisma's query
+  builder (`prisma.skill.create/update`, `testRun.create`, `evalRun.create`,
+  `usage.upsert`); a full-tree search for `$queryRaw*`/`$executeRaw*` returns
+  zero hits. No raw-SQL escape hatch exists.
+- **Ownership re-checked before save** — `build-stream.ts:51` rejects when
+  `existing.userId !== userId`.
+- **Raw user prompts are not persisted** — only the resulting `SKILL.md`.
+- **No secrets in the DB** — provider/API keys and Clerk secrets stay in env.
 
 ### Gaps this proposal closes
 
@@ -52,6 +64,11 @@ it **is** the product. The design goal is not to scrub that surface but to
 3. No **per-user rate limit** independent of the daily token cap.
 4. No **bounds on re-interpolated** rationales/transcripts in eval insight prompts.
 5. No explicit **trust boundary** treatment for imported skills.
+6. No **lint guard** locking in the parameterized-only / no-`*Unsafe` invariant.
+7. Ownership is enforced in **callers, not queries** (`findById` lacks a `userId`
+   scope; test/eval `findById` lack ownership entirely).
+8. `frontmatterJson` is **unbounded and unsanitized** (size, depth, unsafe keys).
+9. No explicit rule that skill content / prompts **must not be logged**.
 
 ## 2. Design principles
 
@@ -123,7 +140,80 @@ going a bit fast, try again in a few seconds."
   asserting the Rendered view never gains `dangerouslySetInnerHTML` (protects
   R5/the XSS invariant once cross-user content exists).
 
-## 4. Error copy (warm-pro, sentence-case)
+## 4. Persistence & data-at-rest
+
+When skill content (and, later, possibly prompts) is saved, the threat shifts
+from "input → model" to "what's stored, who can read it, and how it's read
+back." The reassuring part: classic **SQL-injection-on-save is not possible
+today** (parameterized-only writes, no raw SQL — see Current guardrails). The
+work here is to convert that *convention* into *enforced invariants* and to close
+the access-control and JSON-shape gaps before the data store grows.
+
+### 4.1 Data inventory & sensitivity
+
+| Asset | Table / column | User-controlled | Sensitivity | Notes |
+|---|---|---|---|---|
+| Skill body / description / name / frontmatter | `skills`, `skill_versions` | **Yes** | **Medium–High** | The crown jewel. For SMB-owner users this can encode confidential business processes. `skill_versions` keeps full history, so deletes don't fully erase. |
+| Email | `users.email` | No (OAuth) | Medium (PII) | Cleartext, unique-indexed. |
+| Test/eval scenarios + transcripts | `test_runs`, `eval_runs` (`*Json`) | Indirect | Low–Medium | System-generated but derived from the skill; reachable via the R7 enumeration gap. |
+| Usage counters | `usage` | No | Low | Aggregate tokens/turns only; no per-request content. |
+| Raw user prompts / chat | **not persisted** | — | — | Only the resulting `SKILL.md` is saved today. See 4.5. |
+| Provider/API keys, Clerk secrets | **not in DB** | — | — | Env vars only. |
+
+### 4.2 Lock in parameterized-only (R6 — second-order SQLi)
+
+- Add an **ESLint rule** (e.g. `no-restricted-syntax` / a Prisma-aware lint)
+  that bans `$queryRawUnsafe`, `$executeRawUnsafe`, and tagged-template
+  `$queryRaw`/`$executeRaw` built from non-literal expressions. Treat any raw
+  SQL as an explicit, reviewed exception with a justifying comment.
+- Document the rule in `ARCHITECTURE.md` (data section) so it survives as a
+  standing constraint, not a doc buried here.
+- This means stored content stays inert *forever*, even when a search/admin
+  feature is added later — which is exactly when second-order SQLi would
+  otherwise appear.
+
+### 4.3 Ownership in the query, not the caller (R7 — IDOR)
+
+- Change `findById` to scope by owner: `where: { id, userId }` (return
+  not-found when the owner doesn't match), so the boundary is enforced by the
+  database, not by remembering to re-check in each caller. Keep the
+  `build-stream.ts:51` check as belt-and-suspenders.
+- Apply the same to `TestRun`/`EvalRun` `findById` (add `userId` scope) and to
+  any `listBySkill` path — verify the caller has proven skill ownership first.
+- Add a test that a second user's id cannot read or overwrite the first user's
+  skill / test-run / eval-run by id.
+
+### 4.4 Bound & sanitize `frontmatterJson` (R8)
+
+- Reuse the §3 limits: cap serialized `frontmatterJson` size, max nesting
+  depth, and key count; reject the keys `__proto__`, `constructor`,
+  `prototype` on parse (in `skill-md.ts`, before persistence).
+- Never deep-merge untrusted frontmatter into a shared object; treat it as a
+  plain data bag.
+
+### 4.5 Decide prompt persistence *deliberately* (R9-adjacent)
+
+- Today raw prompts are ephemeral. **If** conversation history is added later,
+  it creates a new, higher-sensitivity store (free-text user input, possibly
+  pasted secrets/PII). That should be an explicit, reviewed decision — with
+  retention limits and the same ownership-in-query scoping — not something that
+  drifts in via a feature PR.
+
+### 4.6 Don't log content (R9)
+
+- Add a standing rule: skill `body`, frontmatter values, and message `content`
+  must never be passed to loggers or attached to `domainError` causes that get
+  logged. Audit existing `domainError(..., cause)` sites and any request
+  logging for content leakage.
+
+### 4.7 Persistence phases
+
+- **P4 — invariants:** ESLint no-raw-unsafe rule (4.2) + ownership-in-query for
+  skills/test-runs/eval-runs (4.3). Highest value, smallest surface.
+- **P5 — shape & hygiene:** `frontmatterJson` bounds/sanitization (4.4) +
+  no-content-logging audit (4.6). Pairs naturally with the §3 P0 size limits.
+
+## 5. Error copy (warm-pro, sentence-case)
 
 Reject on violation. Plain language, no jargon, tells the user what to do:
 
@@ -140,8 +230,12 @@ Reject on violation. Plain language, no jargon, tells the user what to do:
   smaller change."*
 - Rate limited: *"You're going a little fast — give it a few seconds and try
   again."*
+- Frontmatter too large/complex: *"The skill's settings are too large or deeply
+  nested — simplify the frontmatter and try again."*
+- Skill not found / not yours (IDOR response): *"We couldn't find that skill."*
+  (Deliberately not "you don't have access" — don't confirm the id exists.)
 
-## 5. Testing
+## 6. Testing
 
 - Unit: each schema rejects at limit+1 and accepts at limit; gateway `admit()`
   rejects oversized payloads with `input_too_large`.
@@ -149,10 +243,18 @@ Reject on violation. Plain language, no jargon, tells the user what to do:
 - Regression/invariant: a test that fails if `dangerouslySetInnerHTML` appears
   in the hero render path.
 - Manual: oversized paste in the build chat surfaces the right copy, no spend.
+- Persistence (R7): a second user cannot read or overwrite another user's skill,
+  test-run, or eval-run by id (`findById` returns not-found across owners).
+- Persistence (R8): frontmatter exceeding size/depth/key limits is rejected;
+  `__proto__`/`constructor`/`prototype` keys are stripped or rejected on parse.
+- Persistence (R6): a lint/CI check fails if `*RawUnsafe` or non-literal raw SQL
+  is introduced.
 
-## 6. Explicitly out of scope
+## 7. Explicitly out of scope
 
 - Prompt-injection / jailbreak *detection* on legitimate authoring input.
 - Content/meaning filtering or special-character stripping.
 - Model **output** moderation (separate concern; R5 is handled by escaping).
 - Multi-tenant skill sharing model beyond the existing import/export caps.
+- Encryption-at-rest of skill content / email beyond what the DB host provides
+  (note it; defer unless a compliance requirement lands).
