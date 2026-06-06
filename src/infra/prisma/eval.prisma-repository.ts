@@ -1,0 +1,89 @@
+import type { Prisma, PrismaClient } from "@prisma/client";
+import type {
+  EvalRun,
+  EvalRunRepository,
+  EvalStatus,
+  TriggeringResult,
+} from "@/modules/triggering-eval";
+import {
+  domainError,
+  err,
+  EvalRunId,
+  ok,
+  SkillId,
+  UserId,
+} from "@/shared";
+
+type EvalRunRow = {
+  id: string;
+  skillId: string;
+  userId: string;
+  status: string;
+  resultJson: unknown;
+  createdAt: Date;
+};
+
+function toEvalRun(row: EvalRunRow): EvalRun {
+  return {
+    id: EvalRunId(row.id),
+    skillId: SkillId(row.skillId),
+    userId: UserId(row.userId),
+    status: row.status as EvalStatus,
+    result: row.resultJson as TriggeringResult,
+    createdAt: row.createdAt,
+  };
+}
+
+/** Prisma EvalRunRepository (real). Persists triggering-eval artifacts. */
+export function createPrismaEvalRunRepository(prisma: PrismaClient): EvalRunRepository {
+  return {
+    async record(run) {
+      try {
+        const row = await prisma.evalRun.create({
+          data: {
+            skillId: run.skillId,
+            userId: run.userId,
+            status: run.status,
+            resultJson: run.result as unknown as Prisma.InputJsonValue,
+          },
+        });
+        return ok(toEvalRun(row as EvalRunRow));
+      } catch (cause) {
+        return err(domainError("persistence_failed", "An eval run could not be recorded.", cause));
+      }
+    },
+
+    async findById(id) {
+      try {
+        const row = await prisma.evalRun.findUnique({ where: { id } });
+        return ok(row ? toEvalRun(row as EvalRunRow) : null);
+      } catch (cause) {
+        return err(domainError("persistence_failed", "An eval run could not be loaded.", cause));
+      }
+    },
+
+    async listBySkill(skillId) {
+      try {
+        const rows = await prisma.evalRun.findMany({
+          where: { skillId },
+          orderBy: { createdAt: "desc" },
+        });
+        return ok(rows.map((row) => toEvalRun(row as EvalRunRow)));
+      } catch (cause) {
+        return err(domainError("persistence_failed", "Eval runs could not be listed.", cause));
+      }
+    },
+
+    async listByUser(userId) {
+      try {
+        const rows = await prisma.evalRun.findMany({
+          where: { userId },
+          orderBy: { createdAt: "desc" },
+        });
+        return ok(rows.map((row) => toEvalRun(row as EvalRunRow)));
+      } catch (cause) {
+        return err(domainError("persistence_failed", "Eval runs could not be listed.", cause));
+      }
+    },
+  };
+}
