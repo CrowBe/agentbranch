@@ -66,7 +66,12 @@ export function getContainer(): AppContainer {
   // degrades to the offline stub when no model is configured, so evaluation
   // capabilities fail cleanly with `model_unavailable` (CONTEXT.md → Model gateway).
   const modelGateway: ModelGateway = modelProvider.model
-    ? createModelGateway({ provider: modelProvider, usage })
+    ? createModelGateway({
+        provider: modelProvider,
+        usage,
+        providerKind: config.modelProvider,
+        modelId: config.modelId,
+      })
     : stubModelGateway;
 
   const auth = config.flags.hasAuth ? createClerkAuth() : createStubAuth();

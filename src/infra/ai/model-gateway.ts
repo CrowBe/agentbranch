@@ -26,6 +26,20 @@ import {
   type UserId,
 } from "@/shared";
 
+type GatewayModelProviderKind = "anthropic" | "nous";
+
+const OUTPUT_LIMITS = {
+  classify: 256,
+  runAgent: 4_096,
+  streamAgent: 16_000,
+  generate: 2_048,
+} as const;
+
+const SONNET_EFFORT = {
+  low: { providerOptions: { anthropic: { effort: "low" } } },
+  medium: { providerOptions: { anthropic: { effort: "medium" } } },
+} as const;
+
 /**
  * Real model gateway — Claude via the Vercel AI SDK (NOT the Anthropic SDK
  * directly, ARCHITECTURE §4). The platform's single metered entry to the model
@@ -40,11 +54,17 @@ import {
 export function createModelGateway(deps: {
   provider: ModelProvider;
   usage: UsageRepository;
+  providerKind?: GatewayModelProviderKind;
+  modelId?: string;
   /** Resolves a user's tier. v1 has no paid users, so this is "free" for now. */
   tierFor?: (userId: UserId) => Promise<Tier>;
 }): ModelGateway {
   const { provider, usage } = deps;
   const tierFor = deps.tierFor ?? (async () => "free" as Tier);
+  const sonnetEffort =
+    deps.providerKind === "anthropic" && deps.modelId?.toLowerCase().includes("sonnet")
+      ? SONNET_EFFORT
+      : null;
 
   /**
    * Gate an `account` call against tier caps before spending. `platform` calls
@@ -93,6 +113,7 @@ export function createModelGateway(deps: {
       try {
         const { object, usage: u } = await generateObject({
           model: admitted.value,
+          maxOutputTokens: OUTPUT_LIMITS.classify,
           schema: z.object({
             choice: z
               .string()
@@ -120,6 +141,8 @@ export function createModelGateway(deps: {
       try {
         const result = await generateText({
           model: admitted.value,
+          maxOutputTokens: OUTPUT_LIMITS.runAgent,
+          ...sonnetEffort?.medium,
           system: input.system,
           messages: input.messages.map((m) => ({ role: m.role, content: m.content })),
           tools: toSdkTools(input.tools),
@@ -145,6 +168,7 @@ export function createModelGateway(deps: {
       async function* stream(): AsyncGenerator<AgentStreamPart> {
         const result = streamText({
           model,
+          maxOutputTokens: OUTPUT_LIMITS.streamAgent,
           system: input.system,
           messages: input.messages.map((m) => ({ role: m.role, content: m.content })),
           tools: toSdkTools(input.tools),
@@ -205,6 +229,8 @@ export function createModelGateway(deps: {
       try {
         const { object, usage: u } = await generateObject({
           model: admitted.value,
+          maxOutputTokens: OUTPUT_LIMITS.generate,
+          ...sonnetEffort?.low,
           schema: input.schema,
           system: input.system,
           prompt: input.prompt,
