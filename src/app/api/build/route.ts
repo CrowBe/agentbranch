@@ -1,26 +1,10 @@
-import { z } from "zod";
 import { getContainer } from "@/server/container";
 import { buildLoopResponse } from "@/server/build-stream";
 import { SkillId } from "@/shared";
+import { parseBuildRequest } from "../_shared/build-request";
+import { invalidRequestResponse, parseJsonRequest } from "../_shared/request-body";
 
 export const runtime = "nodejs";
-
-const bodySchema = z.object({
-  messages: z
-    .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string() }))
-    .min(1),
-  current: z
-    .object({
-      frontmatter: z.object({
-        name: z.string(),
-        description: z.string(),
-        extra: z.record(z.string(), z.unknown()),
-      }),
-      body: z.string(),
-    })
-    .optional(),
-  currentSkillId: z.string().optional(),
-});
 
 /**
  * The build-loop route handler. Resolves identity, then streams the loop's
@@ -38,15 +22,16 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "Sign in to build a skill." }, { status: 401 });
   }
 
-  const parsed = bodySchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) {
-    return Response.json({ error: "Invalid request body." }, { status: 400 });
-  }
+  const body = await parseJsonRequest(request);
+  if (!body.ok) return body.response;
+
+  const parsed = parseBuildRequest(body.value);
+  if (!parsed.ok) return invalidRequestResponse(parsed.error);
 
   return buildLoopResponse(
     {
-      ...parsed.data,
-      currentSkillId: parsed.data.currentSkillId ? SkillId(parsed.data.currentSkillId) : undefined,
+      ...parsed.value,
+      currentSkillId: parsed.value.currentSkillId ? SkillId(parsed.value.currentSkillId) : undefined,
     },
     container.modelGateway,
     container.skills,

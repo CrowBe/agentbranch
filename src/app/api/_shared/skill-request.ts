@@ -1,17 +1,24 @@
 import { z } from "zod";
 import { makeSkill, type Skill, type SkillSource } from "@/modules/skill";
 import type { AuthIdentity } from "@/modules/auth";
-import { SkillId, type DomainError } from "@/shared";
+import {
+  LIMIT_MESSAGES,
+  SKILL_BODY_MAX,
+  SKILL_DESCRIPTION_MAX,
+  SKILL_NAME_MAX,
+  SkillId,
+  type DomainError,
+} from "@/shared";
 
 const frontmatterSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().min(1),
+  name: z.string().min(1).max(SKILL_NAME_MAX, LIMIT_MESSAGES.skillName),
+  description: z.string().min(1).max(SKILL_DESCRIPTION_MAX, LIMIT_MESSAGES.skillDescription),
   extra: z.record(z.string(), z.unknown()).default({}),
 });
 
-const skillSourceSchema = z.object({
+export const skillSourceSchema = z.object({
   frontmatter: frontmatterSchema,
-  body: z.string(),
+  body: z.string().max(SKILL_BODY_MAX, LIMIT_MESSAGES.skillBody),
 });
 
 const skillRequestSchema = z.object({
@@ -25,12 +32,12 @@ export type SkillRequest = z.infer<typeof skillRequestSchema>;
 
 export function parseSkillRequest(body: unknown):
   | { readonly ok: true; readonly value: SkillRequest & { readonly source: SkillSource } }
-  | { readonly ok: false } {
+  | { readonly ok: false; readonly error: string } {
   const parsed = skillRequestSchema.safeParse(body);
-  if (!parsed.success) return { ok: false };
+  if (!parsed.success) return { ok: false, error: validationMessage(parsed.error) };
 
   const source = parsed.data.skill ?? parsed.data.current;
-  if (!source) return { ok: false };
+  if (!source) return { ok: false, error: "Send a skill before running this action." };
   return { ok: true, value: { ...parsed.data, source } };
 }
 
@@ -43,6 +50,10 @@ export function skillFromRequest(request: SkillRequest & { readonly source: Skil
     createdAt: now,
     updatedAt: now,
   });
+}
+
+export function validationMessage(error: z.ZodError): string {
+  return error.issues[0]?.message ?? "Invalid request body.";
 }
 
 export function domainErrorResponse(error: DomainError): Response {
