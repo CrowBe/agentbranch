@@ -16,16 +16,19 @@ export function Chip({
   children,
   accent = "primary",
   onClick,
+  disabled = false,
 }: {
   children: ReactNode;
   accent?: ChipAccent;
   onClick?: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`text-label inline-flex items-center gap-1.5 rounded-[var(--radius-md)] px-3 py-1.5 transition-opacity hover:opacity-80 ${ACCENT[accent]}`}
+      disabled={disabled}
+      className={`text-label inline-flex items-center gap-1.5 rounded-[var(--radius-md)] px-3 py-1.5 transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50 ${ACCENT[accent]}`}
     >
       {children}
     </button>
