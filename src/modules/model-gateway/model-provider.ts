@@ -1,5 +1,7 @@
 import type { LanguageModel } from "ai";
 
+export type ModelGatewayPrimitive = "classify" | "runAgent" | "streamAgent" | "generate";
+
 /**
  * Model-provider port — the raw language model the gateway plumbs to. Infra
  * supplies an Anthropic-backed provider (default: Claude) or a null-model stub
@@ -10,4 +12,6 @@ import type { LanguageModel } from "ai";
 export interface ModelProvider {
   /** The configured language model, or null when no key is present. */
   readonly model: LanguageModel | null;
+  /** Optional per-primitive routes. Missing routes fall back to `model`. */
+  readonly models?: Partial<Record<ModelGatewayPrimitive, LanguageModel | null>>;
 }

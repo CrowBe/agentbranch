@@ -26,4 +26,4 @@ export type {
   GenerateInput,
   ModelGateway,
 } from "./gateway.types";
-export type { ModelProvider } from "./model-provider";
+export type { ModelProvider, ModelGatewayPrimitive } from "./model-provider";

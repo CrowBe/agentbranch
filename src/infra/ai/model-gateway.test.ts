@@ -32,6 +32,15 @@ vi.mock("ai", () => ({
  *  is never actually invoked here. */
 const withModel: ModelProvider = { model: {} as ModelProvider["model"] };
 const noModel: ModelProvider = { model: null };
+const routedProvider = {
+  model: model("default"),
+  models: {
+    classify: model("classify"),
+    generate: model("generate"),
+    runAgent: model("runAgent"),
+    streamAgent: model("streamAgent"),
+  },
+} satisfies ModelProvider;
 
 const account = (id: string): AccountingTag => ({
   kind: "account",
@@ -117,6 +126,50 @@ describe("model gateway — accounting guard", () => {
     if (isErr(result)) expect(result.error.tag).not.toBe("cap_reached");
   });
 });
+
+describe("model gateway — primitive routing", () => {
+  it("uses the configured model route for each primitive", async () => {
+    aiMocks.generateObject.mockResolvedValue({
+      object: { choice: "a", rationale: "fits" },
+      usage: { totalTokens: 1 },
+    } as never);
+    aiMocks.generateText.mockResolvedValue({ steps: [], usage: { totalTokens: 1 } } as never);
+    aiMocks.streamText.mockReturnValue({
+      fullStream: parts([{ type: "finish", finishReason: "stop" }]),
+      totalUsage: Promise.resolve({ totalTokens: 1 }),
+    });
+    const gateway = createModelGateway({
+      provider: routedProvider,
+      usage: createMemoryUsageRepository(),
+    });
+
+    await gateway.classify({ prompt: "x", choices: ["a"], tag: platform });
+    await gateway.generate({ system: "", prompt: "x", schema: z.object({ choice: z.string(), rationale: z.string() }), tag: platform });
+    await gateway.runAgent({ system: "", messages: [], tools: [], tag: platform });
+    const opened = await gateway.streamAgent({ system: "", messages: [], tools: [], tag: platform });
+    expect(isErr(opened)).toBe(false);
+    if (!isErr(opened)) await collect(opened.value);
+
+    expect(aiMocks.generateObject).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ model: routedProvider.models.classify }),
+    );
+    expect(aiMocks.generateObject).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ model: routedProvider.models.generate }),
+    );
+    expect(aiMocks.generateText).toHaveBeenCalledWith(
+      expect.objectContaining({ model: routedProvider.models.runAgent }),
+    );
+    expect(aiMocks.streamText).toHaveBeenCalledWith(
+      expect.objectContaining({ model: routedProvider.models.streamAgent }),
+    );
+  });
+});
+
+function model(id: string): ModelProvider["model"] {
+  return { id } as unknown as ModelProvider["model"];
+}
 
 describe("model gateway — stream accounting", () => {
   it("records stream usage once after a clean settle", async () => {

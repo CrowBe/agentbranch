@@ -10,6 +10,13 @@ export type AppConfig = {
   readonly nousApiKey: string | undefined;
   readonly nousBaseUrl: string;
   readonly modelId: string;
+  readonly modelIds: {
+    readonly default: string;
+    readonly classify: string;
+    readonly generate: string;
+    readonly runAgent: string;
+    readonly streamAgent: string;
+  };
   readonly clerkConfigured: boolean;
   readonly flags: {
     readonly hasDatabase: boolean;
@@ -21,6 +28,8 @@ export type AppConfig = {
 export type ModelProviderKind = "anthropic" | "nous";
 
 export const DEFAULT_ANTHROPIC_MODEL = "claude-opus-4-8";
+export const DEFAULT_ANTHROPIC_CLASSIFY_MODEL = "claude-haiku-4-5";
+export const DEFAULT_ANTHROPIC_GENERATE_MODEL = "claude-sonnet-4-6";
 export const DEFAULT_NOUS_MODEL = "Hermes-4.3-36B";
 export const DEFAULT_NOUS_BASE_URL = "https://inference-api.nousresearch.com/v1";
 
@@ -36,6 +45,17 @@ export function readConfig(): AppConfig {
   const modelId =
     nonEmpty(process.env.SKILLBUILDER_MODEL) ??
     (modelProvider === "nous" ? DEFAULT_NOUS_MODEL : DEFAULT_ANTHROPIC_MODEL);
+  const modelIds = {
+    default: modelId,
+    classify:
+      nonEmpty(process.env.SKILLBUILDER_CLASSIFY_MODEL) ??
+      (modelProvider === "nous" ? modelId : DEFAULT_ANTHROPIC_CLASSIFY_MODEL),
+    generate:
+      nonEmpty(process.env.SKILLBUILDER_GENERATE_MODEL) ??
+      (modelProvider === "nous" ? modelId : DEFAULT_ANTHROPIC_GENERATE_MODEL),
+    runAgent: nonEmpty(process.env.SKILLBUILDER_RUN_AGENT_MODEL) ?? modelId,
+    streamAgent: nonEmpty(process.env.SKILLBUILDER_STREAM_AGENT_MODEL) ?? modelId,
+  };
   const clerkConfigured =
     nonEmpty(process.env.CLERK_SECRET_KEY) !== undefined &&
     nonEmpty(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) !== undefined;
@@ -47,6 +67,7 @@ export function readConfig(): AppConfig {
     nousApiKey,
     nousBaseUrl: nonEmpty(process.env.NOUS_BASE_URL) ?? DEFAULT_NOUS_BASE_URL,
     modelId,
+    modelIds,
     clerkConfigured,
     flags: {
       hasDatabase: databaseUrl !== undefined,

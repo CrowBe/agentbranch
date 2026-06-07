@@ -5,7 +5,7 @@ describe("createNousProvider", () => {
   it("returns a null model when no Nous key is configured", () => {
     const provider = createNousProvider({
       apiKey: undefined,
-      modelId: "Hermes-4.3-36B",
+      modelIds: modelIds("Hermes-4.3-36B"),
     });
 
     expect(provider.model).toBeNull();
@@ -14,10 +14,20 @@ describe("createNousProvider", () => {
   it("creates an AI SDK language model when configured", () => {
     const provider = createNousProvider({
       apiKey: "nous-key",
-      modelId: "Hermes-4.3-36B",
+      modelIds: modelIds("Hermes-4.3-36B"),
       baseUrl: "https://example.test/v1",
     });
 
     expect(provider.model).not.toBeNull();
   });
 });
+
+function modelIds(model: string) {
+  return {
+    default: model,
+    classify: model,
+    generate: model,
+    runAgent: model,
+    streamAgent: model,
+  };
+}

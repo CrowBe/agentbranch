@@ -53,12 +53,12 @@ export function getContainer(): AppContainer {
     config.modelProvider === "nous"
       ? createNousProvider({
           apiKey: config.nousApiKey,
-          modelId: config.modelId,
+          modelIds: config.modelIds,
           baseUrl: config.nousBaseUrl,
         })
       : createAnthropicProvider({
           apiKey: config.anthropicApiKey,
-          modelId: config.modelId,
+          modelIds: config.modelIds,
         });
   const usage = prisma ? createPrismaUsageRepository(prisma) : createMemoryUsageRepository();
 
