@@ -1,4 +1,5 @@
 import { beforeEach, describe, it, expect, vi } from "vitest";
+import type { Mock } from "vitest";
 import { z } from "zod";
 import { createModelGateway } from "./model-gateway";
 import { stubModelGateway } from "./stub-model-gateway";
@@ -201,6 +202,95 @@ describe("model gateway — stream accounting", () => {
     const snapshot = await usage.get(userId);
     expect(isErr(snapshot)).toBe(false);
     if (!isErr(snapshot)) expect(snapshot.value).toMatchObject({ tokensUsed: 9, turnsUsed: 1 });
+  });
+});
+
+describe("model gateway — generation controls", () => {
+  it("sets explicit output ceilings on every model primitive", async () => {
+    const generateObject = aiMocks.generateObject as Mock;
+    const generateText = aiMocks.generateText as Mock;
+    generateObject
+      .mockResolvedValueOnce({
+        object: { choice: "a", rationale: "best match" },
+        usage: { totalTokens: 3 },
+      })
+      .mockResolvedValueOnce({
+        object: { ok: true },
+        usage: { totalTokens: 5 },
+      });
+    generateText.mockResolvedValueOnce({
+      steps: [],
+      usage: { totalTokens: 7 },
+    });
+    aiMocks.streamText.mockReturnValueOnce({
+      fullStream: parts([{ type: "finish", finishReason: "stop" }]),
+      totalUsage: Promise.resolve({ totalTokens: 11 }),
+    });
+    const gateway = createModelGateway({ provider: withModel, usage: createMemoryUsageRepository() });
+
+    await gateway.classify({ prompt: "x", choices: ["a"], tag: platform });
+    await gateway.runAgent({ system: "", messages: [], tools: [], tag: platform });
+    const stream = await gateway.streamAgent({ system: "", messages: [], tools: [], tag: platform });
+    if (!isErr(stream)) await collect(stream.value);
+    await gateway.generate({
+      system: "",
+      prompt: "x",
+      schema: z.object({ ok: z.boolean() }),
+      tag: platform,
+    });
+
+    expect(aiMocks.generateObject).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ maxOutputTokens: 256 }),
+    );
+    expect(aiMocks.generateText).toHaveBeenCalledWith(
+      expect.objectContaining({ maxOutputTokens: 4096 }),
+    );
+    expect(aiMocks.streamText).toHaveBeenCalledWith(
+      expect.objectContaining({ maxOutputTokens: 16000 }),
+    );
+    expect(aiMocks.generateObject).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ maxOutputTokens: 2048 }),
+    );
+  });
+
+  it("adds Anthropic effort only for Sonnet-routed eval and insight primitives", async () => {
+    const generateObject = aiMocks.generateObject as Mock;
+    const generateText = aiMocks.generateText as Mock;
+    generateObject.mockResolvedValueOnce({
+      object: { ok: true },
+      usage: { totalTokens: 5 },
+    });
+    generateText.mockResolvedValueOnce({
+      steps: [],
+      usage: { totalTokens: 7 },
+    });
+    const gateway = createModelGateway({
+      provider: withModel,
+      usage: createMemoryUsageRepository(),
+      providerKind: "anthropic",
+      modelId: "claude-sonnet-4-6",
+    });
+
+    await gateway.runAgent({ system: "", messages: [], tools: [], tag: platform });
+    await gateway.generate({
+      system: "",
+      prompt: "x",
+      schema: z.object({ ok: z.boolean() }),
+      tag: platform,
+    });
+
+    expect(aiMocks.generateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerOptions: { anthropic: { effort: "medium" } },
+      }),
+    );
+    expect(aiMocks.generateObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerOptions: { anthropic: { effort: "low" } },
+      }),
+    );
   });
 });
 
