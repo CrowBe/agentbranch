@@ -5,6 +5,7 @@ import { checkCap, type Tier, type UsageRepository } from "@/modules/usage";
 import type {
   ModelGateway,
   ModelProvider,
+  ModelGatewayPrimitive,
   AccountingTag,
   GatewayTool,
   ClassifyInput,
@@ -53,8 +54,10 @@ export function createModelGateway(deps: {
    */
   async function admit(
     tag: AccountingTag,
+    primitive: ModelGatewayPrimitive,
   ): Promise<Result<LanguageModel, DomainError>> {
-    if (!provider.model) {
+    const model = provider.models?.[primitive] ?? provider.model;
+    if (!model) {
       return err(domainError("model_unavailable", "No model is configured."));
     }
     if (tag.kind === "account") {
@@ -70,7 +73,7 @@ export function createModelGateway(deps: {
         return err(domainError("cap_reached", decision.reason));
       }
     }
-    return ok(provider.model);
+    return ok(model);
   }
 
   /** Record a turn's token cost. `account` → usage stream; `platform`/paid → deferred no-op. */
@@ -87,7 +90,7 @@ export function createModelGateway(deps: {
     },
 
     async classify(input: ClassifyInput): Promise<Result<Classification, DomainError>> {
-      const admitted = await admit(input.tag);
+      const admitted = await admit(input.tag, "classify");
       if (isErr(admitted)) return admitted;
 
       try {
@@ -114,7 +117,7 @@ export function createModelGateway(deps: {
     },
 
     async runAgent(input: RunAgentInput): Promise<Result<AgentTurn, DomainError>> {
-      const admitted = await admit(input.tag);
+      const admitted = await admit(input.tag, "runAgent");
       if (isErr(admitted)) return admitted;
 
       try {
@@ -137,7 +140,7 @@ export function createModelGateway(deps: {
     ): Promise<Result<AsyncGenerator<AgentStreamPart>, DomainError>> {
       // Admit up front so cap_reached / model_unavailable surface as the outer
       // Result before any part streams; the model is captured for the generator.
-      const admitted = await admit(input.tag);
+      const admitted = await admit(input.tag, "streamAgent");
       if (isErr(admitted)) return admitted;
       const model = admitted.value;
       const { tag } = input;
@@ -199,7 +202,7 @@ export function createModelGateway(deps: {
     },
 
     async generate<T>(input: GenerateInput<T>): Promise<Result<T, DomainError>> {
-      const admitted = await admit(input.tag);
+      const admitted = await admit(input.tag, "generate");
       if (isErr(admitted)) return admitted;
 
       try {

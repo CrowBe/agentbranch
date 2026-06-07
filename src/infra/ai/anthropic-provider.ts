@@ -12,9 +12,24 @@ import type { ModelProvider } from "@/modules/model-gateway";
  */
 export function createAnthropicProvider(params: {
   apiKey: string | undefined;
-  modelId: string;
+  modelIds: {
+    readonly default: string;
+    readonly classify: string;
+    readonly generate: string;
+    readonly runAgent: string;
+    readonly streamAgent: string;
+  };
 }): ModelProvider {
   if (!params.apiKey) return { model: null };
   const anthropic = createAnthropic({ apiKey: params.apiKey });
-  return { model: anthropic(params.modelId) };
+  const fallback = anthropic(params.modelIds.default);
+  return {
+    model: fallback,
+    models: {
+      classify: anthropic(params.modelIds.classify),
+      generate: anthropic(params.modelIds.generate),
+      runAgent: anthropic(params.modelIds.runAgent),
+      streamAgent: anthropic(params.modelIds.streamAgent),
+    },
+  };
 }

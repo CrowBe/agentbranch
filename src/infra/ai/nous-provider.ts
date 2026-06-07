@@ -8,7 +8,13 @@ import { DEFAULT_NOUS_BASE_URL } from "@/server/config";
  */
 export function createNousProvider(params: {
   apiKey: string | undefined;
-  modelId: string;
+  modelIds: {
+    readonly default: string;
+    readonly classify: string;
+    readonly generate: string;
+    readonly runAgent: string;
+    readonly streamAgent: string;
+  };
   baseUrl?: string;
 }): ModelProvider {
   if (!params.apiKey) return { model: null };
@@ -18,5 +24,14 @@ export function createNousProvider(params: {
     baseURL: params.baseUrl ?? DEFAULT_NOUS_BASE_URL,
     includeUsage: true,
   });
-  return { model: nous(params.modelId) };
+  const fallback = nous(params.modelIds.default);
+  return {
+    model: fallback,
+    models: {
+      classify: nous(params.modelIds.classify),
+      generate: nous(params.modelIds.generate),
+      runAgent: nous(params.modelIds.runAgent),
+      streamAgent: nous(params.modelIds.streamAgent),
+    },
+  };
 }
