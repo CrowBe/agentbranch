@@ -3,6 +3,7 @@ import type { Mock } from "vitest";
 import { z } from "zod";
 import { createModelGateway } from "./model-gateway";
 import { stubModelGateway } from "./stub-model-gateway";
+import { createMemoryRequestRateLimiter } from "@/infra/memory/rate-limit.memory-repository";
 import { createMemoryUsageRepository } from "@/infra/memory/usage.memory-repository";
 import { TIER_LIMITS } from "@/modules/usage";
 import type { ModelProvider, AccountingTag } from "@/modules/model-gateway";
@@ -124,6 +125,35 @@ describe("model gateway — accounting guard", () => {
     });
     expect(isErr(result)).toBe(true);
     if (isErr(result)) expect(result.error.tag).not.toBe("cap_reached");
+  });
+
+  it("rate-limits account calls per user and capability, then recovers after the window", async () => {
+    aiMocks.generateObject.mockResolvedValue({
+      object: { choice: "a", rationale: "fits" },
+      usage: { totalTokens: 1 },
+    } as never);
+    let now = 0;
+    const gateway = createModelGateway({
+      provider: withModel,
+      usage: createMemoryUsageRepository(),
+      requestRateLimiter: createMemoryRequestRateLimiter({ now: () => now }),
+      requestRateLimit: { maxRequests: 2, windowMs: 1_000 },
+    });
+
+    const first = await gateway.classify({ prompt: "x", choices: ["a"], tag: account("fast") });
+    const second = await gateway.classify({ prompt: "x", choices: ["a"], tag: account("fast") });
+    const third = await gateway.classify({ prompt: "x", choices: ["a"], tag: account("fast") });
+    now = 1_000;
+    const recovered = await gateway.classify({ prompt: "x", choices: ["a"], tag: account("fast") });
+
+    expect(isErr(first)).toBe(false);
+    expect(isErr(second)).toBe(false);
+    expect(isErr(third)).toBe(true);
+    if (isErr(third)) {
+      expect(third.error.tag).toBe("cap_reached");
+      expect(third.error.message).toContain("going a little fast");
+    }
+    expect(isErr(recovered)).toBe(false);
   });
 });
 

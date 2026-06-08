@@ -11,6 +11,8 @@ export type {
   UsageSnapshot,
   TierLimits,
   CapDecision,
+  RateLimitPolicy,
 } from "./usage.types";
-export { TIER_LIMITS, checkCap, applyTurn } from "./meter";
+export { TIER_LIMITS, REQUEST_RATE_LIMIT, checkCap, applyTurn } from "./meter";
 export type { UsageRepository } from "./usage.repository";
+export type { RequestRateLimiter } from "./rate-limit.repository";

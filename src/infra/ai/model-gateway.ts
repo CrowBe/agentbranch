@@ -1,7 +1,14 @@
 import { generateObject, generateText, streamText, tool, stepCountIs, jsonSchema } from "ai";
 import type { LanguageModel, ToolSet } from "ai";
 import { z } from "zod";
-import { checkCap, type Tier, type UsageRepository } from "@/modules/usage";
+import {
+  checkCap,
+  REQUEST_RATE_LIMIT,
+  type RateLimitPolicy,
+  type RequestRateLimiter,
+  type Tier,
+  type UsageRepository,
+} from "@/modules/usage";
 import type {
   ModelGateway,
   ModelProvider,
@@ -61,9 +68,12 @@ export function createModelGateway(deps: {
   modelId?: string;
   /** Resolves a user's tier. v1 has no paid users, so this is "free" for now. */
   tierFor?: (userId: UserId) => Promise<Tier>;
+  requestRateLimiter?: RequestRateLimiter;
+  requestRateLimit?: RateLimitPolicy;
 }): ModelGateway {
   const { provider, usage } = deps;
   const tierFor = deps.tierFor ?? (async () => "free" as Tier);
+  const requestRateLimit = deps.requestRateLimit ?? REQUEST_RATE_LIMIT;
   const sonnetEffort =
     deps.providerKind === "anthropic" && deps.modelId?.toLowerCase().includes("sonnet")
       ? SONNET_EFFORT
@@ -97,6 +107,17 @@ export function createModelGateway(deps: {
       const decision = checkCap(snapshot.value, tier, tag.capability);
       if (!decision.allowed) {
         return err(domainError("cap_reached", decision.reason));
+      }
+      if (deps.requestRateLimiter) {
+        const rate = await deps.requestRateLimiter.consume(
+          tag.userId,
+          tag.capability,
+          requestRateLimit,
+        );
+        if (isErr(rate)) return rate;
+        if (!rate.value.allowed) {
+          return err(domainError("cap_reached", rate.value.reason));
+        }
       }
     }
     return ok(model);

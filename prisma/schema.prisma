@@ -16,10 +16,11 @@ model User {
   email     String   @unique
   createdAt DateTime @default(now()) @map("created_at")
 
-  skills   Skill[]
-  usage    Usage?
-  testRuns TestRun[]
-  evalRuns EvalRun[]
+  skills     Skill[]
+  usage      Usage?
+  rateLimits RateLimitWindow[]
+  testRuns   TestRun[]
+  evalRuns   EvalRun[]
 
   @@map("users")
 }
@@ -73,6 +74,20 @@ model Usage {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("usage")
+}
+
+/// Fixed-window request-rate limiter, scoped per user and capability.
+model RateLimitWindow {
+  userId       String   @map("user_id")
+  capability   String
+  windowStart  DateTime @map("window_start")
+  requestCount Int      @default(0) @map("request_count")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, capability])
+  @@map("rate_limit_windows")
 }
 
 /// Recorded triggering-eval results: did the skill fire on the right prompts?

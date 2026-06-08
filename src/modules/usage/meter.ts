@@ -4,6 +4,7 @@ import type {
   GatedCapability,
   UsageSnapshot,
   CapDecision,
+  RateLimitPolicy,
 } from "./usage.types";
 
 /**
@@ -29,6 +30,12 @@ export const TIER_LIMITS: Readonly<Record<Tier, TierLimits>> = {
       "import",
     ]),
   },
+};
+
+/** Burst guard: per-user, per-capability requests admitted each minute. */
+export const REQUEST_RATE_LIMIT: RateLimitPolicy = {
+  maxRequests: 12,
+  windowMs: 60_000,
 };
 
 const ALLOW: CapDecision = { allowed: true };
