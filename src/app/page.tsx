@@ -39,5 +39,5 @@ export default async function Home() {
   const rendered = unwrap(await runCapability(heroCapability, "rendered", skill));
   const sourceDoc = unwrap(await runCapability(heroCapability, "source", skill));
 
-  return <AppShell rendered={rendered} source={sourceDoc} />;
+  return <AppShell rendered={rendered} source={sourceDoc} initialSkill={source} />;
 }

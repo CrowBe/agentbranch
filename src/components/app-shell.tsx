@@ -13,8 +13,9 @@ import {
 import { parseSkillMd, serializeSkillMd, type SkillSource } from "@/modules/skill";
 import { TopBar } from "./top-bar";
 import { SideRail } from "./side-rail";
-import { HeroPanel } from "./hero-panel";
+import { HeroPanel, type CapabilityPanel, type InsightPanel } from "./hero-panel";
 import { InteractionPanel, type InteractionEntry } from "./interaction-panel";
+import type { ToolAction } from "./tool-chips";
 
 /**
  * The app shell — composes the chrome top bar, collapsible left rail,
@@ -25,19 +26,24 @@ import { InteractionPanel, type InteractionEntry } from "./interaction-panel";
 export function AppShell({
   rendered,
   source,
+  initialSkill,
 }: {
   rendered: RenderedDoc;
   source: SourceDoc;
+  initialSkill: SkillSource;
 }) {
   const [menuExpanded, setMenuExpanded] = useState(false);
   const [view, setView] = useState<HeroView>("rendered");
   const [status, setStatus] = useState<string | null>(null);
   const [heroDocs, setHeroDocs] = useState({ rendered, source });
-  const [current, setCurrent] = useState<SkillSource | null>(null);
+  const [current, setCurrent] = useState<SkillSource | null>(initialSkill);
   const [currentSkillId, setCurrentSkillId] = useState<string | null>(null);
   const [messages, setMessages] = useState<BuildMessage[]>([]);
   const [entries, setEntries] = useState<InteractionEntry[]>([]);
   const [busy, setBusy] = useState(false);
+  const [toolBusy, setToolBusy] = useState(false);
+  const [activeTool, setActiveTool] = useState<ToolAction | null>(null);
+  const [capability, setCapability] = useState<CapabilityPanel | null>(null);
 
   async function handleSend(message: string) {
     if (busy) return;
@@ -46,6 +52,8 @@ export function AppShell({
     setEntries((prev) => [...prev, entry(message)]);
     setStatus("Building…");
     setBusy(true);
+    setCapability(null);
+    setActiveTool(null);
     let assistantText = "";
     let latestSource = current;
 
@@ -81,6 +89,7 @@ export function AppShell({
           latestSource = event.data.source;
           setCurrent(latestSource);
           setHeroDocs(renderHeroDocs(latestSource));
+          setCapability(null);
         } else if (event.event === "skill-edit") {
           if (!latestSource) {
             setEntries((prev) => [...prev, entry("No draft exists to edit yet.", "error")]);
@@ -100,6 +109,7 @@ export function AppShell({
           latestSource = parsed.value;
           setCurrent(latestSource);
           setHeroDocs(renderHeroDocs(latestSource));
+          setCapability(null);
         } else if (event.event === "error") {
           setStatus(friendlyError(event.data.message));
           setEntries((prev) => [...prev, entry(friendlyError(event.data.message), "error")]);
@@ -131,6 +141,10 @@ export function AppShell({
             source={heroDocs.source}
             view={view}
             onViewChange={setView}
+            capability={capability}
+            activeTool={activeTool}
+            toolBusy={toolBusy}
+            onToolSelect={handleToolSelect}
           />
           {status && (
             <p className="text-label px-6 pb-4 text-on-surface-variant" role="status">
@@ -142,6 +156,43 @@ export function AppShell({
       </div>
     </div>
   );
+
+  async function handleToolSelect(action: ToolAction) {
+    const skill = current;
+    if (!skill || toolBusy) return;
+
+    setActiveTool(action);
+    setToolBusy(true);
+    setCapability(null);
+    setStatus(`${toolLabel(action)} running...`);
+
+    try {
+      const res = await fetch(`/${apiPath(action)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          skill,
+          currentSkillId: currentSkillId ?? undefined,
+          surface: "insights",
+        }),
+      });
+      const body = (await res.json().catch(() => null)) as unknown;
+      if (!res.ok) {
+        const error = parseError(body, res.status, action);
+        setStatus(error);
+        setEntries((prev) => [...prev, entry(error, "error")]);
+        return;
+      }
+      setCapability(toCapabilityPanel(action, body));
+      setStatus(`${toolLabel(action)} ready.`);
+    } catch (cause) {
+      const error = friendlyError(String(cause));
+      setStatus(error);
+      setEntries((prev) => [...prev, entry(error, "error")]);
+    } finally {
+      setToolBusy(false);
+    }
+  }
 }
 
 function renderHeroDocs(source: SkillSource): { rendered: RenderedDoc; source: SourceDoc } {
@@ -205,4 +256,76 @@ function friendlyError(message: string): string {
   if (message.includes("cap_reached")) return "Out of free usage today.";
   if (message.includes("model_unavailable")) return "No model is configured.";
   return message;
+}
+
+function apiPath(action: ToolAction): string {
+  if (action === "visualise") return "api/visualise";
+  if (action === "test-run") return "api/test-run";
+  if (action === "triggering-eval") return "api/triggering-eval";
+  return "api/export";
+}
+
+function toolLabel(action: ToolAction): string {
+  if (action === "visualise") return "Visualise";
+  if (action === "test-run") return "Test run";
+  if (action === "triggering-eval") return "Triggering eval";
+  return "Export";
+}
+
+function parseError(body: unknown, status: number, action: ToolAction): string {
+  const error = body && typeof body === "object" && "error" in body ? String(body.error) : "";
+  const code = body && typeof body === "object" && "code" in body ? String(body.code) : "";
+  if (code === "cap_reached" && action === "triggering-eval") {
+    return "Triggering eval is not available on the free plan.";
+  }
+  if (code === "cap_reached") return "Out of free usage today.";
+  if (code === "model_unavailable" || code === "not_configured") return "No model is configured.";
+  return friendlyError(error || `Request failed (${status}).`);
+}
+
+function toCapabilityPanel(action: ToolAction, body: unknown): CapabilityPanel {
+  if (action === "visualise" && isRecord(body) && typeof body.mermaid === "string") {
+    return { kind: "visualise", mermaid: body.mermaid };
+  }
+
+  if (action === "export" && isRecord(body)) {
+    const files = Array.isArray(body.files) ? body.files.filter(isExportFile) : [];
+    return {
+      kind: "export",
+      rootDir: typeof body.rootDir === "string" ? body.rootDir : "skill",
+      files,
+    };
+  }
+
+  if (isInsight(body)) {
+    return { kind: "insights", title: toolLabel(action), insight: body };
+  }
+
+  throw new Error("Capability returned an unexpected response.");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object";
+}
+
+function isExportFile(value: unknown): value is { readonly path: string; readonly contents: string } {
+  return (
+    isRecord(value) &&
+    typeof value.path === "string" &&
+    typeof value.contents === "string"
+  );
+}
+
+function isInsight(value: unknown): value is InsightPanel {
+  return (
+    isRecord(value) &&
+    (value.verdict === "good" ||
+      value.verdict === "needs-attention" ||
+      value.verdict === "failing") &&
+    typeof value.summary === "string" &&
+    Array.isArray(value.findings) &&
+    value.findings.every((item) => typeof item === "string") &&
+    Array.isArray(value.watch) &&
+    value.watch.every((item) => typeof item === "string")
+  );
 }
