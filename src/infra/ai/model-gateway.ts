@@ -50,6 +50,8 @@ const SONNET_EFFORT = {
   medium: { providerOptions: { anthropic: { effort: "medium" } } },
 } as const;
 
+const PROVIDER_CAP_REACHED_MESSAGE = "cap_reached: Out of free usage today.";
+
 /**
  * Real model gateway — Claude via the Vercel AI SDK (NOT the Anthropic SDK
  * directly, ARCHITECTURE §4). The platform's single metered entry to the model
@@ -160,7 +162,7 @@ export function createModelGateway(deps: {
           object.choice && input.choices.includes(object.choice) ? object.choice : null;
         return ok({ choice, rationale: object.rationale });
       } catch (cause) {
-        return err(domainError("model_unavailable", "Classification call failed.", cause));
+        return err(modelCallError("Classification call failed.", cause));
       }
     },
 
@@ -185,7 +187,7 @@ export function createModelGateway(deps: {
         await record(input.tag, result.usage?.totalTokens ?? 0);
         return ok({ transcript: transcriptFromSteps(result.steps) });
       } catch (cause) {
-        return err(domainError("model_unavailable", "Agent turn failed.", cause));
+        return err(modelCallError("Agent turn failed.", cause));
       }
     },
 
@@ -204,22 +206,24 @@ export function createModelGateway(deps: {
       const { tag } = input;
 
       async function* stream(): AsyncGenerator<AgentStreamPart> {
-        const result = streamText({
-          model,
-          maxOutputTokens: OUTPUT_LIMITS.streamAgent,
-          system: input.system,
-          messages: input.messages.map((m) => ({ role: m.role, content: m.content })),
-          tools: toSdkTools(input.tools),
-          stopWhen: stepCountIs(8),
-        });
+        let result: ReturnType<typeof streamText> | undefined;
         let latestKnownTokens = 0;
         let recorded = false;
+        let skipRecording = false;
         const recordOnce = async () => {
-          if (recorded) return;
+          if (recorded || skipRecording || !result) return;
           recorded = true;
           await record(tag, await readStreamTokens(result, latestKnownTokens));
         };
         try {
+          result = streamText({
+            model,
+            maxOutputTokens: OUTPUT_LIMITS.streamAgent,
+            system: input.system,
+            messages: input.messages.map((m) => ({ role: m.role, content: m.content })),
+            tools: toSdkTools(input.tools),
+            stopWhen: stepCountIs(8),
+          });
           for await (const rawPart of result.fullStream) {
             const part = rawPart as { type: string } & Record<string, unknown>;
             latestKnownTokens = Math.max(latestKnownTokens, readTotalTokens(part) ?? 0);
@@ -243,12 +247,24 @@ export function createModelGateway(deps: {
                 yield { kind: "finish", finishReason: readString(part, "finishReason") ?? "stop" };
                 break;
               case "error":
+                if (isProviderCapError(part.error)) {
+                  skipRecording = true;
+                  yield { kind: "error", message: PROVIDER_CAP_REACHED_MESSAGE };
+                  break;
+                }
                 yield { kind: "error", message: String(part.error ?? "Unknown error") };
                 break;
               default:
                 break;
             }
           }
+        } catch (cause) {
+          if (isProviderCapError(cause)) {
+            skipRecording = true;
+            yield { kind: "error", message: PROVIDER_CAP_REACHED_MESSAGE };
+            return;
+          }
+          throw cause;
         } finally {
           // Record once even when the consumer disconnects or the stream throws.
           // Prefer SDK totals, but fall back to the latest usage attached to a
@@ -280,7 +296,7 @@ export function createModelGateway(deps: {
         await record(input.tag, u?.totalTokens ?? 0);
         return ok(object);
       } catch (cause) {
-        return err(domainError("model_unavailable", "Generation call failed.", cause));
+        return err(modelCallError("Generation call failed.", cause));
       }
     },
   };
@@ -343,6 +359,51 @@ function readNumber(obj: Record<string, unknown>, key: string): number | undefin
   const value = obj[key];
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
+
+function modelCallError(message: string, cause: unknown): DomainError {
+  if (isProviderCapError(cause)) {
+    return domainError("cap_reached", PROVIDER_CAP_REACHED_MESSAGE, cause);
+  }
+  return domainError("model_unavailable", message, cause);
+}
+
+function isProviderCapError(value: unknown): boolean {
+  const visited = new Set<unknown>();
+  const stack: unknown[] = [value];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || visited.has(current)) continue;
+    visited.add(current);
+
+    if (typeof current === "string") {
+      if (providerCapTextPattern.test(current)) return true;
+      continue;
+    }
+    if (typeof current !== "object") continue;
+
+    const obj = current as Record<string, unknown>;
+    if (readNumber(obj, "status") === 429 || readNumber(obj, "statusCode") === 429) {
+      return true;
+    }
+
+    for (const key of ["code", "type", "name", "message", "error"]) {
+      const nested = obj[key];
+      if (typeof nested === "string" && providerCapTextPattern.test(nested)) {
+        return true;
+      }
+      if (nested && typeof nested === "object") stack.push(nested);
+    }
+
+    for (const key of ["cause", "response", "data", "body"]) {
+      const nested = obj[key];
+      if (nested && typeof nested === "object") stack.push(nested);
+    }
+  }
+  return false;
+}
+
+const providerCapTextPattern =
+  /\b(429|rate[-\s]?limit(?:ed)?|quota|billing|credit|insufficient[_\s-]?quota)\b/i;
 
 function classifyPrompt(prompt: string, choices: readonly string[]): string {
   const list = choices.map((c, i) => `${i + 1}. ${c}`).join("\n");
