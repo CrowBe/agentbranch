@@ -6,7 +6,7 @@ import { stubModelGateway } from "./stub-model-gateway";
 import { createMemoryUsageRepository } from "@/infra/memory/usage.memory-repository";
 import { TIER_LIMITS } from "@/modules/usage";
 import type { ModelProvider, AccountingTag } from "@/modules/model-gateway";
-import { isErr, UserId } from "@/shared";
+import { isErr, REQUEST_BYTES_MAX, UserId } from "@/shared";
 
 const aiMocks = vi.hoisted(() => ({
   streamText: vi.fn(),
@@ -164,6 +164,68 @@ describe("model gateway — primitive routing", () => {
     expect(aiMocks.streamText).toHaveBeenCalledWith(
       expect.objectContaining({ model: routedProvider.models.streamAgent }),
     );
+  });
+});
+
+describe("model gateway — input budget guard", () => {
+  it("admits payloads at the gateway byte ceiling", async () => {
+    aiMocks.generateObject.mockResolvedValueOnce({
+      object: { choice: "a", rationale: "fits" },
+      usage: { totalTokens: 1 },
+    } as never);
+    const gateway = createModelGateway({
+      provider: withModel,
+      usage: createMemoryUsageRepository(),
+    });
+
+    const result = await gateway.classify({
+      prompt: "x".repeat(REQUEST_BYTES_MAX),
+      choices: ["a"],
+      tag: platform,
+    });
+
+    expect(isErr(result)).toBe(false);
+    expect(aiMocks.generateObject).toHaveBeenCalledOnce();
+  });
+
+  it("rejects payloads over the gateway byte ceiling before SDK calls", async () => {
+    const gateway = createModelGateway({
+      provider: withModel,
+      usage: createMemoryUsageRepository(),
+    });
+    const oversized = "x".repeat(REQUEST_BYTES_MAX + 1);
+
+    const classify = await gateway.classify({
+      prompt: oversized,
+      choices: ["a"],
+      tag: platform,
+    });
+    const runAgent = await gateway.runAgent({
+      system: "s",
+      messages: [{ role: "user", content: oversized }],
+      tools: [],
+      tag: platform,
+    });
+    const streamAgent = await gateway.streamAgent({
+      system: oversized,
+      messages: [],
+      tools: [],
+      tag: platform,
+    });
+    const generate = await gateway.generate({
+      system: "s",
+      prompt: oversized,
+      schema: z.object({ ok: z.boolean() }),
+      tag: platform,
+    });
+
+    for (const result of [classify, runAgent, streamAgent, generate]) {
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.tag).toBe("input_too_large");
+    }
+    expect(aiMocks.generateObject).not.toHaveBeenCalled();
+    expect(aiMocks.generateText).not.toHaveBeenCalled();
+    expect(aiMocks.streamText).not.toHaveBeenCalled();
   });
 });
 
