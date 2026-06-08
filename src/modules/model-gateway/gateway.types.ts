@@ -103,6 +103,7 @@ export type GenerateInput<T> = {
  * - `model_unavailable` — no model configured (offline / no key).
  * - `cap_reached`       — a model exists, but an `account` call hit a tier cap
  *   (the §8 graceful-degradation catch — "out of free usage today").
+ * - `input_too_large`   — the final model input exceeds the gateway budget.
  */
 export interface ModelGateway {
   /** True when a model is configured. False → calls fail `model_unavailable`. */
