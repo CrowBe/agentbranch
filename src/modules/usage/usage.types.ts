@@ -26,6 +26,12 @@ export type TierLimits = {
   readonly allowed: ReadonlySet<GatedCapability>;
 };
 
+/** Fixed-window request-rate policy, enforced before model spend. */
+export type RateLimitPolicy = {
+  readonly maxRequests: number;
+  readonly windowMs: number;
+};
+
 /** The answer to "may this user do X right now?" */
 export type CapDecision =
   | { readonly allowed: true }

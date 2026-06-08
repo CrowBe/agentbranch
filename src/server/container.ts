@@ -9,11 +9,13 @@ import type { ModelGateway } from "@/modules/model-gateway";
 import { readConfig, type AppConfig } from "./config";
 import { createMemorySkillRepository } from "@/infra/memory/skill.memory-repository";
 import { createMemoryUsageRepository } from "@/infra/memory/usage.memory-repository";
+import { createMemoryRequestRateLimiter } from "@/infra/memory/rate-limit.memory-repository";
 import { createMemoryTestRunRepository } from "@/infra/memory/test-run.memory-repository";
 import { createMemoryEvalRunRepository } from "@/infra/memory/eval.memory-repository";
 import { createPrismaClient } from "@/infra/prisma/client";
 import { createPrismaSkillRepository } from "@/infra/prisma/skill.prisma-repository";
 import { createPrismaUsageRepository } from "@/infra/prisma/usage.prisma-repository";
+import { createPrismaRequestRateLimiter } from "@/infra/prisma/rate-limit.prisma-repository";
 import { createPrismaTestRunRepository } from "@/infra/prisma/test-run.prisma-repository";
 import { createPrismaEvalRunRepository } from "@/infra/prisma/eval.prisma-repository";
 import { createUserProvisioningAuth } from "@/infra/prisma/user-provisioning-auth";
@@ -61,6 +63,9 @@ export function getContainer(): AppContainer {
           modelIds: config.modelIds,
         });
   const usage = prisma ? createPrismaUsageRepository(prisma) : createMemoryUsageRepository();
+  const requestRateLimiter = prisma
+    ? createPrismaRequestRateLimiter(prisma)
+    : createMemoryRequestRateLimiter();
 
   // The model gateway is the platform's single metered entry to the model. It
   // degrades to the offline stub when no model is configured, so evaluation
@@ -69,6 +74,7 @@ export function getContainer(): AppContainer {
     ? createModelGateway({
         provider: modelProvider,
         usage,
+        requestRateLimiter,
         providerKind: config.modelProvider,
         modelId: config.modelId,
       })
