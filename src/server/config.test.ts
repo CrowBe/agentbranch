@@ -29,6 +29,7 @@ describe("readConfig", () => {
       runAgent: DEFAULT_ANTHROPIC_MODEL,
       streamAgent: DEFAULT_ANTHROPIC_MODEL,
     });
+    expect(config.clerkProPlanSlug).toBe("pro");
     expect(config.flags.hasModel).toBe(false);
   });
 
@@ -101,6 +102,16 @@ describe("readConfig", () => {
     });
   });
 
+  it("lets the Clerk Pro plan slug override the default", () => {
+    replaceEnv({
+      SKILLBUILDER_PRO_PLAN_SLUG: "skillbuilder-pro",
+    });
+
+    const config = readConfig();
+
+    expect(config.clerkProPlanSlug).toBe("skillbuilder-pro");
+  });
+
   it("rejects unsupported model providers", () => {
     replaceEnv({
       SKILLBUILDER_MODEL_PROVIDER: "bogus",
@@ -122,6 +133,7 @@ function replaceEnv(env: Record<string, string>): void {
   delete process.env.SKILLBUILDER_RUN_AGENT_MODEL;
   delete process.env.SKILLBUILDER_STREAM_AGENT_MODEL;
   delete process.env.SKILLBUILDER_MODEL_PROVIDER;
+  delete process.env.SKILLBUILDER_PRO_PLAN_SLUG;
   delete process.env.CLERK_SECRET_KEY;
   delete process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
   Object.assign(process.env, env);

@@ -18,6 +18,7 @@ export type AppConfig = {
     readonly streamAgent: string;
   };
   readonly clerkConfigured: boolean;
+  readonly clerkProPlanSlug: string;
   readonly flags: {
     readonly hasDatabase: boolean;
     readonly hasModel: boolean;
@@ -69,6 +70,7 @@ export function readConfig(): AppConfig {
     modelId,
     modelIds,
     clerkConfigured,
+    clerkProPlanSlug: nonEmpty(process.env.SKILLBUILDER_PRO_PLAN_SLUG) ?? "pro",
     flags: {
       hasDatabase: databaseUrl !== undefined,
       hasModel:

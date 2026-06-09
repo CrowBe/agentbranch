@@ -107,6 +107,27 @@ describe("model gateway — accounting guard", () => {
     if (isErr(result)) expect(result.error.tag).toBe("cap_reached");
   });
 
+  it("admits Pro users for triggering eval", async () => {
+    aiMocks.generateObject.mockResolvedValueOnce({
+      object: { choice: "a", rationale: "fits" },
+      usage: { totalTokens: 1 },
+    } as never);
+    const usage = createMemoryUsageRepository();
+    const gateway = createModelGateway({
+      provider: withModel,
+      usage,
+      tierFor: async () => "pro",
+    });
+
+    const result = await gateway.classify({
+      prompt: "x",
+      choices: ["a"],
+      tag: { kind: "account", userId: UserId("pro-user"), capability: "triggering-eval" },
+    });
+
+    expect(isErr(result)).toBe(false);
+  });
+
   it("does not cap-gate platform calls (the platform owns that cost)", async () => {
     const usage = createMemoryUsageRepository();
     const userId = "capped";
