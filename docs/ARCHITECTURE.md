@@ -177,7 +177,8 @@ Presentation-layer architecture — same kind of decision as the rest of this do
 
 - **OAuth-only** signup (Google + GitHub) — no passwords, no password-storage liability, raises per-account scripted-abuse cost.
 - **One** skill-building session per account, naturally bounded by the **context window + a turn cap** → per-account spend is bounded by construction.
-- Includes: 1 skill, 1 visualisation, 1 **test run** (+ its generated scenario). **No triggering evals. No import.**
+- Includes: 1 skill (**built or imported** — import is free by construction: paste / GitHub URL costs no model tokens, and it's the acquisition wedge, [#66](https://github.com/CrowBe/SkillBuilder/issues/66)), the **lint report** (pure analysis, zero tokens, uncapped), 1 visualisation, 1 **test run** (+ its generated scenario). **No triggering evals.**
+- Structural bounds extend to import's non-model costs: a per-account **skill-count cap** (the "1 skill" above, one tunable constant) and a per-user **rate limit on import fetches** ([#73](https://github.com/CrowBe/SkillBuilder/issues/73)).
 - Export: copy + the standard skill folder `.zip`.
 - Aggregate protection: provider-side cap + the graceful-degradation catch (see [§4](#4-locked-decisions)).
 
