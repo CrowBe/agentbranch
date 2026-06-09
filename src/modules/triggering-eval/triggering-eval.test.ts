@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { runTriggeringEval, buildPromptBattery, generatePromptBattery } from "./index";
 import { makeSkill, parseSkillMd, type Skill } from "@/modules/skill";
 import type { GenerateInput, ModelGateway } from "@/modules/model-gateway";
-import { ok, unwrap, SkillId, UserId } from "@/shared";
+import { domainError, err, ok, unwrap, SkillId, UserId } from "@/shared";
 
 function skillFor(description: string): Skill {
   const source = unwrap(parseSkillMd(`---\nname: t\ndescription: ${description}\n---\nbody`));
@@ -27,6 +27,7 @@ type FakeGatewayOptions = {
     readonly negative: readonly string[];
   };
   readonly generateCalls?: GenerateInput<unknown>[];
+  readonly rationale?: string;
 };
 
 function fakeGateway(options: FakeGatewayOptions = {}): ModelGateway {
@@ -39,7 +40,7 @@ function fakeGateway(options: FakeGatewayOptions = {}): ModelGateway {
         .toLowerCase()
         .split(/[^a-z]+/)
         .some((w) => words.has(w));
-      return ok({ choice: fires ? candidate : null, rationale: "probe" });
+      return ok({ choice: fires ? candidate : null, rationale: options.rationale ?? "probe" });
     },
     async streamAgent() {
       // The build loop's primitive; unused by the triggering-eval evaluator.
@@ -52,22 +53,23 @@ function fakeGateway(options: FakeGatewayOptions = {}): ModelGateway {
     async generate(input) {
       options.generateCalls?.push(input as GenerateInput<unknown>);
       if (input.prompt.includes("Return 3 positive prompts and 3 negative prompts.")) {
-        return ok(
-          input.schema.parse(
-            options.generatedBattery ?? {
-              positive: [
-                "Schedule a planning meeting on my calendar.",
-                "Find calendar time for a customer call next week.",
-                "Move my calendar block to Friday.",
-              ],
-              negative: [
-                "Summarize the notes from my meeting.",
-                "Write a follow-up email after the call.",
-                "What is the weather like tomorrow?",
-              ],
-            },
-          ),
+        const parsed = input.schema.safeParse(
+          options.generatedBattery ?? {
+            positive: [
+              "Schedule a planning meeting on my calendar.",
+              "Find calendar time for a customer call next week.",
+              "Move my calendar block to Friday.",
+            ],
+            negative: [
+              "Summarize the notes from my meeting.",
+              "Write a follow-up email after the call.",
+              "What is the weather like tomorrow?",
+            ],
+          },
         );
+        return parsed.success
+          ? ok(parsed.data)
+          : err(domainError("seam_analyze_failed", "Generated prompt battery was invalid."));
       }
       // Validate a canned insight through the caller's schema so the generic
       // return type is honoured — same contract the real adapter satisfies.
@@ -145,5 +147,31 @@ describe("triggering eval", () => {
     });
     expect(generateCalls).toHaveLength(1);
     expect(generateCalls[0]?.tag).toEqual(TAG);
+  });
+
+  it("bounds generated prompt cases and clamps rationales before insight generation", async () => {
+    const generateCalls: GenerateInput<unknown>[] = [];
+    const longRationale = "because ".repeat(200);
+    const result = unwrap(
+      await runTriggeringEval(
+        skillFor("Schedule meetings on the calendar."),
+        fakeGateway({ generateCalls, rationale: longRationale }),
+        TAG,
+      ),
+    );
+
+    expect(result.cases[0]?.rationale).toBe(longRationale);
+    const insightPrompt = generateCalls.at(-1)?.prompt ?? "";
+    expect(insightPrompt).not.toContain(longRationale);
+    expect(insightPrompt).toContain(longRationale.slice(0, 120));
+
+    const overlongBattery = fakeGateway({
+      generatedBattery: {
+        positive: ["a".repeat(161), "Schedule a planning meeting."],
+        negative: ["Summarize the notes.", "What is the weather?"],
+      },
+    });
+    const rejected = await generatePromptBattery(skillFor("Coordinate workshops."), overlongBattery, TAG);
+    expect(rejected.ok).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseSkillMd, serializeSkillMd } from "./skill-md";
-import { unwrap, isErr } from "@/shared";
+import { LIMIT_MESSAGES, SKILL_BODY_MAX, SKILL_DESCRIPTION_MAX, SKILL_NAME_MAX, unwrap, isErr } from "@/shared";
 
 const SAMPLE = `---
 name: inbox-triage
@@ -38,6 +38,24 @@ describe("parseSkillMd", () => {
   it("fails on malformed YAML", () => {
     const result = parseSkillMd(`---\nname: : :\n bad\n---\nbody`);
     expect(isErr(result)).toBe(true);
+  });
+
+  it("rejects imported skills that exceed strict skill limits", () => {
+    const longName = parseSkillMd(`---\nname: ${"a".repeat(SKILL_NAME_MAX + 1)}\ndescription: d\n---\nbody`);
+    expect(isErr(longName)).toBe(true);
+    if (isErr(longName)) expect(longName.error.message).toBe(LIMIT_MESSAGES.skillName);
+
+    const longDescription = parseSkillMd(
+      `---\nname: n\ndescription: ${"a".repeat(SKILL_DESCRIPTION_MAX + 1)}\n---\nbody`,
+    );
+    expect(isErr(longDescription)).toBe(true);
+    if (isErr(longDescription)) {
+      expect(longDescription.error.message).toBe(LIMIT_MESSAGES.skillDescription);
+    }
+
+    const longBody = parseSkillMd(`---\nname: n\ndescription: d\n---\n${"a".repeat(SKILL_BODY_MAX + 1)}`);
+    expect(isErr(longBody)).toBe(true);
+    if (isErr(longBody)) expect(longBody.error.message).toBe(LIMIT_MESSAGES.skillBody);
   });
 });
 

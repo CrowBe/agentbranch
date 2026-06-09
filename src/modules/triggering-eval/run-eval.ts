@@ -7,6 +7,8 @@ import { generatePromptBattery } from "./prompt-battery";
 import { distractorLibrary } from "./distractor-library";
 import type { CaseResult, TriggeringResult } from "./triggering-eval.types";
 
+const INSIGHT_CASE_TEXT_MAX = 240;
+
 /**
  * Run the triggering eval: does the skill fire on the right prompts and stay
  * silent on the wrong ones? (ARCHITECTURE §4) — the cheapest eval, no judge model.
@@ -56,7 +58,10 @@ quiet on the rest, and call out anything worth adjusting.`;
 
 function insightPrompt(name: string, cases: readonly CaseResult[], passed: boolean): string {
   const lines = cases
-    .map((c) => `- "${c.prompt}" — expected ${c.expected}, got ${c.actual} (${c.rationale})`)
+    .map(
+      (c) =>
+        `- "${clampText(c.prompt, INSIGHT_CASE_TEXT_MAX)}" — expected ${c.expected}, got ${c.actual} (${clampText(c.rationale, INSIGHT_CASE_TEXT_MAX)})`,
+    )
     .join("\n");
   return `Skill "${name}" triggering eval ${passed ? "passed" : "found issues"}.\n\nCases:\n${lines}`;
 }
@@ -65,4 +70,8 @@ function insightPrompt(name: string, cases: readonly CaseResult[], passed: boole
  *  apart from the distractors (which use the same shape). */
 function candidateLabel(skill: Skill): string {
   return `${skillName(skill)}: ${skillDescription(skill)}`;
+}
+
+function clampText(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }

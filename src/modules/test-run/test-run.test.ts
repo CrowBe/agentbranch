@@ -136,4 +136,34 @@ describe("test run", () => {
     );
     expect(worldGenerations).toHaveLength(1);
   });
+
+  it("clamps transcript content before sending it into insight generation", async () => {
+    const calls: { generate: GenerateInput<unknown>[] } = { generate: [] };
+    const longText = "transcript ".repeat(200);
+    const gateway: ModelGateway = {
+      ...fakeGateway(calls),
+      async runAgent() {
+        return ok({
+          transcript: [
+            { kind: "model", text: longText },
+            { kind: "tool-result", tool: "search", output: { value: longText } },
+          ],
+        });
+      },
+    };
+
+    unwrap(
+      await executeSkill({
+        skill: fixtureSkill("s3"),
+        gateway,
+        tag: TAG,
+        scenario: { prompt: longText, seedData: {} },
+        registry: defaultMockToolRegistry(),
+      }),
+    );
+
+    const insightPrompt = calls.generate.at(-1)?.prompt ?? "";
+    expect(insightPrompt).not.toContain(longText);
+    expect(insightPrompt).toContain(longText.slice(0, 120));
+  });
 });

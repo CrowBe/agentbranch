@@ -13,6 +13,8 @@ import type {
   TranscriptStep,
 } from "./test-run.types";
 
+const INSIGHT_TRANSCRIPT_TEXT_MAX = 600;
+
 /**
  * Run a skill against the mock-tool registry and return a test-run result.
  *
@@ -95,13 +97,13 @@ function insightPrompt(
   const steps = transcript
     .map((s) =>
       s.kind === "model"
-        ? `model: ${s.text}`
+        ? `model: ${clampText(s.text, INSIGHT_TRANSCRIPT_TEXT_MAX)}`
         : s.kind === "tool-call"
-          ? `tool-call: ${s.tool}(${JSON.stringify(s.input)})`
-          : `tool-result: ${s.tool} → ${JSON.stringify(s.output)}`,
+          ? `tool-call: ${s.tool}(${clampJson(s.input, INSIGHT_TRANSCRIPT_TEXT_MAX)})`
+          : `tool-result: ${s.tool} → ${clampJson(s.output, INSIGHT_TRANSCRIPT_TEXT_MAX)}`,
     )
     .join("\n");
-  return `Skill "${name}" was test-run on: "${prompt}".\n\nWhat happened:\n${steps}`;
+  return `Skill "${name}" was test-run on: "${clampText(prompt, INSIGHT_TRANSCRIPT_TEXT_MAX)}".\n\nWhat happened:\n${steps}`;
 }
 
 async function generatedWorld(
@@ -217,6 +219,14 @@ function fallbackGeneratedWorld(): GeneratedWorld {
       },
     ],
   };
+}
+
+function clampJson(value: unknown, max: number): string {
+  return clampText(JSON.stringify(value) ?? "undefined", max);
+}
+
+function clampText(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
 
 function worldCacheKey(skill: Skill): string {
