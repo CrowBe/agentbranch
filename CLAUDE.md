@@ -1,4 +1,4 @@
-# SkillBuilder — agent guide
+# SkillSmith — agent guide
 
 Tool for building + testing agent skills (the Agent Skills open standard). Author a skill in a chat-driven loop, see it live, validate it (visualise / test-run / triggering eval), export it. Claude-first runtime, standard-native artifact.
 
@@ -22,7 +22,7 @@ If layout and theme disagree, ARCHITECTURE wins. DESIGN dresses the shell; it do
 - **Cross-runtime validation** — the portability surface: one engine runs the skill's triggering battery against other runtimes' models (provider swap through the gateway). Skills travel as-is under the open standard — behaviour, not format, is the portability question; no per-target export packages.
 - **Rendered / Source view** — the hero's two views: Rendered (friendly doc, default) + Source (raw mono `SKILL.md`).
 
-Note: SkillBuilder authors / validates / exports skills — it does **not *deploy*** them (no schedules, webhooks, production runs). "Run" means a test run, not a deploy.
+Note: SkillSmith authors / validates / exports skills — it does **not *deploy*** them (no schedules, webhooks, production runs). "Run" means a test run, not a deploy.
 
 ## How docs work here (greenfield, in active flux)
 

@@ -1,11 +1,11 @@
 <!-- Currently a statement of purpose only. As we build out, grow this: installation/cloning,
      setup, usage guides, contributing. Keep it human-facing and present-tense. -->
 
-# SkillBuilder
+# SkillSmith
 
-A tool for **building and testing agent skills** — author a skill in a chat-driven loop, watch it take shape live, then validate it before you ship.
+**Craft agent skills you can trust** — author a skill in a chat-driven loop, watch it take shape live, then prove it works before you ship.
 
-> Working name — also considering *SkillDesign*.
+> Working name (previously *SkillBuilder*) — the repository name will follow.
 
 ---
 
@@ -13,9 +13,7 @@ A tool for **building and testing agent skills** — author a skill in a chat-dr
 
 An [agent skill](https://agentskills.io) is a reusable instruction set that tells an AI agent how to do a job — a `SKILL.md` file with a description and a workflow. It's an open standard: the same skill installs in Claude, Codex, Gemini CLI, Copilot and a growing list of tools. Writing one is easy; knowing whether it actually *works* is not. Will the agent reach for it at the right moment? Does the workflow hold up?
 
-SkillBuilder closes that gap. Most tools stop at editing — the durable value here is **validating a skill before it ships**.
-
-You describe what you want in plain language. SkillBuilder writes the skill live in front of you, and lets you:
+SkillSmith closes that gap. Most tools stop at editing — here a skill leaves the bench **proven, not just written**. Describe what you want in plain language; SkillSmith writes the skill live in front of you, and lets you:
 
 - **See it as a document** — a friendly, readable view by default; the raw `SKILL.md` source one click away.
 - **Visualise its logic** — a diagram of what the skill actually does.
@@ -36,7 +34,7 @@ The design goal is **approachable without dumbing it down** — technical depth 
 
 You build with Claude — the tool runs the model on its own key and meters usage, so there's nothing to configure. What you export is yours: a standard skill folder, not something locked to this tool or any one platform.
 
-Because the format already travels, portability is about *behaviour*: **honest validation** — *"will your skill survive over there?"* — checking how the skill triggers and behaves on other tools' models, not a false "works identically everywhere" promise. SkillBuilder is straight with you about what carries over.
+Because the format already travels, portability is about *behaviour*: **honest validation** — *"will your skill survive over there?"* — checking how the skill triggers and behaves on other tools' models, not a false "works identically everywhere" promise. SkillSmith is straight with you about what carries over.
 
 ## Documentation
 
@@ -47,4 +45,4 @@ Because the format already travels, portability is about *behaviour*: **honest v
 
 ---
 
-*Building agent skills you can trust.*
+*Agent skills, crafted and proven.*

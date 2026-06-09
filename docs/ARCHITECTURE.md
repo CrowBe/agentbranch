@@ -1,4 +1,4 @@
-# SkillBuilder — Architecture
+# SkillSmith — Architecture
 
 Single source of truth for **what we build and why** — product, system, services, data, **and** app/screen layout. All of it lives here because it's one *kind* of knowledge (decisions that translate into code), regardless of layer.
 
@@ -10,7 +10,7 @@ Single source of truth for **what we build and why** — product, system, servic
 
 ## 1. Product thesis
 
-**SkillBuilder is a skill *testing / CI* tool that also authors.** That is the long-term thesis, and it's the sharp end of the pitch — most tools stop at editing; the durable value is *validating* a skill before it ships.
+**SkillSmith is a skill *testing / CI* tool that also authors.** That is the long-term thesis, and it's the sharp end of the pitch — most tools stop at editing; the durable value is *validating* a skill before it ships.
 
 In the near term it's a **visual authoring + lightweight-validation tool for agent skills**: build a skill in chat with a live-streaming preview, **visualise** its logic, **test-run** it, check its **triggering**, and **export** it. The frame is **Claude-first runtime, standard-native artifact**: authoring and validation run on Claude, and the skill the user owns is an [Agent Skills open-standard](https://agentskills.io) `SKILL.md` folder that installs as-is across compatible tools (Claude, Codex CLI, Gemini CLI, Copilot and more). **Honest portability** is the growth edge — validating *behaviour* on other runtimes' models, never a "runs everywhere" fidelity claim; the standard already solved the format question.
 

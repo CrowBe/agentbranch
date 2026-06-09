@@ -19,7 +19,7 @@ export function TopBar({ onToggleMenu }: { onToggleMenu: () => void }) {
         >
           <MenuIcon />
         </button>
-        <span className="text-headline-md select-none">SkillBuilder</span>
+        <span className="text-headline-md select-none">SkillSmith</span>
       </div>
       <Pill tone="success">Free plan</Pill>
     </header>

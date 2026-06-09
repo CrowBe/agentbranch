@@ -1,8 +1,8 @@
 {
-  "name": "skillbuilder",
+  "name": "skillsmith",
   "version": "0.1.0",
   "private": true,
-  "description": "Build and test Claude Skills — author, visualise, test-run, validate triggering, and export.",
+  "description": "Craft and test agent skills — author, visualise, test-run, validate triggering, and export.",
   "type": "module",
   "scripts": {
     "dev": "next dev",
