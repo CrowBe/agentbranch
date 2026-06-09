@@ -78,4 +78,60 @@ describe("AppShell capability chips", () => {
     });
     expect(screen.getByRole("button", { name: "Triggers" })).toBeEnabled();
   });
+
+  it("requests and renders a test-run breakdown on demand", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          verdict: "needs-attention",
+          summary: "The skill missed one tool call.",
+          findings: ["Missing calendar lookup."],
+          watch: [],
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          scenario: { prompt: "Triage a calendar-heavy inbox.", seedData: {} },
+          transcript: [
+            { kind: "model", text: "I will inspect the inbox." },
+            { kind: "tool-call", tool: "email.search", input: { query: "unread" } },
+          ],
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AppShell rendered={rendered} source={source} initialSkill={skill} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Run" }));
+
+    await screen.findByText("The skill missed one tool call.");
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/test-run",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          skill,
+          currentSkillId: undefined,
+          surface: "insights",
+        }),
+      }),
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Breakdown" }));
+
+    await screen.findByText("Triage a calendar-heavy inbox.");
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/test-run",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          skill,
+          currentSkillId: undefined,
+          surface: "breakdown",
+        }),
+      }),
+    );
+    expect(screen.getByText("email.search", { exact: false })).toBeInTheDocument();
+  });
 });

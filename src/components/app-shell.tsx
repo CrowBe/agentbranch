@@ -13,7 +13,13 @@ import {
 import { parseSkillMd, serializeSkillMd, type SkillSource } from "@/modules/skill";
 import { TopBar } from "./top-bar";
 import { SideRail } from "./side-rail";
-import { HeroPanel, type CapabilityPanel, type InsightPanel } from "./hero-panel";
+import {
+  HeroPanel,
+  type CapabilityPanel,
+  type EvaluationBreakdown,
+  type EvaluationToolAction,
+  type InsightPanel,
+} from "./hero-panel";
 import { InteractionPanel, type InteractionEntry } from "./interaction-panel";
 import type { ToolAction } from "./tool-chips";
 
@@ -145,6 +151,7 @@ export function AppShell({
             activeTool={activeTool}
             toolBusy={toolBusy}
             onToolSelect={handleToolSelect}
+            onEvaluationSurfaceChange={handleEvaluationSurfaceSelect}
           />
           {status && (
             <p className="text-label px-6 pb-4 text-on-surface-variant" role="status">
@@ -158,6 +165,15 @@ export function AppShell({
   );
 
   async function handleToolSelect(action: ToolAction) {
+    await runTool(action, "insights");
+  }
+
+  async function handleEvaluationSurfaceSelect(surface: "insights" | "breakdown") {
+    if (!activeTool || !isEvaluationTool(activeTool)) return;
+    await runTool(activeTool, surface);
+  }
+
+  async function runTool(action: ToolAction, surface: "insights" | "breakdown") {
     const skill = current;
     if (!skill || toolBusy) return;
 
@@ -173,7 +189,7 @@ export function AppShell({
         body: JSON.stringify({
           skill,
           currentSkillId: currentSkillId ?? undefined,
-          surface: "insights",
+          surface,
         }),
       });
       const body = (await res.json().catch(() => null)) as unknown;
@@ -183,7 +199,7 @@ export function AppShell({
         setEntries((prev) => [...prev, entry(error, "error")]);
         return;
       }
-      setCapability(toCapabilityPanel(action, body));
+      setCapability(toCapabilityPanel(action, surface, body));
       setStatus(`${toolLabel(action)} ready.`);
     } catch (cause) {
       const error = friendlyError(String(cause));
@@ -283,7 +299,11 @@ function parseError(body: unknown, status: number, action: ToolAction): string {
   return friendlyError(error || `Request failed (${status}).`);
 }
 
-function toCapabilityPanel(action: ToolAction, body: unknown): CapabilityPanel {
+function toCapabilityPanel(
+  action: ToolAction,
+  surface: "insights" | "breakdown",
+  body: unknown,
+): CapabilityPanel {
   if (action === "visualise" && isRecord(body) && typeof body.mermaid === "string") {
     return { kind: "visualise", mermaid: body.mermaid };
   }
@@ -297,11 +317,35 @@ function toCapabilityPanel(action: ToolAction, body: unknown): CapabilityPanel {
     };
   }
 
-  if (isInsight(body)) {
-    return { kind: "insights", title: toolLabel(action), insight: body };
+  if (isEvaluationTool(action) && surface === "breakdown") {
+    const breakdown = toEvaluationBreakdown(action, body);
+    if (breakdown) {
+      return { kind: "breakdown", action, title: toolLabel(action), breakdown };
+    }
+  }
+
+  if (isEvaluationTool(action) && isInsight(body)) {
+    return { kind: "insights", action, title: toolLabel(action), insight: body };
   }
 
   throw new Error("Capability returned an unexpected response.");
+}
+
+function isEvaluationTool(action: ToolAction): action is EvaluationToolAction {
+  return action === "test-run" || action === "triggering-eval";
+}
+
+function toEvaluationBreakdown(
+  action: EvaluationToolAction,
+  body: unknown,
+): EvaluationBreakdown | null {
+  if (action === "test-run" && isTestRunBreakdown(body)) {
+    return { kind: "test-run", scenario: body.scenario, transcript: body.transcript };
+  }
+  if (action === "triggering-eval" && isTriggeringBreakdown(body)) {
+    return { kind: "triggering-eval", passed: body.passed, cases: body.cases };
+  }
+  return null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -327,5 +371,47 @@ function isInsight(value: unknown): value is InsightPanel {
     value.findings.every((item) => typeof item === "string") &&
     Array.isArray(value.watch) &&
     value.watch.every((item) => typeof item === "string")
+  );
+}
+
+function isTestRunBreakdown(
+  value: unknown,
+): value is Extract<EvaluationBreakdown, { kind: "test-run" }> {
+  return (
+    isRecord(value) &&
+    isRecord(value.scenario) &&
+    typeof value.scenario.prompt === "string" &&
+    Array.isArray(value.transcript) &&
+    value.transcript.every(isTranscriptStep)
+  );
+}
+
+function isTranscriptStep(value: unknown): boolean {
+  if (!isRecord(value) || typeof value.kind !== "string") return false;
+  if (value.kind === "model") return typeof value.text === "string";
+  if (value.kind === "tool-call") return typeof value.tool === "string" && "input" in value;
+  if (value.kind === "tool-result") return typeof value.tool === "string" && "output" in value;
+  return false;
+}
+
+function isTriggeringBreakdown(
+  value: unknown,
+): value is Extract<EvaluationBreakdown, { kind: "triggering-eval" }> {
+  return (
+    isRecord(value) &&
+    typeof value.passed === "boolean" &&
+    Array.isArray(value.cases) &&
+    value.cases.every(isTriggeringCase)
+  );
+}
+
+function isTriggeringCase(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.prompt === "string" &&
+    (value.expected === "fire" || value.expected === "silent") &&
+    (value.actual === "fire" || value.actual === "silent") &&
+    typeof value.pass === "boolean" &&
+    typeof value.rationale === "string"
   );
 }

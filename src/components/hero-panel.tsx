@@ -4,14 +4,52 @@ import { ToolChips, type ToolAction } from "./tool-chips";
 
 export type CapabilityPanel =
   | { readonly kind: "visualise"; readonly mermaid: string }
-  | { readonly kind: "insights"; readonly title: string; readonly insight: InsightPanel }
+  | {
+      readonly kind: "insights";
+      readonly action: EvaluationToolAction;
+      readonly title: string;
+      readonly insight: InsightPanel;
+    }
+  | {
+      readonly kind: "breakdown";
+      readonly action: EvaluationToolAction;
+      readonly title: string;
+      readonly breakdown: EvaluationBreakdown;
+    }
   | { readonly kind: "export"; readonly rootDir: string; readonly files: readonly ExportPanelFile[] };
+
+export type EvaluationToolAction = "test-run" | "triggering-eval";
 
 export type InsightPanel = {
   readonly verdict: "good" | "needs-attention" | "failing";
   readonly summary: string;
   readonly findings: readonly string[];
   readonly watch: readonly string[];
+};
+
+export type EvaluationBreakdown =
+  | {
+      readonly kind: "test-run";
+      readonly scenario: { readonly prompt: string };
+      readonly transcript: readonly TranscriptStepPanel[];
+    }
+  | {
+      readonly kind: "triggering-eval";
+      readonly passed: boolean;
+      readonly cases: readonly TriggeringCasePanel[];
+    };
+
+export type TranscriptStepPanel =
+  | { readonly kind: "model"; readonly text: string }
+  | { readonly kind: "tool-call"; readonly tool: string; readonly input: unknown }
+  | { readonly kind: "tool-result"; readonly tool: string; readonly output: unknown };
+
+export type TriggeringCasePanel = {
+  readonly prompt: string;
+  readonly expected: "fire" | "silent";
+  readonly actual: "fire" | "silent";
+  readonly pass: boolean;
+  readonly rationale: string;
 };
 
 export type ExportPanelFile = {
@@ -34,6 +72,7 @@ export function HeroPanel({
   activeTool,
   toolBusy,
   onToolSelect,
+  onEvaluationSurfaceChange,
 }: {
   rendered: RenderedDoc;
   source: SourceDoc;
@@ -43,6 +82,7 @@ export function HeroPanel({
   activeTool: ToolAction | null;
   toolBusy: boolean;
   onToolSelect: (action: ToolAction) => void;
+  onEvaluationSurfaceChange: (surface: "insights" | "breakdown") => void;
 }) {
   return (
     <section className="mx-auto flex h-full w-full max-w-3xl flex-col gap-4 px-6 py-8">
@@ -53,7 +93,11 @@ export function HeroPanel({
 
       <article className="flex-1 overflow-auto rounded-[var(--radius-lg)] border border-outline-variant bg-surface p-6">
         {capability ? (
-          <CapabilityView panel={capability} />
+          <CapabilityView
+            panel={capability}
+            busy={toolBusy}
+            onEvaluationSurfaceChange={onEvaluationSurfaceChange}
+          />
         ) : view === "rendered" ? (
           <RenderedView doc={rendered} />
         ) : (
@@ -89,7 +133,15 @@ function SourceView({ doc }: { doc: SourceDoc }) {
   );
 }
 
-function CapabilityView({ panel }: { panel: CapabilityPanel }) {
+function CapabilityView({
+  panel,
+  busy,
+  onEvaluationSurfaceChange,
+}: {
+  panel: CapabilityPanel;
+  busy: boolean;
+  onEvaluationSurfaceChange: (surface: "insights" | "breakdown") => void;
+}) {
   if (panel.kind === "visualise") {
     return (
       <div className="flex flex-col gap-3">
@@ -124,8 +176,26 @@ function CapabilityView({ panel }: { panel: CapabilityPanel }) {
     );
   }
 
+  if (panel.kind === "breakdown") {
+    return (
+      <div className="flex flex-col gap-4">
+        <EvaluationSurfaceTabs
+          value="breakdown"
+          busy={busy}
+          onChange={onEvaluationSurfaceChange}
+        />
+        {panel.breakdown.kind === "test-run" ? (
+          <TestRunBreakdownView breakdown={panel.breakdown} />
+        ) : (
+          <TriggeringBreakdownView breakdown={panel.breakdown} />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
+      <EvaluationSurfaceTabs value="insights" busy={busy} onChange={onEvaluationSurfaceChange} />
       <header className="flex flex-col gap-2">
         <p className="text-label text-on-surface-variant">{panel.title}</p>
         <h1 className="text-headline-md">{verdictLabel(panel.insight.verdict)}</h1>
@@ -135,6 +205,103 @@ function CapabilityView({ panel }: { panel: CapabilityPanel }) {
       <InsightList title="Watch" items={panel.insight.watch} />
     </div>
   );
+}
+
+function EvaluationSurfaceTabs({
+  value,
+  busy,
+  onChange,
+}: {
+  value: "insights" | "breakdown";
+  busy: boolean;
+  onChange: (surface: "insights" | "breakdown") => void;
+}) {
+  return (
+    <div className="inline-flex w-fit rounded-[var(--radius-sm)] border border-outline-variant p-1">
+      {(["insights", "breakdown"] as const).map((surface) => (
+        <button
+          key={surface}
+          type="button"
+          disabled={busy || value === surface}
+          onClick={() => onChange(surface)}
+          className={`text-label rounded-[var(--radius-sm)] px-3 py-1.5 ${
+            value === surface ? "bg-primary/15 text-primary" : "text-on-surface-variant"
+          } disabled:cursor-not-allowed`}
+        >
+          {surface === "insights" ? "Insights" : "Breakdown"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function TestRunBreakdownView({
+  breakdown,
+}: {
+  breakdown: Extract<EvaluationBreakdown, { kind: "test-run" }>;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <header className="flex flex-col gap-1">
+        <p className="text-label text-on-surface-variant">Test run</p>
+        <h1 className="text-headline-md">Breakdown</h1>
+      </header>
+      <section className="flex flex-col gap-2">
+        <h2 className="text-doc-rendered-h">Scenario</h2>
+        <p className="text-doc-rendered text-on-surface-variant">{breakdown.scenario.prompt}</p>
+      </section>
+      <section className="flex flex-col gap-2">
+        <h2 className="text-doc-rendered-h">Transcript</h2>
+        <div className="flex flex-col gap-2">
+          {breakdown.transcript.map((step, index) => (
+            <pre
+              key={index}
+              className="text-doc-source overflow-auto whitespace-pre-wrap rounded-[var(--radius-sm)] border border-outline-variant bg-surface-high p-3"
+            >
+              <code>{formatTranscriptStep(step)}</code>
+            </pre>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function TriggeringBreakdownView({
+  breakdown,
+}: {
+  breakdown: Extract<EvaluationBreakdown, { kind: "triggering-eval" }>;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <header className="flex flex-col gap-1">
+        <p className="text-label text-on-surface-variant">Triggering eval</p>
+        <h1 className="text-headline-md">{breakdown.passed ? "Passed" : "Needs work"}</h1>
+      </header>
+      <div className="flex flex-col gap-3">
+        {breakdown.cases.map((item) => (
+          <section key={item.prompt} className="rounded-[var(--radius-sm)] border border-outline-variant p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-doc-rendered-h">{item.pass ? "Pass" : "Fail"}</h2>
+              <p className="text-label text-on-surface-variant">
+                expected {item.expected} · got {item.actual}
+              </p>
+            </div>
+            <p className="text-doc-rendered mt-2">{item.prompt}</p>
+            <p className="text-doc-rendered mt-2 text-on-surface-variant">{item.rationale}</p>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function formatTranscriptStep(step: TranscriptStepPanel): string {
+  if (step.kind === "model") return `model\n${step.text}`;
+  if (step.kind === "tool-call") {
+    return `tool-call ${step.tool}\n${JSON.stringify(step.input, null, 2)}`;
+  }
+  return `tool-result ${step.tool}\n${JSON.stringify(step.output, null, 2)}`;
 }
 
 function InsightList({ title, items }: { title: string; items: readonly string[] }) {
