@@ -139,7 +139,7 @@ The build loop is **not thin** — it's the core and must feel good. Everything 
 
 - **`users`** — identity from Clerk (Google/GitHub).
 - **`skills`** — `id, user_id, name, description, body, frontmatter_json, created_at`.
-- **`skill_versions`** — append-only revisions of a skill (export is a pure function of a version; enables future regression evals).
+- **`skill_versions`** — append-only revisions of a skill (export is a pure function of a version; enables future regression evals). **Target state ([#72](https://github.com/CrowBe/SkillBuilder/issues/72)):** versioning is a product concept — restore-a-version lands as a *new* head revision (append-only stays append-only), with a default 10-version retention cap that never breaks stored run records.
 - **`usage`** — per-user token + turn counters (drives caps now; drives PAYG metering later).
 - **`eval_runs`** / **`test_runs`** — recorded triggering-eval and test-run results. **Target state ([#57](https://github.com/CrowBe/SkillBuilder/issues/57)):** each run carries a `skill_version_id` pinning the result to the revision it evaluated — the substrate for regression evals. **Read path ([#61](https://github.com/CrowBe/SkillBuilder/issues/61)):** list/fetch APIs + My skills / History surfaces re-render stored records through the seam renderers.
 
@@ -192,6 +192,8 @@ Designed-for, not built. Each reuses an existing seam, so it's a renderer/config
 
 **Deferred capabilities:**
 
+- **Skill import** (paste `SKILL.md` text / GitHub URL) — the acquisition wedge: same parse → persist → render path as the build loop, no authoring required ([#66](https://github.com/CrowBe/SkillBuilder/issues/66)).
+- **Skill lint** — a static quality report (spec compliance, structure, description/trigger heuristics): a pure analysis capability on the seam, zero tokens, auto-run on every version ([#69](https://github.com/CrowBe/SkillBuilder/issues/69)–[#71](https://github.com/CrowBe/SkillBuilder/issues/71)).
 - **Cross-runtime validation** (does the skill trigger/behave on Codex/Gemini-class models?) — the existing triggering battery run via provider swap through the model gateway; per-runtime results grid ([#65](https://github.com/CrowBe/SkillBuilder/issues/65)).
 - **Interactive visualise canvas** ("Claude design"-style point-and-annotate) — IR→React Flow renderer; **point-and-annotate falls out for free**: node → its source-span → inject that span as precise context into the next chat turn.
 - **Richer evals** — workflow evals (run the full loop, LLM-as-judge against rubrics) → regression evals (pin a scenario set, track score across edits = the retention hook).
