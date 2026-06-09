@@ -25,6 +25,7 @@ import { createModelGateway } from "@/infra/ai/model-gateway";
 import { stubModelGateway } from "@/infra/ai/stub-model-gateway";
 import { createClerkAuth } from "@/infra/clerk/clerk-auth";
 import { createStubAuth } from "@/infra/clerk/stub-auth";
+import { createClerkTierResolver } from "@/infra/clerk/tier-resolver";
 
 /**
  * The composition root. The one place ports meet adapters; everything else
@@ -66,6 +67,9 @@ export function getContainer(): AppContainer {
   const requestRateLimiter = prisma
     ? createPrismaRequestRateLimiter(prisma)
     : createMemoryRequestRateLimiter();
+  const tierFor = config.flags.hasAuth
+    ? createClerkTierResolver(config.clerkProPlanSlug)
+    : undefined;
 
   // The model gateway is the platform's single metered entry to the model. It
   // degrades to the offline stub when no model is configured, so evaluation
@@ -77,6 +81,7 @@ export function getContainer(): AppContainer {
         requestRateLimiter,
         providerKind: config.modelProvider,
         modelId: config.modelId,
+        tierFor,
       })
     : stubModelGateway;
 
