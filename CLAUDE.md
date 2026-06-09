@@ -1,6 +1,6 @@
 # SkillBuilder — agent guide
 
-Tool for building + testing Claude Skills. Author a skill in a chat-driven loop, see it live, validate it (visualise / test-run / triggering eval), export it. Claude-ecosystem-first.
+Tool for building + testing agent skills (the Agent Skills open standard). Author a skill in a chat-driven loop, see it live, validate it (visualise / test-run / triggering eval), export it. Claude-first runtime, standard-native artifact.
 
 ## Source of truth
 
@@ -13,13 +13,13 @@ If layout and theme disagree, ARCHITECTURE wins. DESIGN dresses the shell; it do
 
 ## Domain language (from the glossary — non-negotiable)
 
-- **Skill** — instruction-only `SKILL.md` (frontmatter + body). No runnable code.
+- **Skill** — instruction-only `SKILL.md` (frontmatter + body) per the Agent Skills open standard. No runnable code. Claude is the first-class runtime; the artifact installs across compatible tools.
 - **Build loop** — the core agentic loop (Claude via Vercel AI SDK; `write_skill`/`edit_skill`, streams to preview).
 - **Skill-analysis seam** — the spine: read skill → emit structured artifact → render. New capability? Ask "what renderer is this?" before "what service?".
 - **Skill IR** — visualise's artifact (nodes+edges+source-spans). One thing on the seam, *not* the seam itself.
 - **Test run** — running a skill against mocked tools (mechanism: **mock-tool registry**; tool: `execute_skill`). **Never write "sandbox"** — it intimidates both audiences. Always "test run" in user-facing copy.
 - **Triggering eval** — does the skill fire on the right prompts, stay silent on the wrong ones.
-- **Portability transform** — one engine, two surfaces (cross-provider validation + cross-primitive export).
+- **Cross-runtime validation** — the portability surface: one engine runs the skill's triggering battery against other runtimes' models (provider swap through the gateway). Skills travel as-is under the open standard — behaviour, not format, is the portability question; no per-target export packages.
 - **Rendered / Source view** — the hero's two views: Rendered (friendly doc, default) + Source (raw mono `SKILL.md`).
 
 Note: SkillBuilder authors / validates / exports skills — it does **not *deploy*** them (no schedules, webhooks, production runs). "Run" means a test run, not a deploy.
@@ -55,14 +55,14 @@ Hexagonal: pure **domain modules** depend on ports (interfaces); **infra** suppl
 
 - `src/shared/` — kernel: `Result`, branded ids, `DomainError`, SSE envelope.
 - `src/modules/<domain>/` — the domain. Each is a deep module with an `index.ts` public surface + co-located tests:
-  - `skill` (the aggregate + lossless `SKILL.md` parse/serialize), `skill-analysis` (**the seam** — two shapes: **analysis** `defineCapability`/`runCapability` (static, offline) and **evaluation** `defineEvaluation`/`runEvaluation` (dynamic, needs the model gateway)), `hero` (Rendered+Source renderers), `visualise` (skill IR → Mermaid), `test-run` (mock-tool registry + `execute_skill`), `triggering-eval`, `export` (Claude `.zip` manifest), `portability` (stub engine), `build-loop` (tools + event mapping; streams through the gateway's `streamAgent`, no raw model access), `model-gateway` (**the platform's single metered entry to the model** — `classify`/`runAgent`/`streamAgent`/`generate` primitives + `account`/`platform` accounting tag; owns the `ModelProvider` port; depends on `usage`), `usage` (tier caps + accounting authority), `auth` (`AuthPort`).
+  - `skill` (the aggregate + lossless `SKILL.md` parse/serialize), `skill-analysis` (**the seam** — two shapes: **analysis** `defineCapability`/`runCapability` (static, offline) and **evaluation** `defineEvaluation`/`runEvaluation` (dynamic, needs the model gateway)), `hero` (Rendered+Source renderers), `visualise` (skill IR → Mermaid), `test-run` (mock-tool registry + `execute_skill`), `triggering-eval`, `export` (standard skill-folder `.zip` manifest), `portability` (stub engine — cross-runtime validation), `build-loop` (tools + event mapping; streams through the gateway's `streamAgent`, no raw model access), `model-gateway` (**the platform's single metered entry to the model** — `classify`/`runAgent`/`streamAgent`/`generate` primitives + `account`/`platform` accounting tag; owns the `ModelProvider` port; depends on `usage`), `usage` (tier caps + accounting authority), `auth` (`AuthPort`).
 - `src/infra/` — adapters: `prisma/`, `memory/` (offline default), `ai/` (Anthropic/Nous providers + **model-gateway** adapter, each with an offline stub), `clerk/` (real + stub auth).
 - `src/server/` — `config.ts` (env→flags), `container.ts` (composition root), `build-stream.ts` (loop→SSE).
 - `src/app/` — App Router presentation; `src/components/` — the shell (top bar, rail, hero, panel) dressed per `DESIGN.md`.
 
 New capability? It's almost always a **renderer on the skill-analysis seam** (`defineCapability`), not a new pipeline. New external service? A **port in the domain module + adapter in infra**, wired in `container.ts`.
 
-Most logic is real where it's pure and load-bearing (SKILL.md, the seam, usage caps, hero/visualise/export renderers). The **build loop** is real and runs through the gateway's `streamAgent` (gated + accounted under the `build` capability). The two **evaluation capabilities** are real `Evaluator`s on the seam (`triggeringEvalCapability`, `testRunCapability`) — each composes the model gateway's primitives (`classify`/`runAgent` for the run, `generate` for the **Insight**) and emits an `Artifact<kind>` carrying that Insight; each exposes two renderers, `insights` (default, friendly — the model-written interpretation) and `breakdown` (raw cases/transcript). Their *inputs* (prompt battery, scenario, mock-tool inference) are still keyword/default **stubs** marked `STUB` in-file. **Future work:** the gateway's remaining consumers — the portability transform and mock-data generation — don't route through it yet; streaming token accounting in `streamAgent` is best-effort (read once after the stream settles); IR extraction and portability stay stubbed behind their real interfaces.
+Most logic is real where it's pure and load-bearing (SKILL.md, the seam, usage caps, hero/visualise/export renderers). The **build loop** is real and runs through the gateway's `streamAgent` (gated + accounted under the `build` capability). The two **evaluation capabilities** are real `Evaluator`s on the seam (`triggeringEvalCapability`, `testRunCapability`) — each composes the model gateway's primitives (`classify`/`runAgent` for the run, `generate` for the **Insight**) and emits an `Artifact<kind>` carrying that Insight; each exposes two renderers, `insights` (default, friendly — the model-written interpretation) and `breakdown` (raw cases/transcript). Their *inputs* (prompt battery, scenario, mock-tool inference) are still keyword/default **stubs** marked `STUB` in-file. **Future work:** the gateway's remaining consumers — cross-runtime validation and mock-data generation — don't route through it yet; streaming token accounting in `streamAgent` is best-effort (read once after the stream settles); IR extraction and cross-runtime validation stay stubbed behind their real interfaces.
 
 ## Keep this file accurate
 
