@@ -197,6 +197,60 @@ describe("model gateway — primitive routing", () => {
   });
 });
 
+describe("model gateway — provider cap errors", () => {
+  it("maps provider quota failures to cap_reached instead of model_unavailable", async () => {
+    aiMocks.generateObject.mockRejectedValueOnce({
+      status: 429,
+      message: "Anthropic rate limit exceeded",
+    });
+    const usage = createMemoryUsageRepository();
+    const userId = UserId("provider-capped");
+    const gateway = createModelGateway({ provider: withModel, usage });
+
+    const result = await gateway.classify({
+      prompt: "x",
+      choices: ["a"],
+      tag: { kind: "account", userId, capability: "test-run" },
+    });
+
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) {
+      expect(result.error.tag).toBe("cap_reached");
+      expect(result.error.message).toContain("cap_reached");
+    }
+    const snapshot = await usage.get(userId);
+    expect(isErr(snapshot)).toBe(false);
+    if (!isErr(snapshot)) expect(snapshot.value).toMatchObject({ tokensUsed: 0, turnsUsed: 0 });
+  });
+
+  it("streams a cap_reached error event for provider quota failures without recording usage", async () => {
+    aiMocks.streamText.mockReturnValueOnce({
+      fullStream: throwingParts([], { statusCode: 429, message: "quota exceeded" }),
+      totalUsage: Promise.resolve({ totalTokens: 0 }),
+    });
+    const usage = createMemoryUsageRepository();
+    const userId = UserId("stream-provider-capped");
+    const gateway = createModelGateway({ provider: withModel, usage });
+
+    const opened = await gateway.streamAgent({
+      system: "",
+      messages: [],
+      tools: [],
+      tag: { kind: "account", userId, capability: "build" },
+    });
+
+    expect(isErr(opened)).toBe(false);
+    if (!isErr(opened)) {
+      expect(await collect(opened.value)).toEqual([
+        { kind: "error", message: "cap_reached: Out of free usage today." },
+      ]);
+    }
+    const snapshot = await usage.get(userId);
+    expect(isErr(snapshot)).toBe(false);
+    if (!isErr(snapshot)) expect(snapshot.value).toMatchObject({ tokensUsed: 0, turnsUsed: 0 });
+  });
+});
+
 describe("model gateway — input budget guard", () => {
   it("admits payloads at the gateway byte ceiling", async () => {
     aiMocks.generateObject.mockResolvedValueOnce({
@@ -462,9 +516,12 @@ async function* parts(values: ReadonlyArray<Record<string, unknown>>) {
   for (const value of values) yield value;
 }
 
-async function* throwingParts(values: ReadonlyArray<Record<string, unknown>>) {
+async function* throwingParts(
+  values: ReadonlyArray<Record<string, unknown>>,
+  cause: unknown = new Error("stream failed"),
+) {
   for (const value of values) yield value;
-  throw new Error("stream failed");
+  throw cause;
 }
 
 async function collect(generator: AsyncGenerator<unknown>): Promise<unknown[]> {
