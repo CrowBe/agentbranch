@@ -1,4 +1,4 @@
-# SkillBuilder — Design System
+# SkillSmith — Design System
 
 > The **visual design system**: theme, color tokens, type scale, spacing, shapes, components.
 > Categorically distinct from `ARCHITECTURE.md` (what we build & why, incl. screen *layout*).

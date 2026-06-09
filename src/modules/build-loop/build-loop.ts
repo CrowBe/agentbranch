@@ -4,7 +4,7 @@ import { isErr, type UserId } from "@/shared";
 import { buildTools } from "./tools";
 import type { BuildLoopInput, BuildLoopEvent } from "./build-loop.types";
 
-const SYSTEM_PROMPT = `You are SkillBuilder's authoring agent. You help a user
+const SYSTEM_PROMPT = `You are SkillSmith's authoring agent. You help a user
 craft a single Claude Skill — an instruction-only SKILL.md (YAML frontmatter
 with name + description, then a markdown body). On a first draft call
 write_skill with the complete document. On revisions call edit_skill with an

@@ -1,4 +1,4 @@
-# SkillBuilder — module design
+# SkillSmith — module design
 
 Agent-facing map of the codebase: the layers, the module boundaries, the
 dependency rules, and where each thing lives. Read this with

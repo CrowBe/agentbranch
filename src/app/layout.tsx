@@ -10,8 +10,8 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", weight: ["40
 const jetbrains = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains", weight: ["400", "500"] });
 
 export const metadata: Metadata = {
-  title: "SkillBuilder",
-  description: "Build and test Claude Skills you can trust.",
+  title: "SkillSmith",
+  description: "Craft, test, and export agent skills you can trust.",
 };
 
 // Clerk requires a publishable key to mount its provider. Until one is set,

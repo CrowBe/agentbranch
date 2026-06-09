@@ -1,4 +1,4 @@
-# SkillBuilder — Architecture
+# SkillSmith — Architecture
 
 Single source of truth for **what we build and why** — product, system, services, data, **and** app/screen layout. All of it lives here because it's one *kind* of knowledge (decisions that translate into code), regardless of layer.
 
@@ -10,9 +10,9 @@ Single source of truth for **what we build and why** — product, system, servic
 
 ## 1. Product thesis
 
-**SkillBuilder is a skill *testing / CI* tool that also authors.** That is the long-term thesis, and it's the sharp end of the pitch — most tools stop at editing; the durable value is *validating* a skill before it ships.
+**SkillSmith is a skill *testing / CI* tool that also authors.** That is the long-term thesis, and it's the sharp end of the pitch — most tools stop at editing; the durable value is *validating* a skill before it ships.
 
-In the near term it's a **visual authoring + lightweight-validation tool for Claude Skills**: build a skill in chat with a live-streaming preview, **visualise** its logic, **test-run** it, check its **triggering**, and **export** it. **Claude-ecosystem-first**, with **honest portability** to other AI tools (ChatGPT/Gemini/Grok) as the growth edge — *not* a "runs everywhere" fidelity claim.
+In the near term it's a **visual authoring + lightweight-validation tool for agent skills**: build a skill in chat with a live-streaming preview, **visualise** its logic, **test-run** it, check its **triggering**, and **export** it. The frame is **Claude-first runtime, standard-native artifact**: authoring and validation run on Claude, and the skill the user owns is an [Agent Skills open-standard](https://agentskills.io) `SKILL.md` folder that installs as-is across compatible tools (Claude, Codex CLI, Gemini CLI, Copilot and more). **Honest portability** is the growth edge — validating *behaviour* on other runtimes' models, never a "runs everywhere" fidelity claim; the standard already solved the format question.
 
 **Audience is a bridge, not just developers.** Two users:
 
@@ -31,8 +31,8 @@ One term per concept. Use these names everywhere — in docs, code, and UI copy.
 
 | Term | Definition |
 |---|---|
-| **Skill** | The product's unit of work: a reusable instruction set for a Claude agent. Instruction-only — no bundled runnable code. |
-| **`SKILL.md`** | The skill's source file: YAML frontmatter (`name`, `description`) + markdown body (instructions, workflow, rules). |
+| **Skill** | The product's unit of work: a reusable instruction set for an AI agent, per the **Agent Skills open standard**. Instruction-only — no bundled runnable code. Claude is the first-class authoring and validation runtime; the artifact itself is standard-native and installs across compatible tools. |
+| **`SKILL.md`** | The skill's source file (the open standard's format): YAML frontmatter (`name`, `description`) + markdown body (instructions, workflow, rules). |
 | **Skill record** | The persisted skill in our DB (see [§6](#6-data-model-sketch)). Exports are rendered *from* it. |
 | **Build loop** | The core agentic loop: Claude writes/edits the `SKILL.md` through the `write_skill`/`edit_skill` tools, streaming to the preview. Reaches the model only through the **model gateway** (`streamAgent`), so a build turn is gated + accounted like every other model call. |
 | **Skill-analysis seam** | The architectural spine. The shared pattern **read skill → emit a structured artifact → render it for a surface**. Built once; each feature is a new *renderer* on it, not a new pipeline. Carries **two capability shapes** (below). Distinct from the skill IR: the seam is the pattern, the IR is one artifact type on it. |
@@ -40,13 +40,13 @@ One term per concept. Use these names everywhere — in docs, code, and UI copy.
 | **Evaluation capability** | A *dynamic* capability on the seam — **runs the skill through a model** and observes behaviour. Costs tokens, needs a model (fails `model_unavailable` offline). Wraps an `Evaluator` (`evaluate(skill, gateway)`) that **owns its method, not its resources**: it builds its own conditions (Scenario / distractors / battery) but model access is handed in via the **model gateway**. Test run and Triggering eval are evaluation capabilities. |
 | **Evaluation result** | The artifact an evaluation capability emits — the structured run-record. Ephemeral; **never shown raw**. Renders to **Insights** (and a detailed breakdown on demand). Distinct from the persisted **evaluation record** ([§6](#6-data-model-sketch)): the result is rendered now, the record is stored and re-rendered later. |
 | **Insights** | The default, plain-language rendered surface of an evaluation result — meaning the user can act on, not a data wall. The audience bridge ([§1](#1-product-thesis)) lives in the *renderer*; a detailed breakdown sits behind it for depth (same Rendered/Source duality as the hero). |
-| **Model gateway** | The platform's **single, controlled entry to the model** — its own module. Owns the provider key (Anthropic default; Nous Portal optional) + AI-SDK plumbing; exposes fine intent-level primitives `classify`/`runAgent`/`streamAgent`/`generate` that callers compose into their own method. Pure mechanism — knows no capability kinds. Every call carries an **accounting tag** (`account` \| `platform`); the gateway routes accounting through the **usage** authority. Consumers: the build loop (via `streamAgent`) and evaluation. The portability transform and mock-data generation route through it next (future work). **Target state ([#34](https://github.com/CrowBe/SkillBuilder/issues/34), [#35](https://github.com/CrowBe/SkillBuilder/issues/35)):** as the one metered chokepoint, the gateway is also where input-size budgets, per-capability model routing (Opus for `streamAgent`, cheaper models for `classify`/`generate`), prompt caching (a frozen system prefix), and cache-aware token accounting are enforced and measured. |
+| **Model gateway** | The platform's **single, controlled entry to the model** — its own module. Owns the provider key (Anthropic default; Nous Portal optional) + AI-SDK plumbing; exposes fine intent-level primitives `classify`/`runAgent`/`streamAgent`/`generate` that callers compose into their own method. Pure mechanism — knows no capability kinds. Every call carries an **accounting tag** (`account` \| `platform`); the gateway routes accounting through the **usage** authority. Consumers: the build loop (via `streamAgent`) and evaluation. Cross-runtime validation and mock-data generation route through it next (future work). **Target state ([#34](https://github.com/CrowBe/SkillBuilder/issues/34), [#35](https://github.com/CrowBe/SkillBuilder/issues/35)):** as the one metered chokepoint, the gateway is also where input-size budgets, per-capability model routing (Opus for `streamAgent`, cheaper models for `classify`/`generate`), prompt caching (a frozen system prefix), and cache-aware token accounting are enforced and measured. |
 | **Accounting tag** | Declared by the *caller* on every model-gateway call: **`account`** (user-attributable, subject to tier policy) or **`platform`** (the platform's own cost to enable a feature — e.g. generating mock data — never charged to a user's allowance). Three accounting streams: free+account = structural caps + provider cap-catch (no token counting, [§8](#8-free-tier)); paid+account = token-spend stream (deferred); platform = our own cost ledger (deferred). A model call denied by a cap fails `cap_reached` (distinct from `model_unavailable` = no model at all). |
 | **Skill IR** | *One specific* artifact type on the seam: visualise's intermediate representation — nodes + edges, each carrying a **source-span** back into `SKILL.md`. A visualise concept, not the whole seam. |
 | **Test run** | User-facing term for executing a skill against **mocked** tools to see how it behaves. The mechanism is the **mock-tool registry**; the agent tool is **`execute_skill`**. Nothing real is ever touched. (Always "test run" in user copy — never "sandbox": jargon that intimidates rather than informs.) |
 | **Mock-tool registry** | The mechanism behind a test run: when the skill calls a tool (e.g. "fetch unread email"), the registry returns generated mock data instead. The skill runs end-to-end against fake tools, so the user sees its behaviour without anything real happening. No code execution or containers — skills are instruction-only, so there's nothing to containerise. |
 | **Triggering eval** | The v1 validation: does the skill *fire* on the right prompts and *stay silent* on the wrong ones? Run competitively against a **distractor library** + a positive/negative **prompt battery**. |
-| **Portability transform** | The one engine that strips Claude-specific scaffolding and re-expresses a skill's intent for another target. **Two surfaces:** *cross-provider validation* (does it survive ChatGPT/Gemini?) and *cross-primitive export* (Gem/GPT packages). Both deferred; built once. |
+| **Cross-runtime validation** | The portability surface. Skills travel as-is under the open standard, so portability is a *behaviour* question, not a format one: one engine runs the skill's triggering battery against other runtimes' models (provider swap through the model gateway) and reports a per-runtime grid. Results are honest, model-level approximations of each tool's harness — copy says so. Deferred; target state ([#65](https://github.com/CrowBe/SkillBuilder/issues/65)). |
 | **Rendered / Source view** | The hero's two views of the same skill. **Rendered** (default) = friendly sans-serif document. **Source** = raw `SKILL.md` monospace. Both are renderers on the seam. |
 
 ---
@@ -69,7 +69,7 @@ Browser (React)  ──SSE──▶  Next.js route handler
 ```
 
 - The **model gateway owns the Anthropic API key** and accounting; nothing above it (the build loop, the route handler) touches the raw model or the client.
-- Tool-call output streams to the client over **SSE**.
+- Tool-call output streams to the client over **SSE**. **Target state ([#58](https://github.com/CrowBe/SkillBuilder/issues/58)):** evaluation runs stream the same way (per-case progress events, then the artifact) instead of blocking JSON responses.
 - `execute_skill` runs against the **mock-tool registry** ([§2](#2-glossary--the-domain-language)): a test run, not real execution.
 
 ### 3.1 The skill-analysis seam (the spine)
@@ -87,7 +87,7 @@ The seam carries **two capability shapes** — same `artifact → render` tail, 
 |---|---|---|---|---|
 | **Rendered hero** | analysis | frontmatter + body | friendly structured document (sans-serif) | richer doc layout / inline editing |
 | **Visualise** | analysis | skill IR (nodes+edges+source-spans) | Mermaid | interactive canvas (React Flow) |
-| **Cross-primitive export** | analysis | instruction intent (via portability transform) | — (deferred) | Gem/GPT packages + import guides |
+| **Cross-runtime validation** | evaluation | run triggering battery on other runtimes' models → per-runtime results | — (deferred) | per-runtime results grid |
 | **Test run** | evaluation | run skill vs. mock-tool registry → result | **Insights** (+ transcript on demand) | richer scenarios / multi-run |
 | **Triggering eval** | evaluation | run skill vs. distractors + battery → result | **Insights** (+ pass/fail breakdown) | scored / workflow / regression |
 
@@ -109,9 +109,8 @@ Current choices and the reasoning behind them. Live — open to revision while w
 | Test run — tool selection | Mock tools **auto-inferred** from the skill; user can override | One-click test; manual add for undetected tools |
 | Triggering eval | **Lightweight** — does the skill fire on the right prompts, stay silent on the wrong ones? Mirrors Anthropic's skill-builder output | Cheapest eval, no judge model, tests the #1 failure mode (bad description/triggers) |
 | Triggering eval — competition | User skill + **distractor library** (~10 → ~30) + positive **and** negative **prompt battery** | Skill selection is competitive; testing in isolation gives false confidence |
-| Cross-provider testing | **Honest portability check** via the portability transform — strip Claude scaffolding, inject `SKILL.md` body as a system prompt; *not* "skills run everywhere" | A skill is a Claude-specific primitive; honesty is the better pitch ("will my skill survive ChatGPT?") |
-| Export v1 | Copy button + **`.zip`** of the proper Claude skill directory (`skillname/SKILL.md` + refs) | The `.zip` is the installable artifact; copy serves the paste-it case |
-| Cross-primitive export | **Deferred** — opt-in, per-target zips (Gem/GPT) of transformed instructions + files + import guides; uses the **portability transform** | No target platform accepts programmatic skill import — the value is the transform + guide, not an installer |
+| Cross-runtime validation | **Honest behavioural check** — run the skill's triggering battery against other runtimes' models via provider swap through the model gateway; *not* format conversion, *not* "skills run everywhere" | The open standard makes the file portable everywhere; the open question is behaviour — "will my skill survive Codex/Gemini?" — and honesty is the better pitch |
+| Export v1 | Copy button + **`.zip`** of the standard skill folder (`skillname/SKILL.md` + refs) | The standard folder is the one installable artifact across compatible runtimes — no per-target packages needed (every major tool consumes `SKILL.md` natively); copy serves the paste-it case |
 | Authoring screen layout | **Preview-primary**: the streaming skill document is the hero; interaction is a **demoted control surface**, not a co-equal chat panel | The skill artifact is the product, not the conversation |
 | Hero render mode | Hero has **two views: Rendered (default) + Source (toggle)** — see [§2](#2-glossary--the-domain-language). Default Rendered for newcomers; Source one click away | Bridge audience ([§1](#1-product-thesis)): raw monospace `SKILL.md` is the biggest "this is for programmers" signal. Rendered-default removes that wall without hiding the artifact. **Reuses the seam — Rendered is just another renderer**, so it's cheap |
 | App shell | **Thin branded top bar** (chrome only, no nav links) + **left slideout menu** (all primary nav + account footer; collapsed icon rail by default, expands on demand) wrapping the hero + slim right interaction panel. Tool surfaces are **chips** on the hero header | Top bar stays clean framing; nav consolidated in the menu; hero gets max width by default |
@@ -130,8 +129,8 @@ The build loop is **not thin** — it's the core and must feel good. Everything 
 3. **Visualise** — model emits skill IR; thin IR→Mermaid renderer; 1 generation; no diagram editing.
 4. **Test run** — single run, 1 generated scenario, mock-tool registry with 1–2 mock integrations (email first), Claude only.
 5. **Triggering eval** — small distractor library (~10), small prompt battery, "did it fire?" boolean. No judge model yet.
-6. **Export** — copy + Claude `.zip`. Cross-primitive (Gem/GPT) deferred; button says "coming soon".
-7. **Portability transform** — **stubbed** (engine designed, not built). One engine for both deferred surfaces.
+6. **Export** — copy + the standard skill folder `.zip`.
+7. **Cross-runtime validation** — **stubbed** (engine designed, not built; [#65](https://github.com/CrowBe/SkillBuilder/issues/65)).
 8. **Billing** — Clerk subscription tiers (Free + one Pro), gating capabilities 4/5. Thin = no PAYG.
 
 ---
@@ -140,13 +139,13 @@ The build loop is **not thin** — it's the core and must feel good. Everything 
 
 - **`users`** — identity from Clerk (Google/GitHub).
 - **`skills`** — `id, user_id, name, description, body, frontmatter_json, created_at`.
-- **`skill_versions`** — append-only revisions of a skill (export is a pure function of a version; enables future regression evals).
+- **`skill_versions`** — append-only revisions of a skill (export is a pure function of a version; enables future regression evals). **Target state ([#72](https://github.com/CrowBe/SkillBuilder/issues/72)):** versioning is a product concept — restore-a-version lands as a *new* head revision (append-only stays append-only), with a default 10-version retention cap that never breaks stored run records.
 - **`usage`** — per-user token + turn counters (drives caps now; drives PAYG metering later).
-- **`eval_runs`** / **`test_runs`** — recorded triggering-eval and test-run results.
+- **`eval_runs`** / **`test_runs`** — recorded triggering-eval and test-run results. **Target state ([#57](https://github.com/CrowBe/SkillBuilder/issues/57)):** each run carries a `skill_version_id` pinning the result to the revision it evaluated — the substrate for regression evals. **Read path ([#61](https://github.com/CrowBe/SkillBuilder/issues/61)):** list/fetch APIs + My skills / History surfaces re-render stored records through the seam renderers.
 
 **Persistence invariants.** All DB access goes through Prisma's query builder — **no raw SQL anywhere**, so stored skill content can never become a SQL payload (parameterized-only). **Target state ([#34](https://github.com/CrowBe/SkillBuilder/issues/34)):** row ownership enforced *in the query* (`where: { id, userId }`) rather than only re-checked in callers; a lint rule pins the no-raw-SQL invariant; `frontmatter_json` bounded (size / depth / key-count) with unsafe keys (`__proto__`, `constructor`) rejected on parse. Skill content and prompts are never written to logs.
 
-Export shapes (Claude `.zip` now; cross-primitive later) are **rendered from** the skill record — the schema is export-agnostic.
+Export shapes are **rendered from** the skill record — the schema is export-agnostic.
 
 ---
 
@@ -165,7 +164,7 @@ Presentation-layer architecture — same kind of decision as the rest of this do
   | **Visualise** | `visualise_skill` | skill IR → Mermaid |
   | **Run** | `execute_skill` | test run |
   | **Triggers** | triggering-eval runner | triggering eval |
-  | **Export** | export renderer | Claude `.zip` |
+  | **Export** | export renderer | standard skill folder `.zip` |
 
   **Two views via a header toggle:** *Rendered* (default, friendly sans-serif document) and *Source* (raw monospace `SKILL.md`). Streaming reads as *a document assembling itself* in Rendered, *code being typed* in Source. Default Rendered for the SMB first impression; Source for power users.
 - **Right** — slim 300px interaction panel (typed drawer now; collapses to a floating voice-forward control when realtime voice lands — see [§9](#9-deferred-features--their-seams)).
@@ -178,8 +177,9 @@ Presentation-layer architecture — same kind of decision as the rest of this do
 
 - **OAuth-only** signup (Google + GitHub) — no passwords, no password-storage liability, raises per-account scripted-abuse cost.
 - **One** skill-building session per account, naturally bounded by the **context window + a turn cap** → per-account spend is bounded by construction.
-- Includes: 1 skill, 1 visualisation, 1 **test run** (+ its generated scenario). **No triggering evals. No import.**
-- Export: copy + Claude `.zip` (cross-primitive export disabled / "coming soon").
+- Includes: 1 skill (**built or imported** — import is free by construction: paste / GitHub URL costs no model tokens, and it's the acquisition wedge, [#66](https://github.com/CrowBe/SkillBuilder/issues/66)), the **lint report** (pure analysis, zero tokens, uncapped), 1 visualisation, 1 **test run** (+ its generated scenario). **No triggering evals.**
+- Structural bounds extend to import's non-model costs: a per-account **skill-count cap** (the "1 skill" above, one tunable constant) and a per-user **rate limit on import fetches** ([#73](https://github.com/CrowBe/SkillBuilder/issues/73)).
+- Export: copy + the standard skill folder `.zip`.
 - Aggregate protection: provider-side cap + the graceful-degradation catch (see [§4](#4-locked-decisions)).
 
 ---
@@ -188,13 +188,14 @@ Presentation-layer architecture — same kind of decision as the rest of this do
 
 Designed-for, not built. Each reuses an existing seam, so it's a renderer/config swap — not a new pipeline. The two principles worth stating explicitly:
 
-- **The skill-analysis seam is the spine** — visualise, the Rendered hero, cross-primitive export, and triggering evals all plug into it. New capabilities should ask "what renderer is this?" before "what service is this?"
-- **The portability transform is one engine, two surfaces** — cross-provider validation *and* cross-primitive export. Design and build it once.
+- **The skill-analysis seam is the spine** — visualise, the Rendered hero, export, and triggering evals all plug into it. New capabilities should ask "what renderer is this?" before "what service is this?"
+- **Cross-runtime validation is an evaluation capability on the seam** — a provider swap inside one engine, not a parallel pipeline.
 
 **Deferred capabilities:**
 
-- **Cross-provider validation** (portability check on GPT/Gemini/Grok) — Vercel AI SDK provider swap + the portability transform.
-- **Cross-primitive export** (Gem/GPT packages + import guides) — same transform, different output surface.
+- **Skill import** (paste `SKILL.md` text / GitHub URL) — the acquisition wedge: same parse → persist → render path as the build loop, no authoring required ([#66](https://github.com/CrowBe/SkillBuilder/issues/66)).
+- **Skill lint** — a static quality report (spec compliance, structure, description/trigger heuristics): a pure analysis capability on the seam, zero tokens, auto-run on every version ([#69](https://github.com/CrowBe/SkillBuilder/issues/69)–[#71](https://github.com/CrowBe/SkillBuilder/issues/71)).
+- **Cross-runtime validation** (does the skill trigger/behave on Codex/Gemini-class models?) — the existing triggering battery run via provider swap through the model gateway; per-runtime results grid ([#65](https://github.com/CrowBe/SkillBuilder/issues/65)).
 - **Interactive visualise canvas** ("Claude design"-style point-and-annotate) — IR→React Flow renderer; **point-and-annotate falls out for free**: node → its source-span → inject that span as precise context into the next chat turn.
 - **Richer evals** — workflow evals (run the full loop, LLM-as-judge against rubrics) → regression evals (pin a scenario set, track score across edits = the retention hook).
 - **Insight agent** — today each evaluation produces its **Insight** (the plain-language interpretation rendered as Insights) from one bounded `generate` call. The richer future is a tool-using agent (`runAgent` + tools) that *investigates* a result — re-runs cases, inspects the skill — before explaining it. Cross-cutting: it would explain *any* evaluation kind, reusing the seam, and replaces the `generate` call without changing the `Insight` shape or the renderer.

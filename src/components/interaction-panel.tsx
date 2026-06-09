@@ -45,7 +45,7 @@ export function InteractionPanel({
       <div className="flex flex-1 flex-col gap-3 overflow-auto px-4 py-4 text-doc-rendered">
         {entries.length === 0 ? (
           <p className="text-on-surface-variant">
-            Tell SkillBuilder what you want the skill to do — it writes it live in the
+            Tell SkillSmith what you want the skill to do — it writes it live in the
             document beside you.
           </p>
         ) : (
