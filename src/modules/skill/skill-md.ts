@@ -1,5 +1,13 @@
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import { ok, err, type Result } from "@/shared";
+import {
+  ok,
+  err,
+  LIMIT_MESSAGES,
+  SKILL_BODY_MAX,
+  SKILL_DESCRIPTION_MAX,
+  SKILL_NAME_MAX,
+  type Result,
+} from "@/shared";
 import type { Frontmatter, SkillSource, SkillError } from "./skill.types";
 
 const FRONTMATTER_FENCE = "---";
@@ -37,15 +45,25 @@ export function parseSkillMd(raw: string): Result<SkillSource, SkillError> {
   if (typeof name !== "string" || name.trim().length === 0) {
     return err({ tag: "missing_name", message: "Frontmatter is missing a `name`." });
   }
+  if (name.length > SKILL_NAME_MAX) {
+    return err({ tag: "invalid_frontmatter", message: LIMIT_MESSAGES.skillName });
+  }
   if (typeof description !== "string" || description.trim().length === 0) {
     return err({
       tag: "missing_description",
       message: "Frontmatter is missing a `description`.",
     });
   }
+  if (description.length > SKILL_DESCRIPTION_MAX) {
+    return err({ tag: "invalid_frontmatter", message: LIMIT_MESSAGES.skillDescription });
+  }
+  const normalizedBody = body.replace(/^\n+/, "");
+  if (normalizedBody.length > SKILL_BODY_MAX) {
+    return err({ tag: "invalid_frontmatter", message: LIMIT_MESSAGES.skillBody });
+  }
 
   const frontmatter: Frontmatter = { name, description, extra };
-  return ok({ frontmatter, body: body.replace(/^\n+/, "") });
+  return ok({ frontmatter, body: normalizedBody });
 }
 
 /**

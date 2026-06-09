@@ -62,12 +62,12 @@ const STOPWORDS = new Set(["should", "their", "about", "which", "would", "there"
 
 const promptBatterySchema = z.object({
   positive: z
-    .array(z.string().min(1))
+    .array(z.string().min(1).max(160))
     .min(2)
     .max(5)
     .describe("Prompts that should trigger this skill."),
   negative: z
-    .array(z.string().min(1))
+    .array(z.string().min(1).max(160))
     .min(2)
     .max(5)
     .describe("Near-miss or off-topic prompts where this skill should stay silent."),
