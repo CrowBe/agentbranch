@@ -11,7 +11,7 @@ import {
   type SourceDoc,
   type HeroView,
 } from "@/modules/hero";
-import { parseSkillMd, serializeSkillMd, type SkillSource } from "@/modules/skill";
+import { applySkillEdit, type SkillSource } from "@/modules/skill";
 import { TopBar } from "./top-bar";
 import { SideRail } from "./side-rail";
 import {
@@ -102,18 +102,12 @@ export function AppShell({
             setEntries((prev) => [...prev, entry("No draft exists to edit yet.", "error")]);
             continue;
           }
-          const raw = serializeSkillMd(latestSource);
-          const nextRaw = raw.replace(event.data.oldStr, event.data.newStr);
-          if (nextRaw === raw) {
-            setEntries((prev) => [...prev, entry("Could not apply the streamed edit.", "error")]);
+          const edited = applySkillEdit(latestSource, event.data.oldStr, event.data.newStr);
+          if (!edited.ok) {
+            setEntries((prev) => [...prev, entry(edited.error.message, "error")]);
             continue;
           }
-          const parsed = parseSkillMd(nextRaw);
-          if (!parsed.ok) {
-            setEntries((prev) => [...prev, entry(parsed.error.message, "error")]);
-            continue;
-          }
-          latestSource = parsed.value;
+          latestSource = edited.value;
           setCurrent(latestSource);
           setHeroDocs(renderHeroDocs(latestSource));
           setCapability(null);

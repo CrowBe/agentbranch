@@ -11,7 +11,7 @@ export type {
   Frontmatter,
   SkillError,
 } from "./skill.types";
-export { parseSkillMd, serializeSkillMd } from "./skill-md";
+export { applySkillEdit, parseSkillMd, serializeSkillMd } from "./skill-md";
 export {
   makeSkill,
   reviseSkill,

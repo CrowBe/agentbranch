@@ -76,6 +76,39 @@ export function serializeSkillMd(source: SkillSource): string {
   return `${FRONTMATTER_FENCE}\n${yamlText}\n${FRONTMATTER_FENCE}\n\n${source.body}`;
 }
 
+/** Apply a streamed edit literally, without interpreting `$` replacement tokens. */
+export function applySkillEdit(
+  source: SkillSource,
+  oldStr: string,
+  newStr: string,
+): Result<SkillSource, SkillError> {
+  if (oldStr.length === 0) {
+    return err({
+      tag: "edit_no_match",
+      message: "Could not apply the streamed edit because the target text was empty.",
+    });
+  }
+
+  const raw = serializeSkillMd(source);
+  const start = raw.indexOf(oldStr);
+  if (start === -1) {
+    return err({
+      tag: "edit_no_match",
+      message: "Could not apply the streamed edit because the target text was not found.",
+    });
+  }
+
+  const nextRaw = `${raw.slice(0, start)}${newStr}${raw.slice(start + oldStr.length)}`;
+  const parsed = parseSkillMd(nextRaw);
+  if (!parsed.ok) {
+    return err({
+      tag: "edit_invalid_skill",
+      message: parsed.error.message,
+    });
+  }
+  return parsed;
+}
+
 /** Split a raw document into its (possibly empty) YAML block and markdown body. */
 function splitFrontmatter(raw: string): { yamlText: string; body: string } {
   const normalized = raw.replace(/\r\n/g, "\n");

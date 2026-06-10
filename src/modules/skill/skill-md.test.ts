@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseSkillMd, serializeSkillMd } from "./skill-md";
+import { applySkillEdit, parseSkillMd, serializeSkillMd } from "./skill-md";
 import { LIMIT_MESSAGES, SKILL_BODY_MAX, SKILL_DESCRIPTION_MAX, SKILL_NAME_MAX, unwrap, isErr } from "@/shared";
 
 const SAMPLE = `---
@@ -64,5 +64,31 @@ describe("serializeSkillMd", () => {
     const source = unwrap(parseSkillMd(SAMPLE));
     const reparsed = unwrap(parseSkillMd(serializeSkillMd(source)));
     expect(reparsed).toEqual(source);
+  });
+});
+
+describe("applySkillEdit", () => {
+  it("applies replacement text literally when it contains dollar patterns", () => {
+    const source = unwrap(parseSkillMd(SAMPLE));
+    const edited = unwrap(applySkillEdit(source, "fetch unread mail", "run `$&` literally"));
+
+    expect(edited.body).toContain("run `$&` literally");
+    expect(edited.body).not.toContain("run `fetch unread mail` literally");
+  });
+
+  it("returns a no-match error when the target text is absent", () => {
+    const source = unwrap(parseSkillMd(SAMPLE));
+    const result = applySkillEdit(source, "missing text", "replacement");
+
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) expect(result.error.tag).toBe("edit_no_match");
+  });
+
+  it("returns an invalid-skill error when the edit breaks SKILL.md parsing", () => {
+    const source = unwrap(parseSkillMd(SAMPLE));
+    const result = applySkillEdit(source, "name: inbox-triage", "name: ");
+
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) expect(result.error.tag).toBe("edit_invalid_skill");
   });
 });

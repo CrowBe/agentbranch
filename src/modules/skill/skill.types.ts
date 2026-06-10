@@ -40,4 +40,6 @@ export type Skill = {
 export type SkillError =
   | { readonly tag: "invalid_frontmatter"; readonly message: string }
   | { readonly tag: "missing_name"; readonly message: string }
-  | { readonly tag: "missing_description"; readonly message: string };
+  | { readonly tag: "missing_description"; readonly message: string }
+  | { readonly tag: "edit_no_match"; readonly message: string }
+  | { readonly tag: "edit_invalid_skill"; readonly message: string };

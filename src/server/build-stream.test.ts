@@ -105,6 +105,37 @@ describe("buildLoopResponse", () => {
     expect(persisted?.source.body).toBe("Say hello in one sentence.");
   });
 
+  it("streams an error and does not persist when an edit cannot be applied", async () => {
+    const repo = createMemorySkillRepository();
+    const source = unwrap(parseSkillMd(`---\nname: greeter\ndescription: Greets people warmly\n---\nSay hello.`));
+    const created = unwrap(await repo.create({ userId, source }));
+
+    const response = buildLoopResponse(
+      {
+        messages: [{ role: "user", content: "Make it concise" }],
+        current: source,
+        currentSkillId: created.id,
+      },
+      fakeGateway([
+        {
+          kind: "tool-result",
+          tool: "edit_skill",
+          output: { oldStr: "Missing text.", newStr: "Hi." },
+        },
+        { kind: "finish", finishReason: "stop" },
+      ]),
+      repo,
+      userId,
+    );
+
+    const events = await readEvents(response);
+    const persisted = unwrap(await repo.findById(created.id));
+
+    expect(events.find((e) => e.event === "error")?.data.message).toContain("target text was not found");
+    expect(events.find((e) => e.event === "skill-edit")).toBeUndefined();
+    expect(persisted?.source.body).toBe("Say hello.");
+  });
+
   it("does not revise another user's skill", async () => {
     const repo = createMemorySkillRepository();
     const source = unwrap(parseSkillMd(`---\nname: greeter\ndescription: Greets people warmly\n---\nSay hello.`));
