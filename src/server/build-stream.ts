@@ -1,9 +1,7 @@
 import { encodeSse, type UserId } from "@/shared";
 import {
-  parseSkillMd,
-  serializeSkillMd,
+  applySkillEdit,
   type SkillRepository,
-  type SkillSource,
 } from "@/modules/skill";
 import { runBuildLoop, type BuildLoopInput, type BuildLoopEvent } from "@/modules/build-loop";
 import type { ModelGateway } from "@/modules/model-gateway";
@@ -32,7 +30,26 @@ export function buildLoopResponse(
           }
 
           if (event.event === "skill-edit") {
-            latestSource = applySkillEdit(latestSource, event.data.oldStr, event.data.newStr);
+            if (!latestSource) {
+              controller.enqueue(
+                encoder.encode(
+                  encodeSse({ event: "error", data: { message: "No draft exists to edit yet." } }),
+                ),
+              );
+              continue;
+            }
+
+            const edited = applySkillEdit(latestSource, event.data.oldStr, event.data.newStr);
+            if (!edited.ok) {
+              controller.enqueue(
+                encoder.encode(
+                  encodeSse({ event: "error", data: { message: edited.error.message } }),
+                ),
+              );
+              continue;
+            }
+
+            latestSource = edited.value;
             controller.enqueue(encoder.encode(encodeSse(event)));
             continue;
           }
@@ -103,17 +120,4 @@ export function buildLoopResponse(
       Connection: "keep-alive",
     },
   });
-}
-
-function applySkillEdit(
-  current: SkillSource | undefined,
-  oldStr: string,
-  newStr: string,
-): SkillSource | undefined {
-  if (!current) return current;
-  const raw = serializeSkillMd(current);
-  const nextRaw = raw.replace(oldStr, newStr);
-  if (nextRaw === raw) return current;
-  const parsed = parseSkillMd(nextRaw);
-  return parsed.ok ? parsed.value : current;
 }
