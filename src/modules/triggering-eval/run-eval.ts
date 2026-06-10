@@ -23,6 +23,13 @@ export async function runTriggeringEval(
   skill: Skill,
   gateway: ModelGateway,
   tag: AccountingTag,
+  options: {
+    readonly onCase?: (event: {
+      readonly index: number;
+      readonly total: number;
+      readonly result: CaseResult;
+    }) => void | Promise<void>;
+  } = {},
 ): Promise<Result<TriggeringResult, DomainError>> {
   const battery = await generatePromptBattery(skill, gateway, tag);
   if (isErr(battery)) return battery;
@@ -31,11 +38,19 @@ export async function runTriggeringEval(
   const choices = [candidate, ...distractorLibrary.map((d) => `${d.name}: ${d.description}`)];
 
   const cases: CaseResult[] = [];
-  for (const c of battery.value) {
+  for (const [index, c] of battery.value.entries()) {
     const selected = await gateway.classify({ prompt: c.prompt, choices, tag });
     if (isErr(selected)) return selected;
-    const actual = selected.value.choice === candidate ? "fire" : "silent";
-    cases.push({ ...c, actual, pass: actual === c.expected, rationale: selected.value.rationale });
+    const actual: CaseResult["actual"] =
+      selected.value.choice === candidate ? "fire" : "silent";
+    const result: CaseResult = {
+      ...c,
+      actual,
+      pass: actual === c.expected,
+      rationale: selected.value.rationale,
+    };
+    cases.push(result);
+    await options.onCase?.({ index: index + 1, total: battery.value.length, result });
   }
   const passed = cases.every((c) => c.pass);
 

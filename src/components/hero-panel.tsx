@@ -5,6 +5,13 @@ import { ToolChips, type ToolAction } from "./tool-chips";
 export type CapabilityPanel =
   | { readonly kind: "visualise"; readonly mermaid: string }
   | {
+      readonly kind: "evaluation-progress";
+      readonly action: EvaluationToolAction;
+      readonly title: string;
+      readonly messages: readonly string[];
+      readonly cases: readonly TriggeringCaseProgressPanel[];
+    }
+  | {
       readonly kind: "insights";
       readonly action: EvaluationToolAction;
       readonly title: string;
@@ -50,6 +57,11 @@ export type TriggeringCasePanel = {
   readonly actual: "fire" | "silent";
   readonly pass: boolean;
   readonly rationale: string;
+};
+
+export type TriggeringCaseProgressPanel = TriggeringCasePanel & {
+  readonly index: number;
+  readonly total: number;
 };
 
 export type ExportPanelFile = {
@@ -176,6 +188,10 @@ function CapabilityView({
     );
   }
 
+  if (panel.kind === "evaluation-progress") {
+    return <EvaluationProgressView panel={panel} />;
+  }
+
   if (panel.kind === "breakdown") {
     return (
       <div className="flex flex-col gap-4">
@@ -203,6 +219,46 @@ function CapabilityView({
       </header>
       <InsightList title="Findings" items={panel.insight.findings} />
       <InsightList title="Watch" items={panel.insight.watch} />
+    </div>
+  );
+}
+
+function EvaluationProgressView({
+  panel,
+}: {
+  panel: Extract<CapabilityPanel, { kind: "evaluation-progress" }>;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <header className="flex flex-col gap-1">
+        <p className="text-label text-on-surface-variant">{panel.title}</p>
+        <h1 className="text-headline-md">Running</h1>
+      </header>
+      {panel.messages.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {panel.messages.map((message, index) => (
+            <p key={`${index}-${message}`} className="text-doc-rendered text-on-surface-variant">
+              {message}
+            </p>
+          ))}
+        </div>
+      )}
+      {panel.cases.length > 0 && (
+        <div className="flex flex-col gap-3">
+          {panel.cases.map((item) => (
+            <section key={`${item.index}-${item.prompt}`} className="rounded-[var(--radius-sm)] border border-outline-variant p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-doc-rendered-h">{item.pass ? "Pass" : "Fail"}</h2>
+                <p className="text-label text-on-surface-variant">
+                  {item.index}/{item.total} · expected {item.expected} · got {item.actual}
+                </p>
+              </div>
+              <p className="text-doc-rendered mt-2">{item.prompt}</p>
+              <p className="text-doc-rendered mt-2 text-on-surface-variant">{item.rationale}</p>
+            </section>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

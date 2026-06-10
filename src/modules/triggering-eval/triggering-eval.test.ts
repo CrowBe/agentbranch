@@ -118,6 +118,30 @@ describe("triggering eval", () => {
     expect(typeof result.insight.summary).toBe("string");
   });
 
+  it("emits per-case progress while evaluating the battery", async () => {
+    const progress: { index: number; total: number; prompt: string; pass: boolean }[] = [];
+    const result = unwrap(
+      await runTriggeringEval(
+        skillFor("Schedule meetings on the calendar."),
+        fakeGateway(),
+        TAG,
+        {
+          onCase: ({ index, total, result: item }) => {
+            progress.push({ index, total, prompt: item.prompt, pass: item.pass });
+          },
+        },
+      ),
+    );
+
+    expect(progress).toHaveLength(result.cases.length);
+    expect(progress[0]).toEqual({
+      index: 1,
+      total: result.cases.length,
+      prompt: result.cases[0]?.prompt,
+      pass: result.cases[0]?.pass,
+    });
+  });
+
   it("fires on a matching prompt and stays silent on an unrelated one", async () => {
     const result = unwrap(
       await runTriggeringEval(skillFor("Schedule meetings on the calendar."), fakeGateway(), TAG),

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { BuildLoopEvent, BuildMessage } from "@/modules/build-loop";
+import type { EvaluationEvent } from "@/shared";
 import {
   createHeroArtifact,
   renderedRenderer,
@@ -85,7 +86,7 @@ export function AppShell({
         return;
       }
 
-      for await (const event of readSseEvents(res.body)) {
+      for await (const event of readSseEvents<BuildLoopEvent>(res.body)) {
         if (event.event === "text") {
           assistantText += event.data.delta;
           setEntries((prev) => upsertAssistant(prev, assistantText));
@@ -179,19 +180,32 @@ export function AppShell({
 
     setActiveTool(action);
     setToolBusy(true);
-    setCapability(null);
+    setCapability(isEvaluationTool(action) ? emptyProgressPanel(action) : null);
     setStatus(`${toolLabel(action)} running...`);
 
     try {
       const res = await fetch(`/${apiPath(action)}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(isEvaluationTool(action) ? { Accept: "text/event-stream" } : {}),
+        },
         body: JSON.stringify({
           skill,
           currentSkillId: currentSkillId ?? undefined,
           surface,
         }),
       });
+      if (
+        res.ok &&
+        isEvaluationTool(action) &&
+        res.body &&
+        res.headers.get("content-type")?.includes("text/event-stream")
+      ) {
+        await consumeEvaluationStream(action, surface, res.body);
+        return;
+      }
+
       const body = (await res.json().catch(() => null)) as unknown;
       if (!res.ok) {
         const error = parseError(body, res.status, action);
@@ -209,6 +223,33 @@ export function AppShell({
       setToolBusy(false);
     }
   }
+
+  async function consumeEvaluationStream(
+    action: EvaluationToolAction,
+    surface: "insights" | "breakdown",
+    body: ReadableStream<Uint8Array>,
+  ) {
+    let failed = false;
+    for await (const event of readSseEvents<EvaluationEvent>(body)) {
+      if (event.event === "eval-progress") {
+        setStatus(event.data.message);
+        setCapability((prev) => appendProgressMessage(prev, action, event.data.message));
+      } else if (event.event === "eval-case") {
+        setStatus(`Case ${event.data.index}/${event.data.total} checked.`);
+        setCapability((prev) => appendProgressCase(prev, action, event.data));
+      } else if (event.event === "artifact") {
+        setCapability(toCapabilityPanel(action, surface, event.data.body));
+        setStatus(`${toolLabel(action)} ready.`);
+      } else if (event.event === "error") {
+        failed = true;
+        const error = parseError(event.data, 500, action);
+        setStatus(error);
+        setEntries((prev) => [...prev, entry(error, "error")]);
+      }
+    }
+
+    if (failed) setCapability(null);
+  }
 }
 
 function renderHeroDocs(source: SkillSource): { rendered: RenderedDoc; source: SourceDoc } {
@@ -219,7 +260,9 @@ function renderHeroDocs(source: SkillSource): { rendered: RenderedDoc; source: S
   };
 }
 
-async function* readSseEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<BuildLoopEvent> {
+async function* readSseEvents<TEvent extends { event: string; data: unknown }>(
+  body: ReadableStream<Uint8Array>,
+): AsyncGenerator<TEvent> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -231,17 +274,17 @@ async function* readSseEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<
     const frames = buffer.split("\n\n");
     buffer = frames.pop() ?? "";
     for (const frame of frames) {
-      const event = parseSseFrame(frame);
+      const event = parseSseFrame<TEvent>(frame);
       if (event) yield event;
     }
   }
 
   buffer += decoder.decode();
-  const event = parseSseFrame(buffer);
+  const event = parseSseFrame<TEvent>(buffer);
   if (event) yield event;
 }
 
-function parseSseFrame(frame: string): BuildLoopEvent | null {
+function parseSseFrame<TEvent extends { event: string; data: unknown }>(frame: string): TEvent | null {
   const lines = frame.split("\n");
   const event = lines.find((line) => line.startsWith("event: "))?.slice("event: ".length);
   const data = lines
@@ -250,7 +293,7 @@ function parseSseFrame(frame: string): BuildLoopEvent | null {
     .join("\n");
 
   if (!event || !data) return null;
-  return { event, data: JSON.parse(data) } as BuildLoopEvent;
+  return { event, data: JSON.parse(data) } as TEvent;
 }
 
 let entryId = 0;
@@ -286,6 +329,42 @@ function toolLabel(action: ToolAction): string {
   if (action === "test-run") return "Test run";
   if (action === "triggering-eval") return "Triggering eval";
   return "Export";
+}
+
+function emptyProgressPanel(
+  action: EvaluationToolAction,
+): Extract<CapabilityPanel, { kind: "evaluation-progress" }> {
+  return {
+    kind: "evaluation-progress",
+    action,
+    title: toolLabel(action),
+    messages: [],
+    cases: [],
+  };
+}
+
+function appendProgressMessage(
+  panel: CapabilityPanel | null,
+  action: EvaluationToolAction,
+  message: string,
+): Extract<CapabilityPanel, { kind: "evaluation-progress" }> {
+  const current =
+    panel?.kind === "evaluation-progress" && panel.action === action
+      ? panel
+      : emptyProgressPanel(action);
+  return { ...current, messages: [...current.messages, message] };
+}
+
+function appendProgressCase(
+  panel: CapabilityPanel | null,
+  action: EvaluationToolAction,
+  item: Extract<EvaluationEvent, { event: "eval-case" }>["data"],
+): Extract<CapabilityPanel, { kind: "evaluation-progress" }> {
+  const current =
+    panel?.kind === "evaluation-progress" && panel.action === action
+      ? panel
+      : emptyProgressPanel(action);
+  return { ...current, cases: [...current.cases, item] };
 }
 
 function parseError(body: unknown, status: number, action: ToolAction): string {
