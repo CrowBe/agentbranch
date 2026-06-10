@@ -5,7 +5,15 @@ import {
   type SkillSource,
   type SkillRepository,
 } from "@/modules/skill";
-import { ok, err, SkillId, UserId, domainError, type SkillId as SkillIdT } from "@/shared";
+import {
+  ok,
+  err,
+  SkillId,
+  SkillVersionId,
+  UserId,
+  domainError,
+  type SkillId as SkillIdT,
+} from "@/shared";
 
 type SkillRow = {
   id: string;
@@ -19,7 +27,7 @@ type SkillRow = {
 };
 
 /** Rehydrate the Skill aggregate from a persisted row. */
-function toSkill(row: SkillRow, latestRevision: number): Skill {
+function toSkill(row: SkillRow, latestRevision: number, latestVersionId?: string): Skill {
   return makeSkill({
     id: SkillId(row.id),
     userId: UserId(row.userId),
@@ -32,6 +40,7 @@ function toSkill(row: SkillRow, latestRevision: number): Skill {
       body: row.body,
     },
     latestRevision,
+    latestVersionId: latestVersionId ? SkillVersionId(latestVersionId) : undefined,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   });
@@ -57,8 +66,9 @@ export function createPrismaSkillRepository(prisma: PrismaClient): SkillReposito
           ...columns(source),
           versions: { create: { revision: 1, ...columns(source) } },
         },
+        include: { versions: { orderBy: { revision: "desc" }, take: 1, select: { id: true } } },
       });
-      return ok(toSkill(skill as SkillRow, 1));
+      return ok(toSkill(skill as SkillRow, 1, skill.versions[0]?.id));
     },
 
     async save({ id, source }: { id: SkillIdT; source: SkillSource }) {
@@ -74,25 +84,26 @@ export function createPrismaSkillRepository(prisma: PrismaClient): SkillReposito
           ...columns(source),
           versions: { create: { revision: nextRevision, ...columns(source) } },
         },
+        include: { versions: { orderBy: { revision: "desc" }, take: 1, select: { id: true } } },
       });
-      return ok(toSkill(skill as SkillRow, nextRevision));
+      return ok(toSkill(skill as SkillRow, nextRevision, skill.versions[0]?.id));
     },
 
     async findById(id) {
       const row = await prisma.skill.findUnique({
         where: { id },
-        include: { versions: { orderBy: { revision: "desc" }, take: 1, select: { revision: true } } },
+        include: { versions: { orderBy: { revision: "desc" }, take: 1, select: { id: true, revision: true } } },
       });
-      return ok(row ? toSkill(row as SkillRow, row.versions[0]?.revision ?? 0) : null);
+      return ok(row ? toSkill(row as SkillRow, row.versions[0]?.revision ?? 0, row.versions[0]?.id) : null);
     },
 
     async listByUser(userId) {
       const rows = await prisma.skill.findMany({
         where: { userId },
         orderBy: { createdAt: "desc" },
-        include: { versions: { orderBy: { revision: "desc" }, take: 1, select: { revision: true } } },
+        include: { versions: { orderBy: { revision: "desc" }, take: 1, select: { id: true, revision: true } } },
       });
-      return ok(rows.map((r) => toSkill(r as SkillRow, r.versions[0]?.revision ?? 0)));
+      return ok(rows.map((r) => toSkill(r as SkillRow, r.versions[0]?.revision ?? 0, r.versions[0]?.id)));
     },
   };
 }

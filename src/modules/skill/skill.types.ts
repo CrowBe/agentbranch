@@ -1,4 +1,4 @@
-import type { SkillId, UserId } from "@/shared";
+import type { SkillId, SkillVersionId, UserId } from "@/shared";
 
 /**
  * The YAML frontmatter of a SKILL.md. `name` and `description` are the two
@@ -31,6 +31,7 @@ export type Skill = {
   readonly userId: UserId;
   readonly source: SkillSource;
   readonly latestRevision: number;
+  readonly latestVersionId?: SkillVersionId;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 };

@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
+import { createMemoryEvalRunRepository } from "./eval.memory-repository";
 import { createMemorySkillRepository } from "./skill.memory-repository";
+import { createMemoryTestRunRepository } from "./test-run.memory-repository";
 import { createMemoryUsageRepository } from "./usage.memory-repository";
 import { parseSkillMd } from "@/modules/skill";
 import { unwrap, UserId } from "@/shared";
@@ -20,6 +22,46 @@ describe("in-memory adapters", () => {
     const mine = unwrap(await repo.listByUser(UserId("u1")));
     expect(mine).toHaveLength(1);
     expect(unwrap(await repo.listByUser(UserId("u2")))).toHaveLength(0);
+  });
+
+  it("keeps run records pinned to the evaluated skill version after later edits", async () => {
+    const skills = createMemorySkillRepository();
+    const testRuns = createMemoryTestRunRepository();
+    const evalRuns = createMemoryEvalRunRepository();
+    const v1 = unwrap(parseSkillMd(`---\nname: t\ndescription: d\n---\nbody`));
+    const created = unwrap(await skills.create({ userId: UserId("u1"), source: v1 }));
+
+    const testRun = unwrap(
+      await testRuns.record({
+        userId: created.userId,
+        skillId: created.id,
+        skillVersionId: created.latestVersionId ?? null,
+        status: "completed",
+        scenario: { prompt: "Run it.", seedData: {} },
+        transcript: [{ kind: "model", text: "done" }],
+      }),
+    );
+    const evalRun = unwrap(
+      await evalRuns.record({
+        userId: created.userId,
+        skillId: created.id,
+        skillVersionId: created.latestVersionId ?? null,
+        status: "passed",
+        result: {
+          kind: "triggering-eval",
+          passed: true,
+          cases: [],
+          insight: { verdict: "good", summary: "ok", findings: [], watch: [] },
+        },
+      }),
+    );
+
+    const v2 = unwrap(parseSkillMd(`---\nname: t\ndescription: d2\n---\nbody2`));
+    const saved = unwrap(await skills.save({ id: created.id, source: v2 }));
+
+    expect(testRun.skillVersionId).toBe(created.latestVersionId);
+    expect(evalRun.skillVersionId).toBe(created.latestVersionId);
+    expect(saved.latestVersionId).not.toBe(created.latestVersionId);
   });
 
   it("usage repository accumulates across increments", async () => {

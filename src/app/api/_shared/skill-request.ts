@@ -29,9 +29,10 @@ const skillRequestSchema = z.object({
 });
 
 export type SkillRequest = z.infer<typeof skillRequestSchema>;
+export type ParsedSkillRequest = SkillRequest & { readonly source: SkillSource };
 
 export function parseSkillRequest(body: unknown):
-  | { readonly ok: true; readonly value: SkillRequest & { readonly source: SkillSource } }
+  | { readonly ok: true; readonly value: ParsedSkillRequest }
   | { readonly ok: false; readonly error: string } {
   const parsed = skillRequestSchema.safeParse(body);
   if (!parsed.success) return { ok: false, error: validationMessage(parsed.error) };
@@ -41,7 +42,7 @@ export function parseSkillRequest(body: unknown):
   return { ok: true, value: { ...parsed.data, source } };
 }
 
-export function skillFromRequest(request: SkillRequest & { readonly source: SkillSource }, identity: AuthIdentity): Skill {
+export function skillFromRequest(request: ParsedSkillRequest, identity: AuthIdentity): Skill {
   const now = new Date();
   return makeSkill({
     id: SkillId(request.skillId ?? request.currentSkillId ?? "current"),
@@ -50,6 +51,15 @@ export function skillFromRequest(request: SkillRequest & { readonly source: Skil
     createdAt: now,
     updatedAt: now,
   });
+}
+
+export function sameSkillSource(a: SkillSource, b: SkillSource): boolean {
+  return (
+    a.frontmatter.name === b.frontmatter.name &&
+    a.frontmatter.description === b.frontmatter.description &&
+    JSON.stringify(a.frontmatter.extra) === JSON.stringify(b.frontmatter.extra) &&
+    a.body === b.body
+  );
 }
 
 export function validationMessage(error: z.ZodError): string {
