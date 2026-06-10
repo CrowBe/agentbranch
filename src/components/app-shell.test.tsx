@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "./app-shell";
 import type { RenderedDoc, SourceDoc } from "@/modules/hero";
 import type { SkillSource } from "@/modules/skill";
+import { encodeSse } from "@/shared";
 
 const skill: SkillSource = {
   frontmatter: {
@@ -133,5 +134,79 @@ describe("AppShell capability chips", () => {
       }),
     );
     expect(screen.getByText("email.search", { exact: false })).toBeInTheDocument();
+  });
+
+  it("renders streamed triggering eval progress before the final artifact", async () => {
+    const encoder = new TextEncoder();
+    let releaseArtifact!: () => void;
+    const artifactReady = new Promise<void>((resolve) => {
+      releaseArtifact = resolve;
+    });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        new ReadableStream<Uint8Array>({
+          async start(controller) {
+            controller.enqueue(
+              encoder.encode(
+                encodeSse({
+                  event: "eval-progress",
+                  data: { message: "Building prompt battery." },
+                }),
+              ),
+            );
+            await artifactReady;
+            controller.enqueue(
+              encoder.encode(
+                encodeSse({
+                  event: "eval-case",
+                  data: {
+                    index: 1,
+                    total: 1,
+                    prompt: "Schedule a planning meeting.",
+                    expected: "fire",
+                    actual: "fire",
+                    pass: true,
+                    rationale: "Matched the calendar skill.",
+                  },
+                }),
+              ),
+            );
+            controller.enqueue(
+              encoder.encode(
+                encodeSse({
+                  event: "artifact",
+                  data: {
+                    surface: "insights",
+                    body: {
+                      verdict: "good",
+                      summary: "Fires correctly.",
+                      findings: ["Matched the right prompt."],
+                      watch: [],
+                    },
+                  },
+                }),
+              ),
+            );
+            controller.close();
+          },
+        }),
+        { headers: { "Content-Type": "text/event-stream; charset=utf-8" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AppShell rendered={rendered} source={source} initialSkill={skill} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Triggers" }));
+
+    expect(await screen.findAllByText("Building prompt battery.")).toHaveLength(2);
+    releaseArtifact();
+    expect(await screen.findByText("Fires correctly.")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/triggering-eval",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Accept: "text/event-stream" }),
+      }),
+    );
   });
 });
