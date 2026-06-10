@@ -1,4 +1,4 @@
-import { type SkillId, type UserId } from "@/shared";
+import { type SkillId, type SkillVersionId, type UserId } from "@/shared";
 import type { Skill, SkillSource } from "./skill.types";
 
 /**
@@ -11,6 +11,7 @@ export function makeSkill(params: {
   userId: UserId;
   source: SkillSource;
   latestRevision?: number;
+  latestVersionId?: SkillVersionId;
   createdAt: Date;
   updatedAt: Date;
 }): Skill {
@@ -19,6 +20,7 @@ export function makeSkill(params: {
     userId: params.userId,
     source: params.source,
     latestRevision: params.latestRevision ?? 1,
+    latestVersionId: params.latestVersionId,
     createdAt: params.createdAt,
     updatedAt: params.updatedAt,
   };

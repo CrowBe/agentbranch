@@ -58,6 +58,8 @@ model SkillVersion {
   createdAt       DateTime @default(now()) @map("created_at")
 
   skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  testRuns TestRun[]
+  evalRuns  EvalRun[]
 
   @@unique([skillId, revision])
   @@map("skill_versions")
@@ -92,33 +94,39 @@ model RateLimitWindow {
 
 /// Recorded triggering-eval results: did the skill fire on the right prompts?
 model EvalRun {
-  id        String   @id @default(cuid())
-  skillId   String   @map("skill_id")
-  userId    String   @map("user_id")
-  status    String // queued | running | passed | failed
-  resultJson Json    @map("result_json")
-  createdAt DateTime @default(now()) @map("created_at")
+  id             String   @id @default(cuid())
+  skillId        String   @map("skill_id")
+  skillVersionId String?  @map("skill_version_id")
+  userId         String   @map("user_id")
+  status         String // queued | running | passed | failed
+  resultJson     Json     @map("result_json")
+  createdAt      DateTime @default(now()) @map("created_at")
 
-  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill        Skill         @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  skillVersion SkillVersion? @relation(fields: [skillVersionId], references: [id], onDelete: SetNull)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([skillId])
+  @@index([skillVersionId])
   @@map("eval_runs")
 }
 
 /// Recorded test-run results: skill executed against the mock-tool registry.
 model TestRun {
-  id          String   @id @default(cuid())
-  skillId     String   @map("skill_id")
-  userId      String   @map("user_id")
-  status      String // queued | running | completed | failed
-  scenarioJson Json    @map("scenario_json")
-  transcriptJson Json  @map("transcript_json")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id             String   @id @default(cuid())
+  skillId        String   @map("skill_id")
+  skillVersionId String?  @map("skill_version_id")
+  userId         String   @map("user_id")
+  status         String // queued | running | completed | failed
+  scenarioJson   Json     @map("scenario_json")
+  transcriptJson Json     @map("transcript_json")
+  createdAt      DateTime @default(now()) @map("created_at")
 
-  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill        Skill         @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  skillVersion SkillVersion? @relation(fields: [skillVersionId], references: [id], onDelete: SetNull)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([skillId])
+  @@index([skillVersionId])
   @@map("test_runs")
 }

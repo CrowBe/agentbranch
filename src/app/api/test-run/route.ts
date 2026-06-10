@@ -1,8 +1,24 @@
 import { z } from "zod";
 import { getContainer } from "@/server/container";
-import { runEvaluation } from "@/modules/skill-analysis";
 import { testRunCapability } from "@/modules/test-run";
-import { parseSkillRequest, skillFromRequest, domainErrorResponse } from "../_shared/skill-request";
+import {
+  domainError,
+  err,
+  isErr,
+  ok,
+  SkillId,
+  type DomainError,
+  type Result,
+  type SkillVersionId,
+  type UserId,
+} from "@/shared";
+import {
+  parseSkillRequest,
+  skillFromRequest,
+  domainErrorResponse,
+  sameSkillSource,
+  type ParsedSkillRequest,
+} from "../_shared/skill-request";
 import { invalidRequestResponse, parseJsonRequest } from "../_shared/request-body";
 
 export const runtime = "nodejs";
@@ -31,7 +47,47 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const skill = skillFromRequest(parsed.value, identity.value);
-  const result = await runEvaluation(testRunCapability, surface.data, skill, container.modelGateway);
+  if (!container.modelGateway.hasModel) {
+    return domainErrorResponse(
+      domainError(
+        "model_unavailable",
+        `"${testRunCapability.name}" needs a model connection to run. Test runs and triggering evals are unavailable offline.`,
+      ),
+    );
+  }
 
-  return result.ok ? Response.json(result.value) : domainErrorResponse(result.error);
+  const result = await testRunCapability.evaluator.evaluate(skill, container.modelGateway);
+  if (isErr(result)) return domainErrorResponse(result.error);
+
+  const skillVersionId = await resolvedSkillVersionId(parsed.value, identity.value.userId);
+  if (isErr(skillVersionId)) return domainErrorResponse(skillVersionId.error);
+
+  const recorded = await container.testRuns.record({
+    userId: skill.userId,
+    skillId: skill.id,
+    skillVersionId: skillVersionId.value,
+    status: "completed",
+    scenario: result.value.scenario,
+    transcript: result.value.transcript,
+  });
+  if (isErr(recorded)) return domainErrorResponse(recorded.error);
+
+  return Response.json(testRunCapability.renderers[surface.data].render(result.value));
+}
+
+async function resolvedSkillVersionId(
+  request: ParsedSkillRequest,
+  userId: UserId,
+): Promise<Result<SkillVersionId | null, DomainError>> {
+  const container = getContainer();
+  const id = request.skillId ?? request.currentSkillId;
+  if (!id) return ok(null);
+
+  const persisted = await container.skills.findById(SkillId(id));
+  if (!persisted.ok) return err(persisted.error);
+  if (!persisted.value || persisted.value.userId !== userId) return ok(null);
+  if (!persisted.value.latestVersionId || !sameSkillSource(persisted.value.source, request.source)) {
+    return ok(null);
+  }
+  return ok(persisted.value.latestVersionId);
 }

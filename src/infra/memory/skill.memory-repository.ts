@@ -5,7 +5,15 @@ import {
   type SkillSource,
   type SkillRepository,
 } from "@/modules/skill";
-import { ok, err, SkillId, type UserId, type SkillId as SkillIdT, domainError } from "@/shared";
+import {
+  ok,
+  err,
+  SkillId,
+  SkillVersionId,
+  type UserId,
+  type SkillId as SkillIdT,
+  domainError,
+} from "@/shared";
 
 /**
  * In-memory SkillRepository — the default adapter so the app runs with no DB
@@ -23,6 +31,7 @@ export function createMemorySkillRepository(): SkillRepository {
         userId,
         source,
         latestRevision: 1,
+        latestVersionId: SkillVersionId(crypto.randomUUID()),
         createdAt: now,
         updatedAt: now,
       });
@@ -33,7 +42,8 @@ export function createMemorySkillRepository(): SkillRepository {
     async save({ id, source }: { id: SkillIdT; source: SkillSource }) {
       const existing = skills.get(id);
       if (!existing) return err(domainError("not_found", `No skill ${id}.`));
-      const next = reviseSkill(existing, source, new Date());
+      const revised = reviseSkill(existing, source, new Date());
+      const next = { ...revised, latestVersionId: SkillVersionId(crypto.randomUUID()) };
       skills.set(id, next);
       return ok(next);
     },

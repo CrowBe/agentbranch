@@ -11,6 +11,7 @@ import {
   err,
   ok,
   SkillId,
+  SkillVersionId,
   TestRunId,
   UserId,
 } from "@/shared";
@@ -18,6 +19,7 @@ import {
 type TestRunRow = {
   id: string;
   skillId: string;
+  skillVersionId: string | null;
   userId: string;
   status: string;
   scenarioJson: unknown;
@@ -29,6 +31,7 @@ function toTestRun(row: TestRunRow): TestRun {
   return {
     id: TestRunId(row.id),
     skillId: SkillId(row.skillId),
+    skillVersionId: row.skillVersionId ? SkillVersionId(row.skillVersionId) : null,
     userId: UserId(row.userId),
     status: row.status as TestRunStatus,
     scenario: row.scenarioJson as Scenario,
@@ -45,6 +48,7 @@ export function createPrismaTestRunRepository(prisma: PrismaClient): TestRunRepo
         const row = await prisma.testRun.create({
           data: {
             skillId: run.skillId,
+            skillVersionId: run.skillVersionId,
             userId: run.userId,
             status: run.status,
             scenarioJson: run.scenario as unknown as Prisma.InputJsonValue,

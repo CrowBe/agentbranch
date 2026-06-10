@@ -11,12 +11,14 @@ import {
   EvalRunId,
   ok,
   SkillId,
+  SkillVersionId,
   UserId,
 } from "@/shared";
 
 type EvalRunRow = {
   id: string;
   skillId: string;
+  skillVersionId: string | null;
   userId: string;
   status: string;
   resultJson: unknown;
@@ -27,6 +29,7 @@ function toEvalRun(row: EvalRunRow): EvalRun {
   return {
     id: EvalRunId(row.id),
     skillId: SkillId(row.skillId),
+    skillVersionId: row.skillVersionId ? SkillVersionId(row.skillVersionId) : null,
     userId: UserId(row.userId),
     status: row.status as EvalStatus,
     result: row.resultJson as TriggeringResult,
@@ -42,6 +45,7 @@ export function createPrismaEvalRunRepository(prisma: PrismaClient): EvalRunRepo
         const row = await prisma.evalRun.create({
           data: {
             skillId: run.skillId,
+            skillVersionId: run.skillVersionId,
             userId: run.userId,
             status: run.status,
             resultJson: run.result as unknown as Prisma.InputJsonValue,
