@@ -16,7 +16,7 @@ function fixtureSkill(): Skill {
 }
 
 describe("export capability", () => {
-  it("renders a Claude skill directory manifest", async () => {
+  it("renders a standard skill-folder manifest", async () => {
     const manifest = unwrap(await runCapability(exportCapability, "claude", fixtureSkill()));
     expect(manifest.target).toBe("claude");
     expect(manifest.rootDir).toBe("inbox-triage");

@@ -1,7 +1,7 @@
 import type { SkillSource } from "@/modules/skill";
 import type { Artifact } from "@/modules/skill-analysis";
 
-/** Export targets. Claude ships in v1; Gem/GPT are deferred (ARCHITECTURE §4). */
+/** Export targets. Claude is the v1 authoring/runtime renderer (ARCHITECTURE §4). */
 export type ExportTarget = "claude" | "gem" | "gpt";
 
 /** A single file in an export package. */
