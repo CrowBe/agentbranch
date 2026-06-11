@@ -13,7 +13,7 @@ describe("in-memory adapters", () => {
     const created = unwrap(await repo.create({ userId: UserId("u1"), source }));
 
     const v2 = unwrap(parseSkillMd(`---\nname: t\ndescription: d2\n---\nbody2`));
-    const saved = unwrap(await repo.save({ id: created.id, source: v2 }));
+    const saved = unwrap(await repo.save({ id: created.id, userId: created.userId, source: v2 }));
     expect(saved.source.frontmatter.description).toBe("d2");
     expect(created.latestRevision).toBe(1);
     expect(saved.latestRevision).toBe(2);
@@ -22,6 +22,7 @@ describe("in-memory adapters", () => {
     const mine = unwrap(await repo.listByUser(UserId("u1")));
     expect(mine).toHaveLength(1);
     expect(unwrap(await repo.listByUser(UserId("u2")))).toHaveLength(0);
+    expect(unwrap(await repo.findById(created.id, UserId("u2")))).toBeNull();
   });
 
   it("keeps run records pinned to the evaluated skill version after later edits", async () => {
@@ -56,8 +57,11 @@ describe("in-memory adapters", () => {
       }),
     );
 
+    expect(unwrap(await testRuns.findById(testRun.id, UserId("u2")))).toBeNull();
+    expect(unwrap(await evalRuns.findById(evalRun.id, UserId("u2")))).toBeNull();
+
     const v2 = unwrap(parseSkillMd(`---\nname: t\ndescription: d2\n---\nbody2`));
-    const saved = unwrap(await skills.save({ id: created.id, source: v2 }));
+    const saved = unwrap(await skills.save({ id: created.id, userId: created.userId, source: v2 }));
 
     expect(testRun.skillVersionId).toBe(created.latestVersionId);
     expect(evalRun.skillVersionId).toBe(created.latestVersionId);

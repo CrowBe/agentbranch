@@ -56,7 +56,7 @@ export function buildLoopResponse(
 
           if (event.event === "done" && latestSource) {
             if (input.currentSkillId) {
-              const existing = await skills.findById(input.currentSkillId);
+              const existing = await skills.findById(input.currentSkillId, userId);
               if (!existing.ok) {
                 controller.enqueue(
                   encoder.encode(
@@ -65,7 +65,7 @@ export function buildLoopResponse(
                 );
                 continue;
               }
-              if (!existing.value || existing.value.userId !== userId) {
+              if (!existing.value) {
                 controller.enqueue(
                   encoder.encode(
                     encodeSse({ event: "error", data: { message: "Skill not found." } }),
@@ -76,7 +76,7 @@ export function buildLoopResponse(
             }
 
             const persisted = input.currentSkillId
-              ? await skills.save({ id: input.currentSkillId, source: latestSource })
+              ? await skills.save({ id: input.currentSkillId, userId, source: latestSource })
               : await skills.create({ userId, source: latestSource });
             if (!persisted.ok) {
               controller.enqueue(
