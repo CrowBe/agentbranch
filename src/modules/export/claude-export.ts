@@ -12,9 +12,9 @@ export const exportAnalyzer: Analyzer<ExportArtifact> = {
 };
 
 /**
- * Render the Claude `.zip` manifest: the proper skill directory
- * `skillname/SKILL.md` (+ refs later). The installable artifact is this
- * directory zipped; copy serves the paste-it case (ARCHITECTURE §4).
+ * Render the standard skill-folder manifest: `skillname/SKILL.md` (+ refs
+ * later). The installable artifact is this directory zipped; copy serves the
+ * paste-it case (ARCHITECTURE §4).
  */
 export const claudeRenderer: Renderer<ExportArtifact, ExportManifest> = {
   target: "claude",
