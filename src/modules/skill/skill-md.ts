@@ -2,6 +2,9 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import {
   ok,
   err,
+  FRONTMATTER_JSON_MAX_BYTES,
+  FRONTMATTER_JSON_MAX_DEPTH,
+  FRONTMATTER_JSON_MAX_KEYS,
   LIMIT_MESSAGES,
   SKILL_BODY_MAX,
   SKILL_DESCRIPTION_MAX,
@@ -25,10 +28,10 @@ export function parseSkillMd(raw: string): Result<SkillSource, SkillError> {
   let parsed: unknown;
   try {
     parsed = yamlText.trim().length > 0 ? parseYaml(yamlText) : {};
-  } catch (cause) {
+  } catch {
     return err({
       tag: "invalid_frontmatter",
-      message: `Could not parse frontmatter YAML: ${String(cause)}`,
+      message: "Could not parse frontmatter YAML.",
     });
   }
 
@@ -41,6 +44,10 @@ export function parseSkillMd(raw: string): Result<SkillSource, SkillError> {
 
   const record = parsed as Record<string, unknown>;
   const { name, description, ...extra } = record;
+  const extraValidation = validateFrontmatterJson(extra);
+  if (extraValidation !== null) {
+    return err({ tag: "invalid_frontmatter", message: extraValidation });
+  }
 
   if (typeof name !== "string" || name.trim().length === 0) {
     return err({ tag: "missing_name", message: "Frontmatter is missing a `name`." });
@@ -122,4 +129,58 @@ function splitFrontmatter(raw: string): { yamlText: string; body: string } {
   const yamlText = normalized.slice(FRONTMATTER_FENCE.length, closingIndex);
   const afterFence = normalized.slice(closingIndex + 1 + FRONTMATTER_FENCE.length);
   return { yamlText, body: afterFence };
+}
+
+const UNSAFE_FRONTMATTER_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+function validateFrontmatterJson(value: unknown): string | null {
+  const seen = new WeakSet<object>();
+  const structuralError = visitFrontmatterValue(value, 0, { keyCount: 0 }, seen);
+  if (structuralError !== null) return structuralError;
+
+  const serialized = JSON.stringify(value);
+  if (serialized === undefined) return LIMIT_MESSAGES.frontmatterJson;
+  if (new TextEncoder().encode(serialized).length > FRONTMATTER_JSON_MAX_BYTES) {
+    return LIMIT_MESSAGES.frontmatterJson;
+  }
+
+  return null;
+}
+
+function visitFrontmatterValue(
+  value: unknown,
+  depth: number,
+  state: { keyCount: number },
+  seen: WeakSet<object>,
+): string | null {
+  if (depth > FRONTMATTER_JSON_MAX_DEPTH) return LIMIT_MESSAGES.frontmatterJson;
+
+  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return null;
+  }
+
+  if (Array.isArray(value)) {
+    if (seen.has(value)) return LIMIT_MESSAGES.frontmatterJson;
+    seen.add(value);
+    for (const item of value) {
+      const itemError = visitFrontmatterValue(item, depth + 1, state, seen);
+      if (itemError !== null) return itemError;
+    }
+    return null;
+  }
+
+  if (typeof value !== "object") return LIMIT_MESSAGES.frontmatterJson;
+  if (seen.has(value)) return LIMIT_MESSAGES.frontmatterJson;
+  seen.add(value);
+
+  for (const [key, child] of Object.entries(value)) {
+    if (UNSAFE_FRONTMATTER_KEYS.has(key)) return LIMIT_MESSAGES.unsafeFrontmatterKey;
+    state.keyCount += 1;
+    if (state.keyCount > FRONTMATTER_JSON_MAX_KEYS) return LIMIT_MESSAGES.frontmatterJson;
+
+    const childError = visitFrontmatterValue(child, depth + 1, state, seen);
+    if (childError !== null) return childError;
+  }
+
+  return null;
 }

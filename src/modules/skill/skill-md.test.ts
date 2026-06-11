@@ -1,6 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { applySkillEdit, parseSkillMd, serializeSkillMd } from "./skill-md";
-import { LIMIT_MESSAGES, SKILL_BODY_MAX, SKILL_DESCRIPTION_MAX, SKILL_NAME_MAX, unwrap, isErr } from "@/shared";
+import {
+  FRONTMATTER_JSON_MAX_BYTES,
+  FRONTMATTER_JSON_MAX_DEPTH,
+  FRONTMATTER_JSON_MAX_KEYS,
+  LIMIT_MESSAGES,
+  SKILL_BODY_MAX,
+  SKILL_DESCRIPTION_MAX,
+  SKILL_NAME_MAX,
+  unwrap,
+  isErr,
+} from "@/shared";
 
 const SAMPLE = `---
 name: inbox-triage
@@ -56,6 +66,39 @@ describe("parseSkillMd", () => {
     const longBody = parseSkillMd(`---\nname: n\ndescription: d\n---\n${"a".repeat(SKILL_BODY_MAX + 1)}`);
     expect(isErr(longBody)).toBe(true);
     if (isErr(longBody)) expect(longBody.error.message).toBe(LIMIT_MESSAGES.skillBody);
+  });
+
+  it("rejects extra frontmatter that exceeds persistence hygiene limits", () => {
+    const oversized = parseSkillMd(
+      `---\nname: n\ndescription: d\nnotes: ${"a".repeat(FRONTMATTER_JSON_MAX_BYTES + 1)}\n---\nbody`,
+    );
+    expect(isErr(oversized)).toBe(true);
+    if (isErr(oversized)) expect(oversized.error.message).toBe(LIMIT_MESSAGES.frontmatterJson);
+
+    const tooManyKeys = parseSkillMd(
+      `---\nname: n\ndescription: d\n${Array.from({ length: FRONTMATTER_JSON_MAX_KEYS + 1 }, (_, index) => `key-${index}: value`).join("\n")}\n---\nbody`,
+    );
+    expect(isErr(tooManyKeys)).toBe(true);
+    if (isErr(tooManyKeys)) expect(tooManyKeys.error.message).toBe(LIMIT_MESSAGES.frontmatterJson);
+
+    const nestedLines = Array.from({ length: FRONTMATTER_JSON_MAX_DEPTH + 1 }, (_, index) => `${"  ".repeat(index)}level${index}:`);
+    const tooDeep = parseSkillMd(`---\nname: n\ndescription: d\n${nestedLines.join("\n")} value\n---\nbody`);
+    expect(isErr(tooDeep)).toBe(true);
+    if (isErr(tooDeep)) expect(tooDeep.error.message).toBe(LIMIT_MESSAGES.frontmatterJson);
+  });
+
+  it("rejects unsafe extra frontmatter keys recursively", () => {
+    const topLevel = parseSkillMd(`---\nname: n\ndescription: d\nconstructor: poisoned\n---\nbody`);
+    expect(isErr(topLevel)).toBe(true);
+    if (isErr(topLevel)) expect(topLevel.error.message).toBe(LIMIT_MESSAGES.unsafeFrontmatterKey);
+
+    const proto = parseSkillMd(`---\nname: n\ndescription: d\n__proto__: poisoned\n---\nbody`);
+    expect(isErr(proto)).toBe(true);
+    if (isErr(proto)) expect(proto.error.message).toBe(LIMIT_MESSAGES.unsafeFrontmatterKey);
+
+    const nested = parseSkillMd(`---\nname: n\ndescription: d\nmetadata:\n  prototype: poisoned\n---\nbody`);
+    expect(isErr(nested)).toBe(true);
+    if (isErr(nested)) expect(nested.error.message).toBe(LIMIT_MESSAGES.unsafeFrontmatterKey);
   });
 });
 
