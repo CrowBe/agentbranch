@@ -14,10 +14,11 @@ export interface SkillRepository {
 
   save(input: {
     id: SkillId;
+    userId: UserId;
     source: SkillSource;
   }): Promise<Result<Skill, DomainError>>;
 
-  findById(id: SkillId): Promise<Result<Skill | null, DomainError>>;
+  findById(id: SkillId, userId: UserId): Promise<Result<Skill | null, DomainError>>;
 
   listByUser(userId: UserId): Promise<Result<readonly Skill[], DomainError>>;
 }

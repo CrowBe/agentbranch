@@ -69,7 +69,7 @@ describe("buildLoopResponse", () => {
 
     expect(done?.data.skillId).toEqual(expect.any(String));
     expect(done?.data.revision).toBe(1);
-    const persisted = unwrap(await repo.findById(done!.data.skillId));
+    const persisted = unwrap(await repo.findById(done!.data.skillId, userId));
     expect(persisted?.source.frontmatter.name).toBe("greeter");
   });
 
@@ -98,7 +98,7 @@ describe("buildLoopResponse", () => {
 
     const events = await readEvents(response);
     const done = events.find((e) => e.event === "done");
-    const persisted = unwrap(await repo.findById(created.id));
+    const persisted = unwrap(await repo.findById(created.id, userId));
 
     expect(done?.data.skillId).toBe(created.id);
     expect(done?.data.revision).toBe(2);
@@ -129,7 +129,7 @@ describe("buildLoopResponse", () => {
     );
 
     const events = await readEvents(response);
-    const persisted = unwrap(await repo.findById(created.id));
+    const persisted = unwrap(await repo.findById(created.id, userId));
 
     expect(events.find((e) => e.event === "error")?.data.message).toContain("target text was not found");
     expect(events.find((e) => e.event === "skill-edit")).toBeUndefined();
@@ -160,7 +160,7 @@ describe("buildLoopResponse", () => {
     );
 
     const events = await readEvents(response);
-    const persisted = unwrap(await repo.findById(created.id));
+    const persisted = unwrap(await repo.findById(created.id, UserId("u2")));
 
     expect(events.find((e) => e.event === "error")?.data.message).toBe("Skill not found.");
     expect(events.find((e) => e.event === "done")).toBeUndefined();

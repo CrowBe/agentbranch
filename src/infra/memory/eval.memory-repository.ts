@@ -11,8 +11,9 @@ export function createMemoryEvalRunRepository(): EvalRunRepository {
       runs.set(full.id, full);
       return ok(full);
     },
-    async findById(id) {
-      return ok(runs.get(id) ?? null);
+    async findById(id, userId) {
+      const run = runs.get(id);
+      return ok(run?.userId === userId ? run : null);
     },
     async listBySkill(skillId: SkillId) {
       return ok([...runs.values()].filter((r) => r.skillId === skillId));

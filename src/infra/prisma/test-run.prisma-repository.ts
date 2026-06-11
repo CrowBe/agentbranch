@@ -61,9 +61,9 @@ export function createPrismaTestRunRepository(prisma: PrismaClient): TestRunRepo
       }
     },
 
-    async findById(id) {
+    async findById(id, userId) {
       try {
-        const row = await prisma.testRun.findUnique({ where: { id } });
+        const row = await prisma.testRun.findFirst({ where: { id, userId } });
         return ok(row ? toTestRun(row as TestRunRow) : null);
       } catch (cause) {
         return err(domainError("persistence_failed", "A test run could not be loaded.", cause));

@@ -71,27 +71,35 @@ export function createPrismaSkillRepository(prisma: PrismaClient): SkillReposito
       return ok(toSkill(skill as SkillRow, 1, skill.versions[0]?.id));
     },
 
-    async save({ id, source }: { id: SkillIdT; source: SkillSource }) {
-      const latest = await prisma.skillVersion.findFirst({
-        where: { skillId: id },
-        orderBy: { revision: "desc" },
-        select: { revision: true },
+    async save({ id, userId, source }: { id: SkillIdT; userId: UserId; source: SkillSource }) {
+      const saved = await prisma.$transaction(async (tx) => {
+        const latest = await tx.skillVersion.findFirst({
+          where: { skillId: id, skill: { userId } },
+          orderBy: { revision: "desc" },
+          select: { revision: true },
+        });
+        if (!latest) return null;
+
+        const nextRevision = latest.revision + 1;
+        const skill = await tx.skill.updateManyAndReturn({
+          where: { id, userId },
+          data: columns(source),
+        });
+        if (skill.length === 0) return null;
+
+        const version = await tx.skillVersion.create({
+          data: { skillId: id, revision: nextRevision, ...columns(source) },
+          select: { id: true },
+        });
+        return { skill: skill[0], revision: nextRevision, versionId: version.id };
       });
-      const nextRevision = (latest?.revision ?? 0) + 1;
-      const skill = await prisma.skill.update({
-        where: { id },
-        data: {
-          ...columns(source),
-          versions: { create: { revision: nextRevision, ...columns(source) } },
-        },
-        include: { versions: { orderBy: { revision: "desc" }, take: 1, select: { id: true } } },
-      });
-      return ok(toSkill(skill as SkillRow, nextRevision, skill.versions[0]?.id));
+      if (!saved) return err(domainError("not_found", `No skill ${id}.`));
+      return ok(toSkill(saved.skill as SkillRow, saved.revision, saved.versionId));
     },
 
-    async findById(id) {
-      const row = await prisma.skill.findUnique({
-        where: { id },
+    async findById(id, userId) {
+      const row = await prisma.skill.findFirst({
+        where: { id, userId },
         include: { versions: { orderBy: { revision: "desc" }, take: 1, select: { id: true, revision: true } } },
       });
       return ok(row ? toSkill(row as SkillRow, row.versions[0]?.revision ?? 0, row.versions[0]?.id) : null);

@@ -39,17 +39,18 @@ export function createMemorySkillRepository(): SkillRepository {
       return ok(skill);
     },
 
-    async save({ id, source }: { id: SkillIdT; source: SkillSource }) {
+    async save({ id, userId, source }: { id: SkillIdT; userId: UserId; source: SkillSource }) {
       const existing = skills.get(id);
-      if (!existing) return err(domainError("not_found", `No skill ${id}.`));
+      if (!existing || existing.userId !== userId) return err(domainError("not_found", `No skill ${id}.`));
       const revised = reviseSkill(existing, source, new Date());
       const next = { ...revised, latestVersionId: SkillVersionId(crypto.randomUUID()) };
       skills.set(id, next);
       return ok(next);
     },
 
-    async findById(id) {
-      return ok(skills.get(id) ?? null);
+    async findById(id, userId) {
+      const skill = skills.get(id);
+      return ok(skill?.userId === userId ? skill : null);
     },
 
     async listByUser(userId: UserId) {

@@ -130,9 +130,9 @@ async function resolvedSkillVersionId(
   const id = request.skillId ?? request.currentSkillId;
   if (!id) return ok(null);
 
-  const persisted = await container.skills.findById(SkillId(id));
+  const persisted = await container.skills.findById(SkillId(id), userId);
   if (!persisted.ok) return err(persisted.error);
-  if (!persisted.value || persisted.value.userId !== userId) return ok(null);
+  if (!persisted.value) return ok(null);
   if (!persisted.value.latestVersionId || !sameSkillSource(persisted.value.source, request.source)) {
     return ok(null);
   }

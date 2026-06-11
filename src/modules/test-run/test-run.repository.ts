@@ -4,7 +4,7 @@ import type { TestRun } from "./test-run.types";
 /** Persistence port for recorded test runs (ARCHITECTURE §6). */
 export interface TestRunRepository {
   record(run: Omit<TestRun, "id" | "createdAt">): Promise<Result<TestRun, DomainError>>;
-  findById(id: TestRunId): Promise<Result<TestRun | null, DomainError>>;
+  findById(id: TestRunId, userId: UserId): Promise<Result<TestRun | null, DomainError>>;
   listBySkill(skillId: SkillId): Promise<Result<readonly TestRun[], DomainError>>;
   listByUser(userId: UserId): Promise<Result<readonly TestRun[], DomainError>>;
 }

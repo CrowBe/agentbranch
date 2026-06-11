@@ -57,9 +57,9 @@ export function createPrismaEvalRunRepository(prisma: PrismaClient): EvalRunRepo
       }
     },
 
-    async findById(id) {
+    async findById(id, userId) {
       try {
-        const row = await prisma.evalRun.findUnique({ where: { id } });
+        const row = await prisma.evalRun.findFirst({ where: { id, userId } });
         return ok(row ? toEvalRun(row as EvalRunRow) : null);
       } catch (cause) {
         return err(domainError("persistence_failed", "An eval run could not be loaded.", cause));
