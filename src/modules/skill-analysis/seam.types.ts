@@ -19,6 +19,7 @@ export type ArtifactKind =
   | "hero"
   | "skill-ir"
   | "export"
+  | "lint"
   | "test-run"
   | "triggering-eval";
 
