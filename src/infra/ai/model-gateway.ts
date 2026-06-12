@@ -6,6 +6,7 @@ import {
   REQUEST_RATE_LIMIT,
   type RateLimitPolicy,
   type RequestRateLimiter,
+  type TokenUsageBreakdown,
   type Tier,
   type UsageRepository,
 } from "@/modules/usage";
@@ -126,9 +127,9 @@ export function createModelGateway(deps: {
   }
 
   /** Record a turn's token cost. `account` → usage stream; `platform`/paid → deferred no-op. */
-  async function record(tag: AccountingTag, tokens: number): Promise<void> {
+  async function record(tag: AccountingTag, modelUsage: TokenUsageBreakdown): Promise<void> {
     if (tag.kind === "account") {
-      await usage.increment(tag.userId, { tokens, turns: 1 });
+      await usage.increment(tag.userId, { usage: modelUsage, turns: 1 });
     }
     // platform: deferred cost ledger — tag carried, not yet recorded.
   }
@@ -155,7 +156,7 @@ export function createModelGateway(deps: {
           }),
           prompt: classifyPrompt(input.prompt, input.choices),
         });
-        await record(input.tag, u?.totalTokens ?? 0);
+        await record(input.tag, readTokenUsage(u));
 
         // Guard against a hallucinated label outside the allowed set.
         const choice =
@@ -184,7 +185,7 @@ export function createModelGateway(deps: {
           tools: toSdkTools(input.tools),
           stopWhen: stepCountIs(8),
         });
-        await record(input.tag, result.usage?.totalTokens ?? 0);
+        await record(input.tag, readTokenUsage(result.usage));
         return ok({ transcript: transcriptFromSteps(result.steps) });
       } catch (cause) {
         return err(modelCallError("Agent turn failed.", cause));
@@ -207,13 +208,13 @@ export function createModelGateway(deps: {
 
       async function* stream(): AsyncGenerator<AgentStreamPart> {
         let result: ReturnType<typeof streamText> | undefined;
-        let latestKnownTokens = 0;
+        let latestKnownUsage = zeroUsage();
         let recorded = false;
         let skipRecording = false;
         const recordOnce = async () => {
           if (recorded || skipRecording || !result) return;
           recorded = true;
-          await record(tag, await readStreamTokens(result, latestKnownTokens));
+          await record(tag, await readStreamUsage(result, latestKnownUsage));
         };
         try {
           result = streamText({
@@ -226,7 +227,7 @@ export function createModelGateway(deps: {
           });
           for await (const rawPart of result.fullStream) {
             const part = rawPart as { type: string } & Record<string, unknown>;
-            latestKnownTokens = Math.max(latestKnownTokens, readTotalTokens(part) ?? 0);
+            latestKnownUsage = maxUsage(latestKnownUsage, readTokenUsage(part));
             switch (part.type) {
               case "text-delta": {
                 const delta = readString(part, "text") ?? readString(part, "textDelta");
@@ -293,7 +294,7 @@ export function createModelGateway(deps: {
           system: input.system,
           prompt: input.prompt,
         });
-        await record(input.tag, u?.totalTokens ?? 0);
+        await record(input.tag, readTokenUsage(u));
         return ok(object);
       } catch (cause) {
         return err(modelCallError("Generation call failed.", cause));
@@ -327,15 +328,15 @@ function readString(obj: Record<string, unknown>, key: string): string | undefin
   return typeof value === "string" ? value : undefined;
 }
 
-async function readStreamTokens(
+async function readStreamUsage(
   result: { totalUsage?: PromiseLike<unknown>; usage?: PromiseLike<unknown> },
-  fallback: number,
-): Promise<number> {
+  fallback: TokenUsageBreakdown,
+): Promise<TokenUsageBreakdown> {
   for (const usage of [result.totalUsage, result.usage]) {
     if (!usage) continue;
     try {
-      const tokens = readTotalTokens(await usage);
-      if (tokens !== undefined) return tokens;
+      const modelUsage = readTokenUsage(await usage);
+      if (totalTokens(modelUsage) > 0) return modelUsage;
     } catch {
       // Fall through to any known in-stream usage.
     }
@@ -343,16 +344,85 @@ async function readStreamTokens(
   return fallback;
 }
 
-function readTotalTokens(value: unknown): number | undefined {
-  if (!value || typeof value !== "object") return undefined;
+function readTokenUsage(value: unknown): TokenUsageBreakdown {
+  if (!value || typeof value !== "object") return zeroUsage();
   const obj = value as Record<string, unknown>;
-  const direct = readNumber(obj, "totalTokens") ?? readNumber(obj, "total_tokens");
-  if (direct !== undefined) return direct;
+  const cacheReadInputTokens = firstNumberDeep(obj, [
+    "cacheReadInputTokens",
+    "cache_read_input_tokens",
+    "cachedInputTokens",
+    "cached_input_tokens",
+  ]);
+  const cacheCreationInputTokens = firstNumberDeep(obj, [
+    "cacheCreationInputTokens",
+    "cache_creation_input_tokens",
+  ]);
+  const rawInputTokens = firstNumberDeep(obj, [
+    "inputTokens",
+    "input_tokens",
+    "promptTokens",
+    "prompt_tokens",
+  ]);
+  const outputTokens = firstNumberDeep(obj, [
+    "outputTokens",
+    "output_tokens",
+    "completionTokens",
+    "completion_tokens",
+  ]);
+  const total = firstNumberDeep(obj, ["totalTokens", "total_tokens"]);
+
+  const billedInputTokens =
+    rawInputTokens === undefined
+      ? Math.max(0, (total ?? 0) - (outputTokens ?? 0))
+      : Math.max(0, rawInputTokens - (cacheReadInputTokens ?? 0) - (cacheCreationInputTokens ?? 0));
+
+  return {
+    inputTokens: billedInputTokens,
+    outputTokens: outputTokens ?? Math.max(0, (total ?? 0) - billedInputTokens),
+    cacheReadInputTokens: cacheReadInputTokens ?? 0,
+    cacheCreationInputTokens: cacheCreationInputTokens ?? 0,
+  };
+}
+
+function zeroUsage(): TokenUsageBreakdown {
+  return {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadInputTokens: 0,
+    cacheCreationInputTokens: 0,
+  };
+}
+
+function maxUsage(a: TokenUsageBreakdown, b: TokenUsageBreakdown): TokenUsageBreakdown {
+  return totalTokens(b) > totalTokens(a) ? b : a;
+}
+
+function totalTokens(usage: TokenUsageBreakdown): number {
   return (
-    readTotalTokens(obj.usage) ??
-    readTotalTokens(obj.totalUsage) ??
-    readTotalTokens(obj.experimental_providerMetadata)
+    usage.inputTokens +
+    usage.outputTokens +
+    usage.cacheReadInputTokens +
+    usage.cacheCreationInputTokens
   );
+}
+
+function firstNumberDeep(value: unknown, keys: readonly string[]): number | undefined {
+  const visited = new Set<unknown>();
+  const stack: unknown[] = [value];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || typeof current !== "object" || visited.has(current)) continue;
+    visited.add(current);
+    const obj = current as Record<string, unknown>;
+    for (const key of keys) {
+      const number = readNumber(obj, key);
+      if (number !== undefined) return number;
+    }
+    for (const nested of Object.values(obj)) {
+      if (nested && typeof nested === "object") stack.push(nested);
+    }
+  }
+  return undefined;
 }
 
 function readNumber(obj: Record<string, unknown>, key: string): number | undefined {

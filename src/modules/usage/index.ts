@@ -8,6 +8,7 @@
 export type {
   Tier,
   GatedCapability,
+  TokenUsageBreakdown,
   UsageSnapshot,
   TierLimits,
   CapDecision,
