@@ -70,9 +70,31 @@ describe("in-memory adapters", () => {
 
   it("usage repository accumulates across increments", async () => {
     const repo = createMemoryUsageRepository();
-    await repo.increment(UserId("u1"), { tokens: 100, turns: 1 });
-    const snap = unwrap(await repo.increment(UserId("u1"), { tokens: 50, turns: 1 }));
-    expect(snap.tokensUsed).toBe(150);
+    await repo.increment(UserId("u1"), {
+      usage: {
+        inputTokens: 70,
+        outputTokens: 20,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 10,
+      },
+      turns: 1,
+    });
+    const snap = unwrap(
+      await repo.increment(UserId("u1"), {
+        usage: {
+          inputTokens: 25,
+          outputTokens: 25,
+          cacheReadInputTokens: 50,
+          cacheCreationInputTokens: 0,
+        },
+        turns: 1,
+      }),
+    );
+    expect(snap.tokensUsed).toBe(200);
     expect(snap.turnsUsed).toBe(2);
+    expect(snap.inputTokensUsed).toBe(95);
+    expect(snap.outputTokensUsed).toBe(45);
+    expect(snap.cacheReadInputTokensUsed).toBe(50);
+    expect(snap.cacheCreationInputTokensUsed).toBe(10);
   });
 });

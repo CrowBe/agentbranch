@@ -5,6 +5,7 @@ import type {
   UsageSnapshot,
   CapDecision,
   RateLimitPolicy,
+  TokenUsageBreakdown,
 } from "./usage.types";
 
 /**
@@ -62,10 +63,20 @@ export function checkCap(
 }
 
 /** Fold a turn's token cost into a snapshot (pure). */
-export function applyTurn(snapshot: UsageSnapshot, tokens: number): UsageSnapshot {
+export function applyTurn(snapshot: UsageSnapshot, usage: TokenUsageBreakdown): UsageSnapshot {
+  const tokens =
+    usage.inputTokens +
+    usage.outputTokens +
+    usage.cacheReadInputTokens +
+    usage.cacheCreationInputTokens;
   return {
     ...snapshot,
     tokensUsed: snapshot.tokensUsed + tokens,
     turnsUsed: snapshot.turnsUsed + 1,
+    inputTokensUsed: snapshot.inputTokensUsed + usage.inputTokens,
+    outputTokensUsed: snapshot.outputTokensUsed + usage.outputTokens,
+    cacheReadInputTokensUsed: snapshot.cacheReadInputTokensUsed + usage.cacheReadInputTokens,
+    cacheCreationInputTokensUsed:
+      snapshot.cacheCreationInputTokensUsed + usage.cacheCreationInputTokens,
   };
 }

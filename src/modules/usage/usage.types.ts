@@ -13,10 +13,22 @@ export type GatedCapability =
   | "import";
 
 /** The running counters for a user (ARCHITECTURE §6). */
+export type TokenUsageBreakdown = {
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly cacheReadInputTokens: number;
+  readonly cacheCreationInputTokens: number;
+};
+
 export type UsageSnapshot = {
   readonly userId: UserId;
+  /** Total model tokens for cap checks. Detailed buckets support pricing later. */
   readonly tokensUsed: number;
   readonly turnsUsed: number;
+  readonly inputTokensUsed: number;
+  readonly outputTokensUsed: number;
+  readonly cacheReadInputTokensUsed: number;
+  readonly cacheCreationInputTokensUsed: number;
 };
 
 /** Per-tier caps. A free session is bounded by construction (ARCHITECTURE §8). */

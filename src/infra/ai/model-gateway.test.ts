@@ -8,6 +8,7 @@ import { createMemoryUsageRepository } from "@/infra/memory/usage.memory-reposit
 import { TIER_LIMITS } from "@/modules/usage";
 import type { ModelProvider, AccountingTag } from "@/modules/model-gateway";
 import { isErr, REQUEST_BYTES_MAX, UserId } from "@/shared";
+import type { TokenUsageBreakdown } from "@/modules/usage";
 
 const aiMocks = vi.hoisted(() => ({
   streamText: vi.fn(),
@@ -49,6 +50,17 @@ const account = (id: string): AccountingTag => ({
   capability: "test-run",
 });
 const platform: AccountingTag = { kind: "platform", reason: "test" };
+const usageBreakdown = (
+  inputTokens: number,
+  outputTokens = 0,
+  cacheReadInputTokens = 0,
+  cacheCreationInputTokens = 0,
+): TokenUsageBreakdown => ({
+  inputTokens,
+  outputTokens,
+  cacheReadInputTokens,
+  cacheCreationInputTokens,
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -76,7 +88,7 @@ describe("model gateway — accounting guard", () => {
     const userId = "capped";
     // Push the user past the free token cap so checkCap denies.
     await usage.increment(UserId(userId), {
-      tokens: TIER_LIMITS.free.maxTokens,
+      usage: usageBreakdown(TIER_LIMITS.free.maxTokens),
       turns: 0,
     });
     const gateway = createModelGateway({ provider: withModel, usage });
@@ -132,7 +144,7 @@ describe("model gateway — accounting guard", () => {
     const usage = createMemoryUsageRepository();
     const userId = "capped";
     await usage.increment(UserId(userId), {
-      tokens: TIER_LIMITS.free.maxTokens,
+      usage: usageBreakdown(TIER_LIMITS.free.maxTokens),
       turns: 0,
     });
     const gateway = createModelGateway({ provider: withModel, usage });
@@ -339,6 +351,45 @@ function model(id: string): ModelProvider["model"] {
 }
 
 describe("model gateway — stream accounting", () => {
+  it("records uncached, cached-read, cached-write, and output token buckets", async () => {
+    aiMocks.generateObject.mockResolvedValueOnce({
+      object: { choice: "a", rationale: "fits" },
+      usage: {
+        inputTokens: 120,
+        outputTokens: 30,
+        providerMetadata: {
+          anthropic: {
+            cacheReadInputTokens: 70,
+            cacheCreationInputTokens: 10,
+          },
+        },
+      },
+    } as never);
+    const usage = createMemoryUsageRepository();
+    const userId = UserId("cache-aware");
+    const gateway = createModelGateway({ provider: withModel, usage });
+
+    const result = await gateway.classify({
+      prompt: "x",
+      choices: ["a"],
+      tag: { kind: "account", userId, capability: "test-run" },
+    });
+
+    expect(isErr(result)).toBe(false);
+    const snapshot = await usage.get(userId);
+    expect(isErr(snapshot)).toBe(false);
+    if (!isErr(snapshot)) {
+      expect(snapshot.value).toMatchObject({
+        tokensUsed: 150,
+        turnsUsed: 1,
+        inputTokensUsed: 40,
+        outputTokensUsed: 30,
+        cacheReadInputTokensUsed: 70,
+        cacheCreationInputTokensUsed: 10,
+      });
+    }
+  });
+
   it("records stream usage once after a clean settle", async () => {
     aiMocks.streamText.mockReturnValueOnce({
       fullStream: parts([

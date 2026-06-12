@@ -67,11 +67,15 @@ model SkillVersion {
 
 /// Per-user token + turn counters. Drives caps now; PAYG metering later.
 model Usage {
-  userId      String   @id @map("user_id")
-  tokensUsed  Int      @default(0) @map("tokens_used")
-  turnsUsed   Int      @default(0) @map("turns_used")
-  periodStart DateTime @default(now()) @map("period_start")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  userId                       String   @id @map("user_id")
+  tokensUsed                   Int      @default(0) @map("tokens_used")
+  turnsUsed                    Int      @default(0) @map("turns_used")
+  inputTokensUsed              Int      @default(0) @map("input_tokens_used")
+  outputTokensUsed             Int      @default(0) @map("output_tokens_used")
+  cacheReadInputTokensUsed     Int      @default(0) @map("cache_read_input_tokens_used")
+  cacheCreationInputTokensUsed Int      @default(0) @map("cache_creation_input_tokens_used")
+  periodStart                  DateTime @default(now()) @map("period_start")
+  updatedAt                    DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
