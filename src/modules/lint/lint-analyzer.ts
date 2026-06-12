@@ -1,5 +1,5 @@
 import { serializeSkillMd, type Skill, skillDescription, skillName } from "@/modules/skill";
-import type { Analyzer } from "@/modules/skill-analysis";
+import type { AnalysisContext, Analyzer } from "@/modules/skill-analysis";
 import { ok, SKILL_BODY_MAX, SKILL_DESCRIPTION_MAX, SKILL_NAME_MAX } from "@/shared";
 import type { LintFinding, LintReport, LintSeverity, LintSummary } from "./lint.types";
 
@@ -10,17 +10,18 @@ const BODY_TOKEN_WARN = 6_000;
 
 export const lintAnalyzer: Analyzer<LintReport> = {
   kind: "lint",
-  async analyze(skill: Skill) {
-    return ok(createLintReport(skill));
+  async analyze(skill: Skill, context?: AnalysisContext) {
+    return ok(createLintReport(skill, context?.referenceFiles ?? []));
   },
 };
 
-export function createLintReport(skill: Skill): LintReport {
+export function createLintReport(skill: Skill, referenceFiles: readonly string[] = []): LintReport {
   const raw = serializeSkillMd(skill.source);
   const findings: LintFinding[] = [];
   const name = skillName(skill);
   const description = skillDescription(skill);
   const body = skill.source.body;
+  const knownReferenceFiles = new Set(referenceFiles.map(normalizeReferencePath));
 
   addFinding(findings, raw, "name:", validateName(name));
   addFinding(findings, raw, "description:", validateDescription(description));
@@ -34,6 +35,7 @@ export function createLintReport(skill: Skill): LintReport {
   }
 
   addFinding(findings, raw, body.trimStart().slice(0, 40), validateBody(body));
+  findings.push(...validateReferenceLinks(raw, body, knownReferenceFiles));
 
   const tokenEstimate = estimateTokens(body);
   if (tokenEstimate > BODY_TOKEN_WARN) {
@@ -46,6 +48,36 @@ export function createLintReport(skill: Skill): LintReport {
   }
 
   return { kind: "lint", summary: summarize(findings), findings };
+}
+
+function validateReferenceLinks(
+  raw: string,
+  body: string,
+  knownReferenceFiles: ReadonlySet<string>,
+): LintFinding[] {
+  const findings: LintFinding[] = [];
+  const bodyStart = raw.indexOf(body);
+  const linkPattern = /\[[^\]\n]+\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+
+  for (const match of body.matchAll(linkPattern)) {
+    const href = match[1];
+    if (href === undefined) continue;
+    if (!isLocalReference(href)) continue;
+
+    const normalized = normalizeReferencePath(href);
+    if (knownReferenceFiles.has(normalized)) continue;
+
+    const hrefOffset = match[0].indexOf(href);
+    const start = bodyStart === -1 ? -1 : bodyStart + (match.index ?? 0) + hrefOffset;
+    findings.push({
+      rule: "body.reference-file.missing",
+      severity: "info",
+      message: `Local reference link \`${href}\` does not match a known skill file.`,
+      sourceSpan: start === -1 ? undefined : { start, end: start + href.length },
+    });
+  }
+
+  return findings;
 }
 
 function validateName(name: string): Omit<LintFinding, "sourceSpan"> | null {
@@ -161,4 +193,12 @@ function summarize(findings: readonly LintFinding[]): LintSummary {
 
 function estimateTokens(text: string): number {
   return Math.ceil(text.trim().split(/\s+/).filter(Boolean).length * 1.35);
+}
+
+function isLocalReference(href: string): boolean {
+  return !/^(?:[a-z][a-z0-9+.-]*:|#|\/)/i.test(href);
+}
+
+function normalizeReferencePath(path: string): string {
+  return (path.split("#", 1)[0] ?? "").replace(/^\.\//, "");
 }

@@ -51,6 +51,7 @@ export type Artifact<K extends ArtifactKind = ArtifactKind> = { readonly kind: K
 export type AnalysisContext = {
   readonly gateway?: ModelGateway;
   readonly tag?: AccountingTag;
+  readonly referenceFiles?: readonly string[];
 };
 
 /**

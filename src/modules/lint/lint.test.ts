@@ -57,6 +57,52 @@ describe("lint capability", () => {
       "Add instructions to the body so the skill has something to do after it triggers.",
     );
   });
+
+  it("flags local reference links that do not match known skill files", async () => {
+    const report = unwrap(
+      await runCapability(
+        lintCapability,
+        "breakdown",
+        skillFromSource({
+          frontmatter: {
+            name: "research-helper",
+            description: "Use project reference files to answer research questions.",
+            extra: {},
+          },
+          body: "# Steps\nRead [known](references/known.md), [missing](references/missing.md), and [docs](https://example.com/docs).",
+        }),
+        { referenceFiles: ["references/known.md"] },
+      ),
+    );
+
+    expect(report.findings.map((finding) => finding.rule)).toEqual([
+      "body.reference-file.missing",
+    ]);
+    expect(report.findings[0]).toMatchObject({
+      message: "Local reference link `references/missing.md` does not match a known skill file.",
+      sourceSpan: expect.objectContaining({ start: expect.any(Number), end: expect.any(Number) }),
+    });
+  });
+
+  it("warns when the body token footprint is high", async () => {
+    const report = unwrap(
+      await runCapability(
+        lintCapability,
+        "breakdown",
+        skillFromSource({
+          frontmatter: {
+            name: "long-skill",
+            description: "Handle a long workflow that should be split into references.",
+            extra: {},
+          },
+          body: `# Steps\n${"word ".repeat(4500)}`,
+        }),
+      ),
+    );
+
+    expect(report.findings.map((finding) => finding.rule)).toEqual(["body.token-footprint"]);
+    expect(report.summary.counts).toEqual({ error: 0, warn: 1, info: 0 });
+  });
 });
 
 function goodSource(): SkillSource {
