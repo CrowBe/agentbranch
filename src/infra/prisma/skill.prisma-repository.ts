@@ -113,6 +113,14 @@ export function createPrismaSkillRepository(prisma: PrismaClient): SkillReposito
       });
       return ok(rows.map((r) => toSkill(r as SkillRow, r.versions[0]?.revision ?? 0, r.versions[0]?.id)));
     },
+
+    async delete(id, userId) {
+      const deleted = await prisma.skill.deleteMany({
+        where: { id, userId },
+      });
+      if (deleted.count === 0) return err(domainError("not_found", `No skill ${id}.`));
+      return ok(undefined);
+    },
   };
 }
 
