@@ -166,9 +166,14 @@ The Matrix pivot resolves most of the earlier exposure. The two biggest borrows 
 **digital-rain visual** (replaced by the forge) and any **character-name reconstruction** (the
 forge theme leans `-smith` as a *craft*, the way "SkillSmith" already does — one who smiths skills
 → one who smiths agents). What's left is a craft-trade name on a forge aesthetic — ordinary and
-defensible. Still prudent, not paranoid: **a trademark clearance search on "AgentSmithing" before
-the name and launch branding lock** (not legal advice; it's a real commercial product). Keep any
-Matrix *references* to the occasional in-product wink, never the brand.
+defensible. It's also *distinctive*, which matters as much as defensible: the obvious alternative,
+**AgentForge**, is saturated in this exact niche — many shipping "AgentForge"/"Agent Forge"
+agent-builders (one with the same SMB positioning, plus Microsoft's `agent-forge` for agent-config
+generation) and a phonetic hair from Salesforce's heavily-enforced **Agentforce**. So "forge" earns
+its place as the *theme and the in-product surface* (`the Forge`, §2), **not the brand** — the smith
+works the forge. Still prudent, not paranoid: **a trademark clearance search on "AgentSmithing"
+before the name and launch branding lock** (not legal advice; it's a real commercial product). Keep
+any Matrix *references* to the occasional in-product wink, never the brand.
 
 ---
 
