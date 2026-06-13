@@ -7,6 +7,64 @@ const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 const DESCRIPTION_MIN = 12;
 const DESCRIPTION_SOFT_MAX = 300;
 const BODY_TOKEN_WARN = 6_000;
+const DESCRIPTION_FILLER_OPENINGS = [
+  "a skill for",
+  "helps with",
+  "assists with",
+  "useful for",
+  "designed to",
+] as const;
+const DESCRIPTION_STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "for",
+  "in",
+  "of",
+  "the",
+  "to",
+  "use",
+  "with",
+  "skill",
+  "helps",
+  "assist",
+  "assists",
+]);
+const DESCRIPTION_TRIGGER_WORDS = new Set([
+  "add",
+  "analyze",
+  "answer",
+  "audit",
+  "build",
+  "check",
+  "classify",
+  "convert",
+  "create",
+  "debug",
+  "diagnose",
+  "draft",
+  "edit",
+  "extract",
+  "fix",
+  "generate",
+  "import",
+  "investigate",
+  "plan",
+  "review",
+  "run",
+  "sort",
+  "summarize",
+  "test",
+  "triage",
+  "update",
+  "validate",
+]);
+const NEGATIVE_SCOPE_PATTERN =
+  /\b(?:when not to use|do not use|don't use|not suitable|avoid using|out of scope|skip this skill)\b/i;
+const EXAMPLE_PATTERN = /\bexamples?\b|```/i;
+const VAGUE_STEP_PATTERN =
+  /^\s*(?:[-*]|\d+\.)\s+(?:understand|ensure|consider|think about|help(?:\s+with)?|improve|handle|manage|support)\b/im;
+const LONG_PARAGRAPH_LENGTH = 700;
 
 export const lintAnalyzer: Analyzer<LintReport> = {
   kind: "lint",
@@ -25,6 +83,7 @@ export function createLintReport(skill: Skill, referenceFiles: readonly string[]
 
   addFinding(findings, raw, "name:", validateName(name));
   addFinding(findings, raw, "description:", validateDescription(description));
+  findings.push(...validateDescriptionQuality(raw, name, description, body));
 
   for (const key of Object.keys(skill.source.frontmatter.extra).sort()) {
     addFinding(findings, raw, `${key}:`, {
@@ -35,6 +94,7 @@ export function createLintReport(skill: Skill, referenceFiles: readonly string[]
   }
 
   addFinding(findings, raw, body.trimStart().slice(0, 40), validateBody(body));
+  findings.push(...validateBodyQuality(raw, body));
   findings.push(...validateReferenceLinks(raw, body, knownReferenceFiles));
 
   const tokenEstimate = estimateTokens(body);
@@ -139,6 +199,72 @@ function validateDescription(description: string): Omit<LintFinding, "sourceSpan
   return null;
 }
 
+function validateDescriptionQuality(
+  raw: string,
+  name: string,
+  description: string,
+  body: string,
+): LintFinding[] {
+  const findings: LintFinding[] = [];
+  const trimmed = description.trim();
+  if (trimmed.length === 0) return findings;
+
+  const normalized = trimmed.toLowerCase();
+  const descriptionTokens = contentTokens(trimmed);
+  const nameTokens = contentTokens(name.replaceAll("-", " "));
+
+  if (DESCRIPTION_FILLER_OPENINGS.some((opening) => normalized.startsWith(opening))) {
+    findings.push({
+      rule: "frontmatter.description.weak-opening",
+      severity: "warn",
+      message:
+        "The description opens with filler. Try: start with the concrete task or trigger phrase an agent would recognize.",
+      sourceSpan: spanOf(raw, trimmed),
+    });
+  }
+
+  if (nameTokens.length > 0 && descriptionTokens.length > 0) {
+    const nameTokenSet = new Set(nameTokens);
+    const nonNameTokens = descriptionTokens.filter((token) => !nameTokenSet.has(token));
+    if (nonNameTokens.length <= 1) {
+      findings.push({
+        rule: "frontmatter.description.restates-name",
+        severity: "warn",
+        message:
+          "The description mostly restates the skill name. Try: add the user task, artifact, or decision this skill handles.",
+        sourceSpan: spanOf(raw, trimmed),
+      });
+    }
+  }
+
+  if (!descriptionTokens.some((token) => DESCRIPTION_TRIGGER_WORDS.has(token))) {
+    findings.push({
+      rule: "frontmatter.description.trigger-vocabulary",
+      severity: "warn",
+      message:
+        "The description lacks clear trigger vocabulary. Try: include an action such as review, generate, debug, import, or validate.",
+      sourceSpan: spanOf(raw, trimmed),
+    });
+  }
+
+  const bodyTokens = contentTokens(body);
+  if (descriptionTokens.length >= 4 && bodyTokens.length >= 12) {
+    const bodyTokenSet = new Set(bodyTokens);
+    const overlap = descriptionTokens.filter((token) => bodyTokenSet.has(token));
+    if (overlap.length === 0) {
+      findings.push({
+        rule: "frontmatter.description.body-overlap",
+        severity: "warn",
+        message:
+          "The description and body do not share concrete vocabulary. Try: make the trigger text name the workflow described in the instructions.",
+        sourceSpan: spanOf(raw, trimmed),
+      });
+    }
+  }
+
+  return findings;
+}
+
 function validateBody(body: string): Omit<LintFinding, "sourceSpan"> | null {
   const trimmed = body.trim();
   if (trimmed.length === 0) {
@@ -163,6 +289,60 @@ function validateBody(body: string): Omit<LintFinding, "sourceSpan"> | null {
     };
   }
   return null;
+}
+
+function validateBodyQuality(raw: string, body: string): LintFinding[] {
+  const trimmed = body.trim();
+  if (trimmed.length === 0) return [];
+
+  const findings: LintFinding[] = [];
+
+  if (!NEGATIVE_SCOPE_PATTERN.test(body)) {
+    findings.push({
+      rule: "body.negative-scope.missing",
+      severity: "warn",
+      message:
+        "The body does not say when not to use the skill. Try: add one short out-of-scope note to reduce false triggers.",
+      sourceSpan: spanOf(raw, trimmed.slice(0, 40)),
+    });
+  }
+
+  if (!EXAMPLE_PATTERN.test(body)) {
+    findings.push({
+      rule: "body.examples.missing",
+      severity: "info",
+      message:
+        "The body has no examples. Try: include a compact example input, output, or decision so agents can copy the pattern.",
+      sourceSpan: spanOf(raw, trimmed.slice(0, 40)),
+    });
+  }
+
+  const vagueStep = body.match(VAGUE_STEP_PATTERN);
+  if (vagueStep?.[0]) {
+    findings.push({
+      rule: "body.steps.vague-action",
+      severity: "info",
+      message:
+        "One step is phrased as a broad goal instead of an action. Try: start steps with observable verbs like read, compare, run, draft, or update.",
+      sourceSpan: spanOf(raw, vagueStep[0].trim()),
+    });
+  }
+
+  const longParagraph = body
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .find((paragraph) => paragraph.length > LONG_PARAGRAPH_LENGTH && !paragraph.includes("\n- "));
+  if (longParagraph !== undefined) {
+    findings.push({
+      rule: "body.structure.long-paragraph",
+      severity: "info",
+      message:
+        "A paragraph is long and hard to scan. Try: split it into headed steps, bullets, or a reference file.",
+      sourceSpan: spanOf(raw, longParagraph.slice(0, 40)),
+    });
+  }
+
+  return findings;
 }
 
 function addFinding(
@@ -193,6 +373,14 @@ function summarize(findings: readonly LintFinding[]): LintSummary {
 
 function estimateTokens(text: string): number {
   return Math.ceil(text.trim().split(/\s+/).filter(Boolean).length * 1.35);
+}
+
+function contentTokens(text: string): string[] {
+  return text
+    .toLowerCase()
+    .match(/[a-z][a-z0-9-]{2,}/g)
+    ?.map((token) => token.replace(/ing$|ed$|s$/u, ""))
+    .filter((token) => !DESCRIPTION_STOP_WORDS.has(token)) ?? [];
 }
 
 function isLocalReference(href: string): boolean {

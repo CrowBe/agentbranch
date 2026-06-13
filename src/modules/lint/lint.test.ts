@@ -33,10 +33,13 @@ describe("lint capability", () => {
     expect(report.findings.map((finding) => finding.rule)).toEqual([
       "frontmatter.name.format",
       "frontmatter.description.too-short",
+      "frontmatter.description.restates-name",
       "frontmatter.unknown-key",
       "body.structure.headings",
+      "body.negative-scope.missing",
+      "body.examples.missing",
     ]);
-    expect(report.summary.counts).toEqual({ error: 0, warn: 2, info: 2 });
+    expect(report.summary.counts).toEqual({ error: 0, warn: 4, info: 3 });
     expect(report.findings.every((finding) => finding.sourceSpan !== undefined)).toBe(true);
   });
 
@@ -66,10 +69,10 @@ describe("lint capability", () => {
         skillFromSource({
           frontmatter: {
             name: "research-helper",
-            description: "Use project reference files to answer research questions.",
+            description: "Review project reference files to answer research questions.",
             extra: {},
           },
-          body: "# Steps\nRead [known](references/known.md), [missing](references/missing.md), and [docs](https://example.com/docs).",
+          body: "# Steps\nRead [known](references/known.md), [missing](references/missing.md), and [docs](https://example.com/docs).\n\n## When not to use\nDo not use for implementation tasks.\n\n## Example\nInput: research question. Output: cited answer.",
         }),
         { referenceFiles: ["references/known.md"] },
       ),
@@ -92,10 +95,10 @@ describe("lint capability", () => {
         skillFromSource({
           frontmatter: {
             name: "long-skill",
-            description: "Handle a long workflow that should be split into references.",
+            description: "Review a long workflow that should be split into references.",
             extra: {},
           },
-          body: `# Steps\n${"word ".repeat(4500)}`,
+          body: `# Steps\n- ${"word ".repeat(4500)}\n\n## When not to use\nDo not use for short workflows.\n\n## Example\nInput: long workflow. Output: extracted reference files.`,
         }),
       ),
     );
@@ -103,12 +106,87 @@ describe("lint capability", () => {
     expect(report.findings.map((finding) => finding.rule)).toEqual(["body.token-footprint"]);
     expect(report.summary.counts).toEqual({ error: 0, warn: 1, info: 0 });
   });
+
+  it("flags vague descriptions with actionable quality hints", async () => {
+    const report = unwrap(
+      await runCapability(
+        lintCapability,
+        "breakdown",
+        skillFromSource({
+          frontmatter: {
+            name: "email-triage",
+            description: "A skill for email triage.",
+            extra: {},
+          },
+          body: "# Steps\n- Read unread email.\n- Sort messages by urgency.\n\n## When not to use\nDo not use for calendar planning.\n\n## Example\nInput: unread support email. Output: priority bucket.",
+        }),
+      ),
+    );
+
+    expect(report.findings.map((finding) => finding.rule)).toEqual([
+      "frontmatter.description.weak-opening",
+      "frontmatter.description.restates-name",
+    ]);
+    expect(report.findings.map((finding) => finding.message)).toEqual([
+      expect.stringContaining("Try:"),
+      expect.stringContaining("Try:"),
+    ]);
+  });
+
+  it("flags missing trigger vocabulary and body mismatch", async () => {
+    const report = unwrap(
+      await runCapability(
+        lintCapability,
+        "breakdown",
+        skillFromSource({
+          frontmatter: {
+            name: "release-helper",
+            description: "Production confidence for launch readiness decisions.",
+            extra: {},
+          },
+          body: "# Steps\n- Read incident notes.\n- Draft a rollback checklist.\n\n## When not to use\nDo not use for roadmap planning.\n\n## Example\nInput: incident notes. Output: rollback checklist.",
+        }),
+      ),
+    );
+
+    expect(report.findings.map((finding) => finding.rule)).toEqual([
+      "frontmatter.description.trigger-vocabulary",
+      "frontmatter.description.body-overlap",
+    ]);
+  });
+
+  it("flags missing negative scope, missing examples, vague steps, and long paragraphs", async () => {
+    const report = unwrap(
+      await runCapability(
+        lintCapability,
+        "breakdown",
+        skillFromSource({
+          frontmatter: {
+            name: "planning-helper",
+            description: "Plan project work from notes and open questions.",
+            extra: {},
+          },
+          body: `# Steps
+- Understand the project notes.
+
+${"This paragraph explains planning context without structure. ".repeat(16)}`,
+        }),
+      ),
+    );
+
+    expect(report.findings.map((finding) => finding.rule)).toEqual([
+      "body.negative-scope.missing",
+      "body.examples.missing",
+      "body.steps.vague-action",
+      "body.structure.long-paragraph",
+    ]);
+  });
 });
 
 function goodSource(): SkillSource {
   return unwrap(
     parseSkillMd(
-      `---\nname: inbox-triage\ndescription: Sort unread email into clear priority buckets.\n---\n# Goal\nIdentify urgent unread messages.\n\n# Steps\n- Read the inbox.\n- Group messages by priority.\n- Draft a short summary.`,
+      `---\nname: inbox-triage\ndescription: Sort unread email into clear priority buckets.\n---\n# Goal\nIdentify urgent unread email messages.\n\n# Steps\n- Read the inbox.\n- Group email messages by priority.\n- Draft a short summary.\n\n## When not to use\nDo not use for calendar scheduling or outbound campaign planning.\n\n## Example\nInput: three unread email messages. Output: urgent, soon, and later priority buckets.`,
     ),
   );
 }
