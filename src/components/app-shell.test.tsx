@@ -30,6 +30,52 @@ afterEach(() => {
 });
 
 describe("AppShell capability chips", () => {
+  it("imports pasted SKILL.md and renders the saved skill", async () => {
+    const importedSkill: SkillSource = {
+      frontmatter: {
+        name: "calendar-planner",
+        description: "Plan calendar meetings from plain language requests.",
+        extra: {},
+      },
+      body: "# Steps\n\nCheck availability.",
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({
+        skill: { id: "skill-1", source: importedSkill, latestRevision: 1 },
+        rendered: {
+          title: "calendar-planner",
+          description: "Plan calendar meetings from plain language requests.",
+          sections: [],
+        },
+        source: {
+          markdown:
+            "---\nname: calendar-planner\ndescription: Plan calendar meetings from plain language requests.\n---\n# Steps\n\nCheck availability.",
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AppShell rendered={rendered} source={source} initialSkill={skill} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Import" }));
+    expect(screen.getByRole("heading", { name: "Import a skill" })).toBeInTheDocument();
+    await userEvent.type(
+      screen.getByRole("textbox"),
+      "---\nname: calendar-planner\ndescription: Plan calendar meetings from plain language requests.\n---\n# Steps\n\nCheck availability.",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Import skill" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/import", {
+        method: "POST",
+        headers: { "Content-Type": "text/markdown; charset=utf-8" },
+        body: "---\nname: calendar-planner\ndescription: Plan calendar meetings from plain language requests.\n---\n# Steps\n\nCheck availability.",
+      });
+    });
+    expect(await screen.findByText("calendar-planner")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Import complete.");
+  });
+
   it("calls the visualise route with the current skill and renders the result", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       Response.json({

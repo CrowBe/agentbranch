@@ -47,6 +47,7 @@ export function AppShell({
   const [currentSkillId, setCurrentSkillId] = useState<string | null>(null);
   const [messages, setMessages] = useState<BuildMessage[]>([]);
   const [entries, setEntries] = useState<InteractionEntry[]>([]);
+  const [interactionMode, setInteractionMode] = useState<"build" | "import">("build");
   const [busy, setBusy] = useState(false);
   const [toolBusy, setToolBusy] = useState(false);
   const [activeTool, setActiveTool] = useState<ToolAction | null>(null);
@@ -54,6 +55,7 @@ export function AppShell({
 
   async function handleSend(message: string) {
     if (busy) return;
+    setInteractionMode("build");
     const nextMessages: BuildMessage[] = [...messages, { role: "user", content: message }];
     setMessages(nextMessages);
     setEntries((prev) => [...prev, entry(message)]);
@@ -135,7 +137,14 @@ export function AppShell({
     <div className="flex h-dvh flex-col">
       <TopBar onToggleMenu={() => setMenuExpanded((v) => !v)} />
       <div className="flex min-h-0 flex-1">
-        <SideRail expanded={menuExpanded} />
+        <SideRail
+          expanded={menuExpanded}
+          onImport={() => {
+            setInteractionMode("import");
+            setEntries([]);
+            setStatus(null);
+          }}
+        />
         <main className="min-w-0 flex-1 overflow-hidden">
           <HeroPanel
             rendered={heroDocs.rendered}
@@ -154,10 +163,56 @@ export function AppShell({
             </p>
           )}
         </main>
-        <InteractionPanel entries={entries} busy={busy} onSend={handleSend} />
+        <InteractionPanel
+          entries={entries}
+          busy={busy}
+          mode={interactionMode}
+          onSend={handleSend}
+          onImport={handleImport}
+        />
       </div>
     </div>
   );
+
+  async function handleImport(raw: string) {
+    if (busy) return;
+    setBusy(true);
+    setCapability(null);
+    setActiveTool(null);
+    setStatus("Importing...");
+    setEntries([entry("Importing pasted SKILL.md.", "muted")]);
+
+    try {
+      const res = await fetch("/api/import", {
+        method: "POST",
+        headers: { "Content-Type": "text/markdown; charset=utf-8" },
+        body: raw,
+      });
+      const body = (await res.json().catch(() => null)) as unknown;
+      if (!res.ok) {
+        const error = parseImportError(body, res.status);
+        setStatus(error);
+        setEntries((prev) => [...prev, entry(error, "error")]);
+        return;
+      }
+      if (!isImportResponse(body)) {
+        throw new Error("Import returned an unexpected response.");
+      }
+
+      setCurrent(body.skill.source);
+      setCurrentSkillId(body.skill.id);
+      setHeroDocs({ rendered: body.rendered, source: body.source });
+      setView("rendered");
+      setStatus("Import complete.");
+      setEntries((prev) => [...prev, entry(`Imported ${body.rendered.title}.`, "muted")]);
+    } catch (cause) {
+      const error = friendlyError(String(cause));
+      setStatus(error);
+      setEntries((prev) => [...prev, entry(error, "error")]);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function handleToolSelect(action: ToolAction) {
     await runTool(action, "insights");
@@ -372,6 +427,11 @@ function parseError(body: unknown, status: number, action: ToolAction): string {
   return friendlyError(error || `Request failed (${status}).`);
 }
 
+function parseImportError(body: unknown, status: number): string {
+  const error = body && typeof body === "object" && "error" in body ? String(body.error) : "";
+  return friendlyError(error || `Import failed (${status}).`);
+}
+
 function toCapabilityPanel(
   action: ToolAction,
   surface: "insights" | "breakdown",
@@ -445,6 +505,43 @@ function isInsight(value: unknown): value is InsightPanel {
     Array.isArray(value.watch) &&
     value.watch.every((item) => typeof item === "string")
   );
+}
+
+function isImportResponse(
+  value: unknown,
+): value is { readonly skill: { readonly id: string; readonly source: SkillSource }; readonly rendered: RenderedDoc; readonly source: SourceDoc } {
+  return (
+    isRecord(value) &&
+    isRecord(value.skill) &&
+    typeof value.skill.id === "string" &&
+    isSkillSource(value.skill.source) &&
+    isRenderedDoc(value.rendered) &&
+    isSourceDoc(value.source)
+  );
+}
+
+function isSkillSource(value: unknown): value is SkillSource {
+  return (
+    isRecord(value) &&
+    isRecord(value.frontmatter) &&
+    typeof value.frontmatter.name === "string" &&
+    typeof value.frontmatter.description === "string" &&
+    isRecord(value.frontmatter.extra) &&
+    typeof value.body === "string"
+  );
+}
+
+function isRenderedDoc(value: unknown): value is RenderedDoc {
+  return (
+    isRecord(value) &&
+    typeof value.title === "string" &&
+    typeof value.description === "string" &&
+    Array.isArray(value.sections)
+  );
+}
+
+function isSourceDoc(value: unknown): value is SourceDoc {
+  return isRecord(value) && typeof value.markdown === "string";
 }
 
 function isTestRunBreakdown(
