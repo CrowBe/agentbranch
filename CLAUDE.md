@@ -29,6 +29,7 @@ Note: SkillSmith authors / validates / exports skills — it does **not *deploy*
 - **Docs read as current state — no history.** No decision-log tables, no "retired / rejected / was-X-now-Y" asides, no ADR register. State what a thing *is* and *why* (live rationale stays); strip how-we-got-here.
 - Suggest a decision register **only** when a decision is actually being reversed and the old reasoning needs preserving.
 - Keep UI/layout/system/data decisions in ARCHITECTURE (all the same *kind* of knowledge). DESIGN is only for the visual system.
+- **Update existing docs instead of adding new files** — drift stays contained when knowledge has one home. A new doc needs the same justification as a decision register: the content genuinely fits nowhere that exists.
 
 ## Audience & tone
 
