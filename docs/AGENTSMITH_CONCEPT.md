@@ -106,6 +106,23 @@ from the same role tokens, **chosen once and cached as a preference** — exactl
 theming/component swap, cached" shape. It is *not* two codebases; it's one component tree
 reading one more token axis.
 
+### 4.1 The wordmark — `AgentSmith|<Builder>`
+
+The name is a **rename, not a sub-brand**: "SkillSmith" does not survive — the product *is*
+AgentSmith. The wordmark's second segment is **dynamic**, naming the **active builder domain**
+(§5), so the mark doubles as a "where am I" indicator:
+
+| Surface | Wordmark |
+|---|---|
+| The skill builder (today's whole product) | `AgentSmith\|Skills` |
+| The subagent builder | `AgentSmith\|Subagents` *(second-segment label TBD)* |
+| Each new builder | `AgentSmith\|<its domain>` |
+
+The constant **AgentSmith** is the factory / the Orchestrator; the suffix is *what you're forging
+right now*. The Smith pun carries it — one smith, many wares. Same string in both pills, themed:
+reads like a terminal path / breadcrumb in red pill, a soft tab label in blue pill. (When no
+builder is active — landing, account — the mark is just `AgentSmith`.)
+
 Design rules so red pill stays *pedagogical*, not *hostile*:
 
 - **Role tokens are shared.** Primary/secondary/tertiary/error keep their *meanings* (`DESIGN.md §4`);
@@ -130,7 +147,9 @@ The reason this is *expansion* and not *rewrite*: the existing spine generalizes
   loop that writes a `SKILL.md` through `write_skill`/`edit_skill` via the gateway's `streamAgent`.
   The **subagent builder** is the *same shape* — a chat loop writing a subagent's definition through
   its own write/edit tools, same gateway, same SSE streaming. A builder is "the build loop, parameterised
-  by what artifact it authors." No new pipeline (MODULE_DESIGN §6, rule 1).
+  by what artifact it authors." No new pipeline (MODULE_DESIGN §6, rule 1). Each builder is the
+  surface behind a wordmark segment (§4.1): entering the subagent builder swaps the mark to
+  `AgentSmith\|Subagents`, so the IA and the brand are the same object.
 - **An Agent is both analyzable and evaluable on the seam.** The skill-analysis seam (read →
   artifact → render) becomes the **artifact-analysis seam** where the artifact may be a skill *or
   an agent*:
@@ -177,8 +196,10 @@ Ordered so each phase ships value and de-risks the next. Nothing here is a commi
 shape of the bet.
 
 1. **Red/blue pill + rebrand.** Pure presentation: the pill entry screen, the red-pill theme variant
-   + digital-rain loader, the AgentSmith name. Reuses the existing two-theme machinery. *Lowest risk,
-   highest visible signal — proves the brand direction before any domain work.*
+   + digital-rain loader, and the **rename to AgentSmith** with the dynamic `AgentSmith|<Builder>`
+   wordmark (§4.1) — which on day one is just `AgentSmith|Skills` over the current product. Reuses the
+   existing two-theme machinery. *Lowest risk, highest visible signal — proves the brand direction
+   before any domain work.*
 2. **Agent as a first-class artifact (analysis only).** The `Agent` module + composition model;
    Rendered/Source agent view + spawn-graph Visualise + agent export, all on the seam. No new
    runtime. *Proves the seam generalizes.*
@@ -194,8 +215,6 @@ shape of the bet.
 
 ## 8. Open questions
 
-- **One product or two?** Is AgentSmith a *rename* of SkillSmith, or a superset where "SkillSmith"
-  survives as the skill-builder surface inside it? (Affects naming, marketing, the repo.)
 - **Does an agent compose existing skills, or only freshly-built ones?** I.e. is there an "acquire
   from my skill library" path (pairs naturally with the deferred Skill Tap, §9.1)?
 - **How literal is "spawning"?** Is a subagent a real sub-loop the Orchestrator invokes at run time,
