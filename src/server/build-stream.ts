@@ -1,10 +1,12 @@
 import { encodeSse, type UserId } from "@/shared";
 import {
   applySkillEdit,
+  checkSkillCreateCap,
   type SkillRepository,
 } from "@/modules/skill";
 import { runBuildLoop, type BuildLoopInput, type BuildLoopEvent } from "@/modules/build-loop";
 import type { ModelGateway } from "@/modules/model-gateway";
+import type { Tier } from "@/modules/usage";
 
 /**
  * Bridge the build loop's typed event generator to an SSE Response. This is the
@@ -16,6 +18,7 @@ export function buildLoopResponse(
   gateway: ModelGateway,
   skills: SkillRepository,
   userId: UserId,
+  tierFor: (userId: UserId) => Promise<Tier> = async () => "free",
 ): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -69,6 +72,19 @@ export function buildLoopResponse(
                 controller.enqueue(
                   encoder.encode(
                     encodeSse({ event: "error", data: { message: "Skill not found." } }),
+                  ),
+                );
+                continue;
+              }
+            }
+
+            if (!input.currentSkillId) {
+              const tier = await tierFor(userId);
+              const skillCap = await checkSkillCreateCap({ skills, userId, tier });
+              if (!skillCap.ok) {
+                controller.enqueue(
+                  encoder.encode(
+                    encodeSse({ event: "error", data: { message: skillCap.error.message } }),
                   ),
                 );
                 continue;

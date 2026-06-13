@@ -18,4 +18,5 @@ export {
   skillName,
   skillDescription,
 } from "./skill";
+export { checkSkillCreateCap } from "./skill-cap";
 export type { SkillRepository } from "./skill.repository";

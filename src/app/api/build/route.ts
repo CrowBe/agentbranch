@@ -36,5 +36,6 @@ export async function POST(request: Request): Promise<Response> {
     container.modelGateway,
     container.skills,
     identity.value.userId,
+    container.tierFor,
   );
 }

@@ -10,14 +10,15 @@ import type {
 
 /**
  * Tier limits. Free is intentionally tight: one bounded session, no triggering
- * evals, no import (ARCHITECTURE §8). The token meter exists day one to enforce
+ * evals. Import is free because it spends no model tokens; its non-model cost is
+ * bounded by skill-count caps and request rate limits (ARCHITECTURE §8). The token meter exists day one to enforce
  * caps and to be reused for PAYG metering later (ARCHITECTURE §4).
  */
 export const TIER_LIMITS: Readonly<Record<Tier, TierLimits>> = {
   free: {
     maxTurns: 25,
     maxTokens: 200_000,
-    allowed: new Set<GatedCapability>(["build", "visualise", "test-run", "export"]),
+    allowed: new Set<GatedCapability>(["build", "visualise", "test-run", "export", "import"]),
   },
   pro: {
     maxTurns: 1_000,
