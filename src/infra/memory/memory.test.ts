@@ -25,6 +25,21 @@ describe("in-memory adapters", () => {
     expect(unwrap(await repo.findById(created.id, UserId("u2")))).toBeNull();
   });
 
+  it("deletes skills only for their owner", async () => {
+    const repo = createMemorySkillRepository();
+    const source = unwrap(parseSkillMd(`---\nname: t\ndescription: d\n---\nbody`));
+    const created = unwrap(await repo.create({ userId: UserId("u1"), source }));
+
+    const blocked = await repo.delete(created.id, UserId("u2"));
+
+    expect(blocked).toMatchObject({ ok: false, error: { tag: "not_found" } });
+    expect(unwrap(await repo.findById(created.id, UserId("u1")))).not.toBeNull();
+
+    unwrap(await repo.delete(created.id, UserId("u1")));
+    expect(unwrap(await repo.findById(created.id, UserId("u1")))).toBeNull();
+    expect(unwrap(await repo.listByUser(UserId("u1")))).toHaveLength(0);
+  });
+
   it("keeps run records pinned to the evaluated skill version after later edits", async () => {
     const skills = createMemorySkillRepository();
     const testRuns = createMemoryTestRunRepository();

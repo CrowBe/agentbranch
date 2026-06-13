@@ -21,4 +21,6 @@ export interface SkillRepository {
   findById(id: SkillId, userId: UserId): Promise<Result<Skill | null, DomainError>>;
 
   listByUser(userId: UserId): Promise<Result<readonly Skill[], DomainError>>;
+
+  delete(id: SkillId, userId: UserId): Promise<Result<void, DomainError>>;
 }

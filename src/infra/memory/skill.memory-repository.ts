@@ -56,5 +56,12 @@ export function createMemorySkillRepository(): SkillRepository {
     async listByUser(userId: UserId) {
       return ok([...skills.values()].filter((s) => s.userId === userId));
     },
+
+    async delete(id, userId) {
+      const skill = skills.get(id);
+      if (!skill || skill.userId !== userId) return err(domainError("not_found", `No skill ${id}.`));
+      skills.delete(id);
+      return ok(undefined);
+    },
   };
 }
