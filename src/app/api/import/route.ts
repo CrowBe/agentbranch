@@ -1,6 +1,8 @@
 import { getContainer } from "@/server/container";
-import { parseSkillMd } from "@/modules/skill";
+import { checkSkillCreateCap, parseSkillMd } from "@/modules/skill";
+import { REQUEST_RATE_LIMIT } from "@/modules/usage";
 import { createHeroArtifact, renderedRenderer, sourceRenderer } from "@/modules/hero";
+import { createLintReport, lintBreakdownRenderer, lintInsightsRenderer } from "@/modules/lint";
 import { isErr } from "@/shared";
 import { domainErrorResponse } from "../_shared/skill-request";
 import { invalidRequestResponse, parseTextRequest } from "../_shared/request-body";
@@ -16,6 +18,16 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "Sign in to import a skill." }, { status: 401 });
   }
 
+  const rate = await container.requestRateLimiter.consume(
+    identity.value.userId,
+    "import",
+    REQUEST_RATE_LIMIT,
+  );
+  if (isErr(rate)) return domainErrorResponse(rate.error);
+  if (!rate.value.allowed) {
+    return domainErrorResponse({ tag: "cap_reached", message: rate.value.reason });
+  }
+
   const body = await parseTextRequest(request);
   if (!body.ok) return body.response;
 
@@ -26,6 +38,14 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
+  const tier = await container.tierFor(identity.value.userId);
+  const skillCap = await checkSkillCreateCap({
+    skills: container.skills,
+    userId: identity.value.userId,
+    tier,
+  });
+  if (isErr(skillCap)) return domainErrorResponse(skillCap.error);
+
   const saved = await container.skills.create({
     userId: identity.value.userId,
     source: parsed.value,
@@ -33,6 +53,7 @@ export async function POST(request: Request): Promise<Response> {
   if (isErr(saved)) return domainErrorResponse(saved.error);
 
   const artifact = createHeroArtifact(saved.value.source);
+  const lint = createLintReport(saved.value);
   return Response.json({
     skill: {
       id: saved.value.id,
@@ -41,5 +62,9 @@ export async function POST(request: Request): Promise<Response> {
     },
     rendered: renderedRenderer.render(artifact),
     source: sourceRenderer.render(artifact),
+    lint: {
+      insights: lintInsightsRenderer.render(lint),
+      breakdown: lintBreakdownRenderer.render(lint),
+    },
   });
 }

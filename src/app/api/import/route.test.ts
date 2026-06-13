@@ -5,11 +5,16 @@ import { POST } from "./route";
 
 const currentIdentity = vi.fn();
 const createSkill = vi.fn();
+const listSkills = vi.fn();
+const consumeRateLimit = vi.fn();
+const tierFor = vi.fn();
 
 vi.mock("@/server/container", () => ({
   getContainer: () => ({
     auth: { currentIdentity },
-    skills: { create: createSkill },
+    skills: { create: createSkill, listByUser: listSkills },
+    requestRateLimiter: { consume: consumeRateLimit },
+    tierFor,
   }),
 }));
 
@@ -17,6 +22,12 @@ describe("POST /api/import", () => {
   beforeEach(() => {
     currentIdentity.mockReset();
     createSkill.mockReset();
+    listSkills.mockReset();
+    consumeRateLimit.mockReset();
+    tierFor.mockReset();
+    listSkills.mockResolvedValue(ok([]));
+    consumeRateLimit.mockResolvedValue(ok({ allowed: true }));
+    tierFor.mockResolvedValue("free");
   });
 
   it("parses and persists a pasted SKILL.md for the current user", async () => {
@@ -54,6 +65,10 @@ describe("POST /api/import", () => {
         title: "inbox-triage",
         description: "Sort unread mail into buckets.",
       },
+      lint: {
+        insights: expect.any(Object),
+        breakdown: expect.any(Object),
+      },
     });
   });
 
@@ -69,6 +84,55 @@ describe("POST /api/import", () => {
     await expect(response.json()).resolves.toEqual({
       error: "This doesn't look like a valid SKILL.md yet - Frontmatter is missing a `name`.",
     });
+    expect(createSkill).not.toHaveBeenCalled();
+  });
+
+  it("rejects a second free-tier skill with friendly cap copy", async () => {
+    currentIdentity.mockResolvedValue(ok({ userId: UserId("user-1"), email: "u@example.test" }));
+    listSkills.mockResolvedValue(ok([
+      makeSkill({
+        id: SkillId("existing"),
+        userId: UserId("user-1"),
+        source: {
+          frontmatter: { name: "existing", description: "Existing skill.", extra: {} },
+          body: "Existing.",
+        },
+        createdAt: new Date(0),
+        updatedAt: new Date(0),
+      }),
+    ]));
+
+    const response = await POST(new Request("https://example.test/api/import", {
+      method: "POST",
+      body: "---\nname: inbox-triage\ndescription: Sort unread mail into buckets.\n---\n# Steps\nRead mail.",
+    }));
+
+    expect(response.status).toBe(429);
+    await expect(response.json()).resolves.toEqual({
+      error: "You're at your skill limit - delete a skill to make room, or upgrade for more.",
+      code: "cap_reached",
+    });
+    expect(createSkill).not.toHaveBeenCalled();
+  });
+
+  it("rate-limits import requests per user", async () => {
+    currentIdentity.mockResolvedValue(ok({ userId: UserId("user-1"), email: "u@example.test" }));
+    consumeRateLimit.mockResolvedValue(ok({
+      allowed: false,
+      reason: "You're going a little fast - give it a few seconds and try again.",
+    }));
+
+    const response = await POST(new Request("https://example.test/api/import", {
+      method: "POST",
+      body: "---\nname: inbox-triage\ndescription: Sort unread mail into buckets.\n---\n# Steps\nRead mail.",
+    }));
+
+    expect(response.status).toBe(429);
+    expect(consumeRateLimit).toHaveBeenCalledWith(
+      "user-1",
+      "import",
+      { maxRequests: 12, windowMs: 60_000 },
+    );
     expect(createSkill).not.toHaveBeenCalled();
   });
 

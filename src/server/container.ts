@@ -1,6 +1,6 @@
 import "server-only";
 import type { SkillRepository } from "@/modules/skill";
-import type { UsageRepository } from "@/modules/usage";
+import type { RequestRateLimiter, Tier, UsageRepository } from "@/modules/usage";
 import type { TestRunRepository } from "@/modules/test-run";
 import type { EvalRunRepository } from "@/modules/triggering-eval";
 import type { AuthPort } from "@/modules/auth";
@@ -40,6 +40,8 @@ export type AppContainer = {
   readonly modelGateway: ModelGateway;
   readonly skills: SkillRepository;
   readonly usage: UsageRepository;
+  readonly requestRateLimiter: RequestRateLimiter;
+  readonly tierFor: (userId: import("@/shared").UserId) => Promise<Tier>;
   readonly testRuns: TestRunRepository;
   readonly evalRuns: EvalRunRepository;
 };
@@ -93,6 +95,8 @@ export function getContainer(): AppContainer {
     modelGateway,
     skills: prisma ? createPrismaSkillRepository(prisma) : createMemorySkillRepository(),
     usage,
+    requestRateLimiter,
+    tierFor: tierFor ?? (async () => "free" as Tier),
     testRuns: prisma ? createPrismaTestRunRepository(prisma) : createMemoryTestRunRepository(),
     evalRuns: prisma ? createPrismaEvalRunRepository(prisma) : createMemoryEvalRunRepository(),
   };

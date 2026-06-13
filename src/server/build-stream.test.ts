@@ -73,6 +73,37 @@ describe("buildLoopResponse", () => {
     expect(persisted?.source.frontmatter.name).toBe("greeter");
   });
 
+  it("streams a cap error instead of persisting a second free-tier skill", async () => {
+    const repo = createMemorySkillRepository();
+    const source = unwrap(parseSkillMd(`---\nname: existing\ndescription: Existing skill\n---\nBody.`));
+    unwrap(await repo.create({ userId, source }));
+
+    const response = buildLoopResponse(
+      { messages: [{ role: "user", content: "Make a greeter" }] },
+      fakeGateway([
+        {
+          kind: "tool-result",
+          tool: "write_skill",
+          output: {
+            content: `---\nname: greeter\ndescription: Greets people warmly\n---\nSay hello.`,
+          },
+        },
+        { kind: "finish", finishReason: "stop" },
+      ]),
+      repo,
+      userId,
+      async () => "free",
+    );
+
+    const events = await readEvents(response);
+
+    expect(events.find((e) => e.event === "error")?.data.message).toBe(
+      "You're at your skill limit - delete a skill to make room, or upgrade for more.",
+    );
+    expect(events.find((e) => e.event === "done")).toBeUndefined();
+    expect(unwrap(await repo.listByUser(userId))).toHaveLength(1);
+  });
+
   it("saves an edit turn as the next revision of the existing skill", async () => {
     const repo = createMemorySkillRepository();
     const source = unwrap(parseSkillMd(`---\nname: greeter\ndescription: Greets people warmly\n---\nSay hello.`));

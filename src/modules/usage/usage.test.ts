@@ -23,6 +23,10 @@ describe("usage meter", () => {
     expect(checkCap(fresh, "pro", "triggering-eval").allowed).toBe(true);
   });
 
+  it("allows import on the free tier because storage is capped separately", () => {
+    expect(checkCap(fresh, "free", "import")).toEqual({ allowed: true });
+  });
+
   it("denies once the turn cap is hit", () => {
     const maxed: UsageSnapshot = { ...fresh, turnsUsed: 25 };
     const decision = checkCap(maxed, "free", "build");

@@ -7,6 +7,10 @@ export const REQUEST_BYTES_MAX = 256_000;
 export const FRONTMATTER_JSON_MAX_BYTES = REQUEST_BYTES_MAX;
 export const FRONTMATTER_JSON_MAX_DEPTH = 16;
 export const FRONTMATTER_JSON_MAX_KEYS = 200;
+export const SKILL_COUNT_LIMITS = {
+  free: 1,
+  pro: 100,
+} as const;
 
 export const LIMIT_MESSAGES = {
   skillName: `Skill names need to stay under ${SKILL_NAME_MAX} characters.`,
@@ -18,4 +22,6 @@ export const LIMIT_MESSAGES = {
   messageContent: `This message is longer than we can build from in one go - trim it to under ${MESSAGE_CONTENT_MAX.toLocaleString("en-US")} characters and try again.`,
   messages: `This conversation has too many messages - keep it to ${MESSAGES_MAX} messages or fewer and try again.`,
   requestBytes: `This request is too large - keep it under ${REQUEST_BYTES_MAX.toLocaleString("en-US")} bytes and try again.`,
+  skillCount:
+    "You're at your skill limit - delete a skill to make room, or upgrade for more.",
 } as const;
