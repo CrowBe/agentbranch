@@ -108,9 +108,11 @@ reading one more token axis.
 
 ### 4.1 The wordmark — `AgentSmith|<Builder>`
 
-The name is a **rename, not a sub-brand**: "SkillSmith" does not survive — the product *is*
-AgentSmith. The wordmark's second segment is **dynamic**, naming the **active builder domain**
-(§5), so the mark doubles as a "where am I" indicator:
+The name is a **rename, not a sub-brand**: "SkillSmith" does not survive. The exact product
+name is **under IP review** — working candidate **AgentSmithing** (the craft gerund; see §4.2
+for why and the alternatives) — so read "AgentSmith" throughout this doc as a placeholder for
+the final mark, not a committed name. The wordmark's second segment is **dynamic**, naming the
+**active builder domain** (§5), so the mark doubles as a "where am I" indicator:
 
 | Surface | Wordmark |
 |---|---|
@@ -137,6 +139,42 @@ Design rules so red pill stays *pedagogical*, not *hostile*:
 DESIGN.md §6 ("not yet designed") gains: red-pill token table, digital-rain loader spec, the
 pill-selection entry screen, and spawn/glitch motion primitives.
 
+### 4.2 IP & branding risk — *inspired, not branded*
+
+The Matrix is Warner Bros. property, and WB actively registers and enforces Matrix marks
+(`ENTER THE MATRIX`, `THE MATRIX RELOADED`; a $57M Matrix-related case settled May 2026). The
+posture that keeps us safe: **borrow the *concepts* (genre + ideas, not protectable), avoid the
+literal *assets* (names, the signature visual).** Not legal advice — a trademark clearance search
++ counsel review is owed before the name and launch branding lock. The risk is tiered:
+
+| Borrow | Risk | Rule |
+|---|---|---|
+| **The product name** | **Highest** — "Agent Smith" is a named character; the name also collides with known Android malware ("Agent Smith", 2019) in our own software space | Don't ship a mark that *reconstructs the character name*. See name status below. |
+| **Digital-rain visual** | **Medium** — the falling green glyphs are a distinctive, recognisable asset (a custom mirrored-katakana typeface) | Use the *genre* (phosphor-green terminal, streaming characters — predates the film), **not** a faithful rain replica with the signature glyphs. |
+| **Red pill / blue pill mechanic** | **Lower** — the phrase is in general lexicon ("redpilled") with prior unenforced software use (Rutkowska's Red Pill/Blue Pill, Maemo's "Red Pill mode") | Fine as an *entry-choice mechanic*; don't *title* the product "Red Pill". |
+| **Verbatim quotes** | Low individually, compounds in aggregate | Light seasoning only; don't build the marketing on stacked recognisable lines. |
+
+**The compounding lever (the one that matters most):** the name *alone* is moderate risk; the
+**name + the full Matrix visual identity together** is what builds WB's "trading on the franchise"
+story. Pick *one* salient borrow, not both — a character-evoking name set in literal Matrix rain
+is the worst case.
+
+**Name status — open.** "AgentSmith" is the biggest single exposure and the part most worth
+changing. The `-smith` *craft* metaphor is ours and clean (it's how "SkillSmith" already works —
+one who smiths skills → one who smiths agents); the collision is specifically the `Agent`+`Smith`
+pairing that rebuilds the character name. Candidates, by how far they sit from that:
+
+- **AgentSmithing** (working candidate) — the gerund reframes a proper noun into a *craft*
+  (black-smithing, word-smithing). More distance than spelling tricks like "AIgentSmith" (which
+  don't help — risk turns on what's *heard*, and casing carries no legal weight), but the
+  sound-alike survives; defensible-as-craft, weakest if set in literal rain.
+- **Smithy / Forgesmith** — keep the forge equity, drop the `Agent` adjacency entirely. Cleaner.
+- **Construct / Loadout** — Matrix *concept* via a generic English word (a builder bullseye),
+  no proper-noun borrow. (Avoid Matrix proper nouns — Zion, Oracle, Morpheus — same risk as Smith.)
+- **The decouple play** (lowest risk, keeps the most fun): brand name original and ownable;
+  **"Smith" lives *inside* the product as the character/guide** — the agent that spawns agents,
+  the narrator. Homage in the *experience* is far safer than homage as the *trademark*.
+
 ---
 
 ## 5. Architecture — it's the same seam, one altitude up
@@ -162,6 +200,22 @@ The reason this is *expansion* and not *rewrite*: the existing spine generalizes
 - **The model gateway does not change.** It stays the single metered chokepoint; builders and
   agent-evals are new *consumers*, declaring accounting tags like everyone else. The accounting model
   (`account` vs `platform`) already covers "the user is building" vs "the platform is stress-testing."
+- **The output is a *composed agent*, and the substrate is still markdown + config.** This is the
+  feasibility crux. The current Claude platform already defines the exact artifacts we'd emit, so
+  none of this is invented: a **Claude Code subagent** *is* a markdown file (frontmatter
+  `name`/`description`/`tools`/`model` + a system-prompt body); an **Agent Skill** is a `SKILL.md`
+  folder that *attaches* to an agent (`skills: […]` — "acquiring skills" is literal); a **Managed
+  Agent** is a versioned config object (model + system + tools + MCP servers + skills + a
+  `multiagent` coordinator roster) that runs in an Anthropic-hosted container. So "markdown
+  describing a subagent" is a *real installable artifact*, not a hand-wave — and the domain claim
+  is carried by **composition** (Orchestrator + multiple skills + multiple subagents + tool/MCP
+  grants), not by generating compiled code. Declarative config *is* the durable substrate: portable,
+  reviewable, on-standard — the same thesis SkillSmith already sells. The "Smith spawning copies"
+  metaphor is literal here: a coordinator with a `{type: "self"}` roster entry.
+
+> **Don't ship a lone file and call it a factory.** A single subagent markdown is SkillSmith
+> with a relabel. The subagent builder's job is "build a subagent *and wire it into an agent's
+> roster*" — the composition is the product.
 
 New `ArtifactKind` members (`"agent" | "subagent" | "spawn-graph" | ...`) and new `Builder`/`Agent`
 domain modules; **no new architectural primitive.** That's the test of whether this concept is sound:
@@ -176,17 +230,22 @@ instruction-only on purpose: a skill carries no runnable code, so a "test run" i
 registry and there is **nothing to containerise** (`ARCHITECTURE.md §4`). That cleanliness ends at
 **deploy.** An *agent you can run* reintroduces a real runtime:
 
-| Target | What it is | New surface area |
-|---|---|---|
-| **Download** | The agent as a folder/archive (skills + subagent defs + manifest). Pure artifact — the natural extension of today's export. | Lowest risk; reuses the export renderer. |
-| **Install** | The same artifact, placed into a **host runtime the user controls** (their Claude Code, their machine). We hand over a package; they run it. | Packaging + an install manifest; *we* still run nothing. |
-| **Deploy** | A **managed container we run** that hosts the agent. | The big one: real execution, isolation, secrets, billing-by-runtime, the whole moderation/safety surface that `ARCHITECTURE.md §9.1` deferred — *amplified*, because now code actually runs. |
+These targets are **not speculative** — each maps to a shipping Claude runtime, which is what makes
+the "deploy to a managed container" line credible rather than aspirational:
+
+| Target | What it is | Concrete runtime | New surface area |
+|---|---|---|---|
+| **Download** | The agent as a folder/archive (skills + subagent defs + manifest). Pure artifact — the natural extension of today's export. | The standard skill folder + agent manifest (`.zip`) | Lowest risk; reuses the export renderer. |
+| **Install** | The same bundle, placed into a **host runtime the user controls**. We hand over a package; they run it. | A **Claude Code `.claude/`** bundle — markdown subagents + `SKILL.md` skills + settings — installed into *their* Claude Code / Agent SDK | Packaging + an install manifest; *we* still run nothing. |
+| **Deploy** | A **managed container we run** that hosts the agent. | A **Managed Agent** config (agent YAML + MCP/vault wiring, optional scheduled deployment) provisioned on Anthropic-hosted containers | The big one: real execution, isolation, secrets/vaults, billing-by-runtime, the whole moderation/safety surface that `ARCHITECTURE.md §9.1` deferred — *amplified*, because now the agent acts. |
 
 **Deploy is a one-way door** and should be the *last* phase, gated behind the safety work the Skill
-Tap design (`§9.1`) already sketched — but harder, because a deployed agent acts, not just advises.
-Download and install are reachable far sooner and deliver most of the "I can take my agent with me"
-value without standing up runtime infra. **Recommend: earn the agent-factory story on download/install
-first; treat managed deploy as a separate, safety-gated program.**
+Tap design (`§9.1`) already sketched — but harder, because a deployed agent acts, not just advises
+(secrets live in vaults, tools touch real systems). Download and install are reachable far sooner —
+the Claude Code bundle is a near-term extension of today's export — and deliver most of the "I can
+take my agent with me" value without standing up runtime infra. **Recommend: earn the agent-factory
+story on download/install (Claude Code bundle) first; treat Managed-Agents deploy as a separate,
+safety-gated program.**
 
 ---
 
@@ -196,10 +255,11 @@ Ordered so each phase ships value and de-risks the next. Nothing here is a commi
 shape of the bet.
 
 1. **Red/blue pill + rebrand.** Pure presentation: the pill entry screen, the red-pill theme variant
-   + digital-rain loader, and the **rename to AgentSmith** with the dynamic `AgentSmith|<Builder>`
-   wordmark (§4.1) — which on day one is just `AgentSmith|Skills` over the current product. Reuses the
-   existing two-theme machinery. *Lowest risk, highest visible signal — proves the brand direction
-   before any domain work.*
+   + a streaming-character loader (genre, *not* a Matrix-rain replica — §4.2), and the **rename**
+   (final mark per §4.2; clearance pass *before* this ships) with the dynamic `AgentSmith|<Builder>`
+   wordmark (§4.1) — day one just `…|Skills` over the current product. Reuses the existing two-theme
+   machinery. **IP guardrail: don't compound a character-evoking name with literal Matrix visuals
+   (§4.2).** *Lowest risk, highest visible signal — proves the brand direction before any domain work.*
 2. **Agent as a first-class artifact (analysis only).** The `Agent` module + composition model;
    Rendered/Source agent view + spawn-graph Visualise + agent export, all on the seam. No new
    runtime. *Proves the seam generalizes.*
@@ -215,6 +275,10 @@ shape of the bet.
 
 ## 8. Open questions
 
+- **Final product name** (§4.2) — `AgentSmithing` working candidate, but it needs a clearance search
+  + counsel, and the *decouple* option (clean brand, Smith as in-product character) is on the table.
+- **Which install target leads?** The Claude Code `.claude/` bundle (markdown subagents + skills) is
+  the near-term Install path; Managed-Agents deploy is the endgame (§6). Confirm install-first.
 - **Does an agent compose existing skills, or only freshly-built ones?** I.e. is there an "acquire
   from my skill library" path (pairs naturally with the deferred Skill Tap, §9.1)?
 - **How literal is "spawning"?** Is a subagent a real sub-loop the Orchestrator invokes at run time,
