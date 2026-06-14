@@ -32,6 +32,12 @@ export type AppConfig = {
   readonly providerRegistry: readonly ProviderProfile[];
   readonly serverKeys: Readonly<Record<ProviderId, { apiKey?: string; baseUrl?: string }>>;
   readonly defaultSelection: ModelSelection;
+  /**
+   * Admin allowlist for instance-wide surfaces (the model console). When auth is
+   * configured, only these identities may read or change the active selection /
+   * credentials; with no list set, the surface is locked (fail-safe).
+   */
+  readonly admin: { readonly userIds: readonly string[]; readonly emails: readonly string[] };
   readonly clerkConfigured: boolean;
   readonly clerkProPlanSlug: string;
   readonly flags: {
@@ -124,6 +130,10 @@ export function readConfig(): AppConfig {
     providerRegistry,
     serverKeys,
     defaultSelection: { providerId: modelProvider },
+    admin: {
+      userIds: parseList(process.env.SKILLBUILDER_ADMIN_USER_IDS),
+      emails: parseList(process.env.SKILLBUILDER_ADMIN_EMAILS).map((email) => email.toLowerCase()),
+    },
     clerkConfigured,
     clerkProPlanSlug: nonEmpty(process.env.SKILLBUILDER_PRO_PLAN_SLUG) ?? "pro",
     flags: {
@@ -153,4 +163,12 @@ function readModelProvider(params: {
 
 function nonEmpty(value: string | undefined): string | undefined {
   return value && value.trim().length > 0 ? value : undefined;
+}
+
+/** Split a comma-separated env value into trimmed, non-empty entries. */
+function parseList(value: string | undefined): string[] {
+  return (value ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
 }

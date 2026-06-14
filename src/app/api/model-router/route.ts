@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getContainer } from "@/server/container";
+import { isAdmin } from "@/modules/auth";
 import { isErr, type Result, type DomainError } from "@/shared";
 import type { ModelSelection, RouterSnapshot } from "@/modules/model-router";
 import { domainErrorResponse } from "../_shared/skill-request";
@@ -13,8 +14,11 @@ export const runtime = "nodejs";
  * runtime (ARCHITECTURE §4 routing). Mutations route through the model router;
  * keys are accepted but never echoed back (the snapshot is secret-free).
  *
- * Auth-gated like the other mutating routes: only a signed-in user may read or
- * change the selection. The selection is process-global in v1.
+ * The selection + credentials apply to the whole running instance, so this is an
+ * admin surface: when auth is configured, only an admin (config allowlist) may
+ * read or change it — a plain signed-in user gets 403. With no auth configured
+ * (single-tenant dev box) it is open. No allowlist in a deployed environment
+ * means it is locked (fail-safe), not open to everyone.
  */
 
 const modelIdsSchema = z
@@ -48,14 +52,14 @@ const commandSchema = z.discriminatedUnion("action", [
 
 export async function GET(): Promise<Response> {
   const container = getContainer();
-  const gate = await requireUser();
+  const gate = await requireAdmin();
   if (gate) return gate;
   return Response.json(container.modelRouter.snapshot());
 }
 
 export async function POST(request: Request): Promise<Response> {
   const container = getContainer();
-  const gate = await requireUser();
+  const gate = await requireAdmin();
   if (gate) return gate;
 
   const body = await parseJsonRequest(request);
@@ -85,12 +89,22 @@ export async function POST(request: Request): Promise<Response> {
   return Response.json(result.value);
 }
 
-/** 401 unless a user is signed in; null when the caller may proceed. */
-async function requireUser(): Promise<Response | null> {
-  const identity = await getContainer().auth.currentIdentity();
+/**
+ * Authorize an admin caller; null when they may proceed. 401 signed-out, 403 a
+ * non-admin while auth is configured. Open on a no-auth dev box; locked when auth
+ * is on but no admin allowlist is set (fail-safe).
+ */
+async function requireAdmin(): Promise<Response | null> {
+  const container = getContainer();
+  const identity = await container.auth.currentIdentity();
   if (!identity.ok) return domainErrorResponse(identity.error);
   if (identity.value === null) {
     return Response.json({ error: "Sign in to manage models." }, { status: 401 });
   }
-  return null;
+  if (!container.config.flags.hasAuth) return null;
+  if (isAdmin(identity.value, container.config.admin)) return null;
+  return Response.json(
+    { error: "Model settings are restricted to administrators." },
+    { status: 403 },
+  );
 }

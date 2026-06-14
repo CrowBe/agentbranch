@@ -198,9 +198,12 @@ placeholder):**
 - `app/api/build/route.ts` — auth → stream; the **model gateway** gates the
   `build` cap and resolves the model through the router (the route never touches
   the raw model or keys).
-- `app/api/model-router/route.ts` — auth-gated; GET the secret-free router
-  snapshot, POST to switch the active provider/model or store/clear a
-  bring-your-own key. Drives the **model console**.
+- `app/api/model-router/route.ts` — **admin-gated** (the selection is
+  instance-wide): GET the secret-free router snapshot, POST to switch the active
+  provider/model or store/clear a bring-your-own key. With Clerk auth on, only an
+  admin (`config.admin` allowlist, via `isAdmin`) passes — others get 403; with
+  auth off it is open (dev); an empty allowlist locks it (fail-safe). Drives the
+  **model console**.
 - `app/layout.tsx` — next/font + conditional `ClerkProvider`; `globals.css`
   holds the DESIGN tokens as CSS variables; `proxy.ts` is Clerk/passthrough.
 - `components/` — `app-shell`, `top-bar`, `side-rail`, `hero-panel`,

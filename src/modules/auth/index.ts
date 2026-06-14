@@ -5,3 +5,4 @@
  * The port keeps the rest of the app independent of Clerk.
  */
 export type { AuthIdentity, AuthPort } from "./auth.types";
+export { isAdmin, type AdminPolicy } from "./admin";
