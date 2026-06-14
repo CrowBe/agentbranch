@@ -184,13 +184,16 @@ export function AppShell({
     setCapability(null);
     setActiveTool(null);
     setStatus("Importing...");
-    setEntries([entry("Importing pasted SKILL.md.", "muted")]);
+    const isUrlImport = isGithubUrl(raw);
+    setEntries([entry(isUrlImport ? "Importing GitHub SKILL.md." : "Importing pasted SKILL.md.", "muted")]);
 
     try {
       const res = await fetch("/api/import", {
         method: "POST",
-        headers: { "Content-Type": "text/markdown; charset=utf-8" },
-        body: raw,
+        headers: isUrlImport
+          ? { "Content-Type": "application/json" }
+          : { "Content-Type": "text/markdown; charset=utf-8" },
+        body: isUrlImport ? JSON.stringify({ url: raw }) : raw,
       });
       const body = (await res.json().catch(() => null)) as unknown;
       if (!res.ok) {
@@ -368,6 +371,18 @@ function friendlyError(message: string): string {
   if (message.includes("cap_reached")) return "Out of free usage today.";
   if (message.includes("model_unavailable")) return "No model is configured.";
   return message;
+}
+
+function isGithubUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && (
+      url.hostname === "github.com" ||
+      url.hostname === "raw.githubusercontent.com"
+    );
+  } catch {
+    return false;
+  }
 }
 
 function apiPath(action: ToolAction): string {

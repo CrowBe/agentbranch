@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ok, SkillId, UserId } from "@/shared";
+import { err, ok, SkillId, UserId } from "@/shared";
 import { makeSkill } from "@/modules/skill";
 import { POST } from "./route";
 
@@ -8,6 +8,7 @@ const createSkill = vi.fn();
 const listSkills = vi.fn();
 const consumeRateLimit = vi.fn();
 const tierFor = vi.fn();
+const fetchSkillMd = vi.fn();
 
 vi.mock("@/server/container", () => ({
   getContainer: () => ({
@@ -15,6 +16,7 @@ vi.mock("@/server/container", () => ({
     skills: { create: createSkill, listByUser: listSkills },
     requestRateLimiter: { consume: consumeRateLimit },
     tierFor,
+    skillImportFetcher: { fetchSkillMd },
   }),
 }));
 
@@ -25,9 +27,66 @@ describe("POST /api/import", () => {
     listSkills.mockReset();
     consumeRateLimit.mockReset();
     tierFor.mockReset();
+    fetchSkillMd.mockReset();
     listSkills.mockResolvedValue(ok([]));
     consumeRateLimit.mockResolvedValue(ok({ allowed: true }));
     tierFor.mockResolvedValue("free");
+  });
+
+  it("fetches and persists a public GitHub SKILL.md URL", async () => {
+    currentIdentity.mockResolvedValue(ok({ userId: UserId("user-1"), email: "u@example.test" }));
+    fetchSkillMd.mockResolvedValue(ok(
+      "---\nname: inbox-triage\ndescription: Sort unread mail into buckets.\n---\n# Steps\nRead mail.",
+    ));
+    createSkill.mockImplementation(async ({ userId, source }) =>
+      ok(makeSkill({
+        id: SkillId("skill-1"),
+        userId,
+        source,
+        createdAt: new Date(0),
+        updatedAt: new Date(0),
+      })),
+    );
+
+    const response = await POST(new Request("https://example.test/api/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url: "https://github.com/acme/skills/tree/main/inbox" }),
+    }));
+
+    expect(response.status).toBe(200);
+    expect(fetchSkillMd).toHaveBeenCalledWith("https://github.com/acme/skills/tree/main/inbox");
+    expect(createSkill).toHaveBeenCalledWith({
+      userId: "user-1",
+      source: {
+        frontmatter: {
+          name: "inbox-triage",
+          description: "Sort unread mail into buckets.",
+          extra: {},
+        },
+        body: "# Steps\nRead mail.",
+      },
+    });
+  });
+
+  it("returns a friendly GitHub URL fetch error without persisting", async () => {
+    currentIdentity.mockResolvedValue(ok({ userId: UserId("user-1"), email: "u@example.test" }));
+    fetchSkillMd.mockResolvedValue(err({
+      kind: "invalid_url",
+      message: "Import from GitHub URLs only: github.com or raw.githubusercontent.com.",
+    }));
+
+    const response = await POST(new Request("https://example.test/api/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ url: "https://example.test/SKILL.md" }),
+    }));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Import from GitHub URLs only: github.com or raw.githubusercontent.com.",
+    });
+    expect(createSkill).not.toHaveBeenCalled();
   });
 
   it("parses and persists a pasted SKILL.md for the current user", async () => {

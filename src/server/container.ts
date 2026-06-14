@@ -6,6 +6,7 @@ import type { EvalRunRepository } from "@/modules/triggering-eval";
 import type { AuthPort } from "@/modules/auth";
 import type { ModelGateway } from "@/modules/model-gateway";
 import type { ModelRouter } from "@/modules/model-router";
+import type { SkillImportFetcher } from "@/modules/skill-import";
 
 import { readConfig, type AppConfig } from "./config";
 import { createMemorySkillRepository } from "@/infra/memory/skill.memory-repository";
@@ -25,6 +26,7 @@ import { createModelGateway } from "@/infra/ai/model-gateway";
 import { createClerkAuth } from "@/infra/clerk/clerk-auth";
 import { createStubAuth } from "@/infra/clerk/stub-auth";
 import { createClerkTierResolver } from "@/infra/clerk/tier-resolver";
+import { createGithubSkillImportFetcher } from "@/infra/github/skill-import-fetcher";
 
 /**
  * The composition root. The one place ports meet adapters; everything else
@@ -46,6 +48,7 @@ export type AppContainer = {
   readonly tierFor: (userId: import("@/shared").UserId) => Promise<Tier>;
   readonly testRuns: TestRunRepository;
   readonly evalRuns: EvalRunRepository;
+  readonly skillImportFetcher: SkillImportFetcher;
 };
 
 let cached: AppContainer | null = null;
@@ -97,6 +100,7 @@ export function getContainer(): AppContainer {
     tierFor: tierFor ?? (async () => "free" as Tier),
     testRuns: prisma ? createPrismaTestRunRepository(prisma) : createMemoryTestRunRepository(),
     evalRuns: prisma ? createPrismaEvalRunRepository(prisma) : createMemoryEvalRunRepository(),
+    skillImportFetcher: createGithubSkillImportFetcher(),
   };
   return cached;
 }

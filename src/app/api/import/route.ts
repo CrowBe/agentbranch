@@ -5,7 +5,7 @@ import { createHeroArtifact, renderedRenderer, sourceRenderer } from "@/modules/
 import { createLintReport, lintBreakdownRenderer, lintInsightsRenderer } from "@/modules/lint";
 import { isErr } from "@/shared";
 import { domainErrorResponse } from "../_shared/skill-request";
-import { invalidRequestResponse, parseTextRequest } from "../_shared/request-body";
+import { invalidRequestResponse, parseJsonRequest, parseTextRequest } from "../_shared/request-body";
 
 export const runtime = "nodejs";
 
@@ -28,7 +28,7 @@ export async function POST(request: Request): Promise<Response> {
     return domainErrorResponse({ tag: "cap_reached", message: rate.value.reason });
   }
 
-  const body = await parseTextRequest(request);
+  const body = await importSource(request, container.skillImportFetcher);
   if (!body.ok) return body.response;
 
   const parsed = parseSkillMd(body.value);
@@ -67,4 +67,34 @@ export async function POST(request: Request): Promise<Response> {
       breakdown: lintBreakdownRenderer.render(lint),
     },
   });
+}
+
+async function importSource(
+  request: Request,
+  fetcher: import("@/modules/skill-import").SkillImportFetcher,
+): Promise<import("../_shared/request-body").TextRequestResult> {
+  if (request.headers.get("content-type")?.includes("application/json")) {
+    const body = await parseJsonRequest(request);
+    if (!body.ok) return body;
+    if (!isUrlImportRequest(body.value)) {
+      return { ok: false, response: invalidRequestResponse("Send a GitHub URL to import.") };
+    }
+
+    const fetched = await fetcher.fetchSkillMd(body.value.url);
+    return fetched.ok
+      ? { ok: true, value: fetched.value }
+      : { ok: false, response: invalidRequestResponse(fetched.error.message) };
+  }
+
+  return parseTextRequest(request);
+}
+
+function isUrlImportRequest(value: unknown): value is { readonly url: string } {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "url" in value &&
+    typeof value.url === "string" &&
+    value.url.trim().length > 0
+  );
 }

@@ -45,8 +45,8 @@ export function InteractionPanel({
     mode === "import"
       ? {
           title: "Import a skill",
-          empty: "Paste a SKILL.md document to add it to your workspace.",
-          placeholder: "---\nname: inbox-triage\ndescription: Sort unread email.\n---\n# Steps",
+          empty: "Paste a SKILL.md document or a public GitHub URL to add it to your workspace.",
+          placeholder: "https://github.com/acme/skills/tree/main/inbox\n\n---\nname: inbox-triage\ndescription: Sort unread email.\n---",
           button: "Import skill",
           busy: "Importing...",
         }
