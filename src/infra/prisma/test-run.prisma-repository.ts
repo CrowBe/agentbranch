@@ -70,10 +70,10 @@ export function createPrismaTestRunRepository(prisma: PrismaClient): TestRunRepo
       }
     },
 
-    async listBySkill(skillId) {
+    async listBySkill(skillId, userId) {
       try {
         const rows = await prisma.testRun.findMany({
-          where: { skillId },
+          where: { skillId, userId },
           orderBy: { createdAt: "desc" },
         });
         return ok(rows.map((row) => toTestRun(row as TestRunRow)));

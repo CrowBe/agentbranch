@@ -7,6 +7,7 @@
  */
 export type {
   Skill,
+  SkillVersion,
   SkillSource,
   Frontmatter,
   SkillError,

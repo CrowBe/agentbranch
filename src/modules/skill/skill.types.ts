@@ -36,6 +36,14 @@ export type Skill = {
   readonly updatedAt: Date;
 };
 
+export type SkillVersion = {
+  readonly id: SkillVersionId;
+  readonly skillId: SkillId;
+  readonly revision: number;
+  readonly source: SkillSource;
+  readonly createdAt: Date;
+};
+
 /** Failure modes when reading or validating a SKILL.md. */
 export type SkillError =
   | { readonly tag: "invalid_frontmatter"; readonly message: string }

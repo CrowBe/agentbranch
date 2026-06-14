@@ -7,6 +7,8 @@ export type InteractionEntry = {
   readonly id: string;
   readonly label: string;
   readonly tone?: "muted" | "error";
+  readonly actionLabel?: string;
+  readonly onAction?: () => void;
 };
 
 /**
@@ -23,7 +25,7 @@ export function InteractionPanel({
 }: {
   entries: readonly InteractionEntry[];
   busy?: boolean;
-  mode?: "build" | "import";
+  mode?: "build" | "import" | "skills" | "history";
   onSend: (message: string) => void;
   onImport?: (raw: string) => void;
 }) {
@@ -41,23 +43,8 @@ export function InteractionPanel({
     setValue("");
   };
 
-  const copy =
-    mode === "import"
-      ? {
-          title: "Import a skill",
-          empty: "Paste a SKILL.md document or a public GitHub URL to add it to your workspace.",
-          placeholder: "https://github.com/acme/skills/tree/main/inbox\n\n---\nname: inbox-triage\ndescription: Sort unread email.\n---",
-          button: "Import skill",
-          busy: "Importing...",
-        }
-      : {
-          title: "Describe your skill",
-          empty:
-            "Tell SkillSmith what you want the skill to do — it writes it live in the document beside you.",
-          placeholder: "e.g. Sort my inbox into respond, archive, escalate",
-          button: "Build skill",
-          busy: "Building...",
-        };
+  const copy = copyForMode(mode);
+  const acceptsInput = mode === "build" || mode === "import";
 
   return (
     <aside
@@ -72,38 +59,87 @@ export function InteractionPanel({
         {entries.length === 0 ? (
           <p className="text-on-surface-variant">{copy.empty}</p>
         ) : (
-          entries.map((entry) => (
-            <p
-              key={entry.id}
-              className={
-                entry.tone === "error"
-                  ? "text-error"
-                  : entry.tone === "muted"
-                    ? "text-on-surface-variant"
-                    : "text-on-surface"
-              }
-            >
-              {entry.label}
-            </p>
-          ))
+          entries.map((entry) => <InteractionEntryView key={entry.id} entry={entry} />)
         )}
       </div>
 
-      <div className="flex flex-col gap-2 border-t border-outline-variant p-3">
-        <textarea
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
-          }}
-          rows={3}
-          placeholder={copy.placeholder}
-          className="resize-none rounded-[var(--radius-sm)] border border-outline-variant bg-surface px-3 py-2 text-doc-rendered outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
-        />
-        <Button onClick={submit} variant="primary" disabled={busy}>
-          {busy ? copy.busy : copy.button}
-        </Button>
-      </div>
+      {acceptsInput && (
+        <div className="flex flex-col gap-2 border-t border-outline-variant p-3">
+          <textarea
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
+            }}
+            rows={3}
+            placeholder={copy.placeholder}
+            className="resize-none rounded-[var(--radius-sm)] border border-outline-variant bg-surface px-3 py-2 text-doc-rendered outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
+          />
+          <Button onClick={submit} variant="primary" disabled={busy}>
+            {busy ? copy.busy : copy.button}
+          </Button>
+        </div>
+      )}
     </aside>
   );
+}
+
+function InteractionEntryView({ entry }: { entry: InteractionEntry }) {
+  const className =
+    entry.tone === "error"
+      ? "text-error"
+      : entry.tone === "muted"
+        ? "text-on-surface-variant"
+        : "text-on-surface";
+
+  if (entry.onAction) {
+    return (
+      <div className="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-outline-variant p-3">
+        <p className={className}>{entry.label}</p>
+        <Button onClick={entry.onAction} variant="secondary">
+          {entry.actionLabel ?? "Open"}
+        </Button>
+      </div>
+    );
+  }
+
+  return <p className={className}>{entry.label}</p>;
+}
+
+function copyForMode(mode: "build" | "import" | "skills" | "history") {
+  if (mode === "import") {
+    return {
+      title: "Import a skill",
+      empty: "Paste a SKILL.md document or a public GitHub URL to add it to your workspace.",
+      placeholder: "https://github.com/acme/skills/tree/main/inbox\n\n---\nname: inbox-triage\ndescription: Sort unread email.\n---",
+      button: "Import skill",
+      busy: "Importing...",
+    };
+  }
+  if (mode === "skills") {
+    return {
+      title: "My skills",
+      empty: "No saved skills yet.",
+      placeholder: "",
+      button: "",
+      busy: "",
+    };
+  }
+  if (mode === "history") {
+    return {
+      title: "History",
+      empty: "No saved runs yet.",
+      placeholder: "",
+      button: "",
+      busy: "",
+    };
+  }
+  return {
+    title: "Describe your skill",
+    empty:
+      "Tell SkillSmith what you want the skill to do — it writes it live in the document beside you.",
+    placeholder: "e.g. Sort my inbox into respond, archive, escalate",
+    button: "Build skill",
+    busy: "Building...",
+  };
 }
