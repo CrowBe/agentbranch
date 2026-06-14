@@ -14,6 +14,7 @@ import {
 import { applySkillEdit, type SkillSource } from "@/modules/skill";
 import { TopBar } from "./top-bar";
 import { SideRail } from "./side-rail";
+import { ModelConsole } from "./model-console";
 import {
   HeroPanel,
   type CapabilityPanel,
@@ -40,6 +41,7 @@ export function AppShell({
   initialSkill: SkillSource;
 }) {
   const [menuExpanded, setMenuExpanded] = useState(false);
+  const [consoleOpen, setConsoleOpen] = useState(false);
   const [view, setView] = useState<HeroView>("rendered");
   const [status, setStatus] = useState<string | null>(null);
   const [heroDocs, setHeroDocs] = useState({ rendered, source });
@@ -144,6 +146,7 @@ export function AppShell({
             setEntries([]);
             setStatus(null);
           }}
+          onModels={() => setConsoleOpen(true)}
         />
         <main className="min-w-0 flex-1 overflow-hidden">
           <HeroPanel
@@ -171,6 +174,7 @@ export function AppShell({
           onImport={handleImport}
         />
       </div>
+      {consoleOpen && <ModelConsole onClose={() => setConsoleOpen(false)} />}
     </div>
   );
 

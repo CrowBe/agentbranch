@@ -9,14 +9,17 @@ const NAV = [
   { key: "skills", label: "My skills", icon: "▤", active: false },
   { key: "history", label: "History", icon: "↻", active: false },
   { key: "templates", label: "Templates", icon: "◳", active: false },
+  { key: "models", label: "Models", icon: "◈", active: false },
 ] as const;
 
 export function SideRail({
   expanded,
   onImport,
+  onModels,
 }: {
   expanded: boolean;
   onImport?: () => void;
+  onModels?: () => void;
 }) {
   return (
     <nav
@@ -29,7 +32,9 @@ export function SideRail({
             <button
               type="button"
               aria-label={expanded ? undefined : item.label}
-              onClick={item.key === "import" ? onImport : undefined}
+              onClick={
+                item.key === "import" ? onImport : item.key === "models" ? onModels : undefined
+              }
               className={`flex w-full items-center gap-3 rounded-[var(--radius-md)] px-2.5 py-2 text-left ${
                 item.active
                   ? "bg-primary/10 text-primary"

@@ -25,6 +25,7 @@ import type {
   AgentStep,
   AgentStreamPart,
 } from "@/modules/model-gateway";
+import type { ModelRouter } from "@/modules/model-router";
 import {
   ok,
   err,
@@ -51,6 +52,13 @@ const SONNET_EFFORT = {
   medium: { providerOptions: { anthropic: { effort: "medium" } } },
 } as const;
 
+type EffortPair = typeof SONNET_EFFORT;
+
+/** Anthropic's effort knob applies only to Sonnet-routed primitives. */
+function effortFor(isAnthropic: boolean, modelId: string | undefined): EffortPair | null {
+  return isAnthropic && modelId?.toLowerCase().includes("sonnet") ? SONNET_EFFORT : null;
+}
+
 const PROVIDER_CAP_REACHED_MESSAGE = "cap_reached: Out of free usage today.";
 
 /**
@@ -65,7 +73,13 @@ const PROVIDER_CAP_REACHED_MESSAGE = "cap_reached: Out of free usage today.";
  * carried and otherwise no-op.
  */
 export function createModelGateway(deps: {
-  provider: ModelProvider;
+  /**
+   * Provider/model selection. A `router` resolves the model per call (runtime
+   * provider switching, ARCHITECTURE §4 routing); a static `provider` is the
+   * direct path (used by tests). Exactly one is expected — `router` wins.
+   */
+  router?: ModelRouter;
+  provider?: ModelProvider;
   usage: UsageRepository;
   providerKind?: GatewayModelProviderKind;
   modelId?: string;
@@ -74,28 +88,50 @@ export function createModelGateway(deps: {
   requestRateLimiter?: RequestRateLimiter;
   requestRateLimit?: RateLimitPolicy;
 }): ModelGateway {
-  const { provider, usage } = deps;
+  const { router, provider, usage } = deps;
   const tierFor = deps.tierFor ?? (async () => "free" as Tier);
   const requestRateLimit = deps.requestRateLimit ?? REQUEST_RATE_LIMIT;
-  const sonnetEffort =
-    deps.providerKind === "anthropic" && deps.modelId?.toLowerCase().includes("sonnet")
-      ? SONNET_EFFORT
-      : null;
+
+  /** The admitted model plus the (per-call) effort options it routes to. */
+  type Admitted = { readonly model: LanguageModel; readonly effort: EffortPair | null };
+
+  /**
+   * Resolve the model for a primitive — through the router (runtime selection)
+   * when present, else the static provider. Carries enough to decide effort
+   * (Anthropic + Sonnet) per call, since the route can change at runtime.
+   */
+  function resolveModel(
+    primitive: ModelGatewayPrimitive,
+  ): Result<{ model: LanguageModel; isAnthropic: boolean; modelId: string | undefined }, DomainError> {
+    if (router) {
+      const resolved = router.resolve(primitive);
+      if (isErr(resolved)) return resolved;
+      return ok({
+        model: resolved.value.model,
+        isAnthropic: resolved.value.kind === "anthropic",
+        modelId: resolved.value.modelId,
+      });
+    }
+    const model = provider?.models?.[primitive] ?? provider?.model ?? null;
+    if (!model) {
+      return err(domainError("model_unavailable", "No model is configured."));
+    }
+    return ok({ model, isAnthropic: deps.providerKind === "anthropic", modelId: deps.modelId });
+  }
 
   /**
    * Gate an `account` call against tier caps before spending. `platform` calls
-   * skip the cap (the platform owns that cost). Returns the model to use, or a
-   * DomainError (`model_unavailable` / `cap_reached`).
+   * skip the cap (the platform owns that cost). Returns the model to use (and its
+   * effort options), or a DomainError (`model_unavailable` / `cap_reached`).
    */
   async function admit(
     tag: AccountingTag,
     primitive: ModelGatewayPrimitive,
     inputBytes: number,
-  ): Promise<Result<LanguageModel, DomainError>> {
-    const model = provider.models?.[primitive] ?? provider.model;
-    if (!model) {
-      return err(domainError("model_unavailable", "No model is configured."));
-    }
+  ): Promise<Result<Admitted, DomainError>> {
+    const resolved = resolveModel(primitive);
+    if (isErr(resolved)) return resolved;
+    const { model } = resolved.value;
     if (inputBytes > REQUEST_BYTES_MAX) {
       return err(domainError("input_too_large", LIMIT_MESSAGES.requestBytes));
     }
@@ -123,7 +159,7 @@ export function createModelGateway(deps: {
         }
       }
     }
-    return ok(model);
+    return ok({ model, effort: effortFor(resolved.value.isAnthropic, resolved.value.modelId) });
   }
 
   /** Record a turn's token cost. `account` → usage stream; `platform`/paid → deferred no-op. */
@@ -136,7 +172,7 @@ export function createModelGateway(deps: {
 
   return {
     get hasModel() {
-      return provider.model !== null;
+      return router ? router.hasModel() : provider?.model != null;
     },
 
     async classify(input: ClassifyInput): Promise<Result<Classification, DomainError>> {
@@ -145,7 +181,7 @@ export function createModelGateway(deps: {
 
       try {
         const { object, usage: u } = await generateObject({
-          model: admitted.value,
+          model: admitted.value.model,
           maxOutputTokens: OUTPUT_LIMITS.classify,
           schema: z.object({
             choice: z
@@ -177,9 +213,9 @@ export function createModelGateway(deps: {
 
       try {
         const result = await generateText({
-          model: admitted.value,
+          model: admitted.value.model,
           maxOutputTokens: OUTPUT_LIMITS.runAgent,
-          ...sonnetEffort?.medium,
+          ...admitted.value.effort?.medium,
           system: input.system,
           messages: input.messages.map((m) => ({ role: m.role, content: m.content })),
           tools: toSdkTools(input.tools),
@@ -203,7 +239,7 @@ export function createModelGateway(deps: {
         modelInputBytes([input.system, ...input.messages.map((m) => m.content)]),
       );
       if (isErr(admitted)) return admitted;
-      const model = admitted.value;
+      const model = admitted.value.model;
       const { tag } = input;
 
       async function* stream(): AsyncGenerator<AgentStreamPart> {
@@ -287,9 +323,9 @@ export function createModelGateway(deps: {
 
       try {
         const { object, usage: u } = await generateObject({
-          model: admitted.value,
+          model: admitted.value.model,
           maxOutputTokens: OUTPUT_LIMITS.generate,
-          ...sonnetEffort?.low,
+          ...admitted.value.effort?.low,
           schema: input.schema,
           system: input.system,
           prompt: input.prompt,
