@@ -1,16 +1,9 @@
 import { parseSkillMd } from "@/modules/skill";
-import type { ModelGateway } from "@/modules/model-gateway";
+import type { GatewayMessage, ModelGateway } from "@/modules/model-gateway";
 import { isErr, type UserId } from "@/shared";
 import { buildTools } from "./tools";
+import { BUILD_LOOP_SYSTEM_PROMPT } from "./system-prompt";
 import type { BuildLoopInput, BuildLoopEvent } from "./build-loop.types";
-
-const SYSTEM_PROMPT = `You are SkillSmith's authoring agent. You help a user
-craft a single Claude Skill — an instruction-only SKILL.md (YAML frontmatter
-with name + description, then a markdown body). On a first draft call
-write_skill with the complete document. On revisions call edit_skill with an
-exact string replacement. Keep skills focused, with clear triggers and any
-constraints stated plainly. Never include runnable code — skills are
-instructions only.`;
 
 /**
  * Run the build loop and stream typed events.
@@ -31,8 +24,8 @@ export async function* runBuildLoop(
   userId: UserId,
 ): AsyncGenerator<BuildLoopEvent> {
   const opened = await gateway.streamAgent({
-    system: SYSTEM_PROMPT,
-    messages: input.messages.map((m) => ({ role: m.role, content: m.content })),
+    system: BUILD_LOOP_SYSTEM_PROMPT,
+    messages: withLatestMessageCacheControl(input.messages),
     tools: buildTools,
     // The build loop spends a user's allowance under the `build` capability; the
     // gateway clears it against the tier cap before any part streams.
@@ -63,6 +56,17 @@ export async function* runBuildLoop(
         break;
     }
   }
+}
+
+function withLatestMessageCacheControl(
+  messages: BuildLoopInput["messages"],
+): readonly GatewayMessage[] {
+  const lastIndex = messages.length - 1;
+  return messages.map((message, index) => ({
+    role: message.role,
+    content: message.content,
+    ...(index === lastIndex ? { cacheControl: { type: "ephemeral" } as const } : {}),
+  }));
 }
 
 /** Translate a tool's output into preview events (skill replace / patch). */

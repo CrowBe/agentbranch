@@ -73,14 +73,32 @@ export type ClassifyInput = {
 };
 
 export type RunAgentInput = {
-  readonly system: string;
-  readonly messages: readonly { readonly role: "user" | "assistant"; readonly content: string }[];
+  readonly system: GatewaySystemPrompt;
+  readonly messages: readonly GatewayMessage[];
   readonly tools: readonly GatewayTool[];
   readonly tag: AccountingTag;
 };
 
 /** Input to `streamAgent` — same shape as a one-shot agent turn, streamed. */
 export type StreamAgentInput = RunAgentInput;
+
+export type GatewaySystemPrompt =
+  | string
+  | {
+      readonly content: string;
+      readonly cacheControl?: GatewayCacheControl;
+    };
+
+export type GatewayMessage = {
+  readonly role: "user" | "assistant";
+  readonly content: string;
+  readonly cacheControl?: GatewayCacheControl;
+};
+
+export type GatewayCacheControl = {
+  readonly type: "ephemeral";
+  readonly ttl?: "5m" | "1h";
+};
 
 export type GenerateInput<T> = {
   readonly system: string;
