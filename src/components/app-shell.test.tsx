@@ -76,6 +76,51 @@ describe("AppShell capability chips", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Import complete.");
   });
 
+  it("imports a public GitHub skill URL", async () => {
+    const importedSkill: SkillSource = {
+      frontmatter: {
+        name: "repo-summarizer",
+        description: "Summarize repository changes from GitHub.",
+        extra: {},
+      },
+      body: "# Steps\n\nRead the repository.",
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({
+        skill: { id: "skill-1", source: importedSkill, latestRevision: 1 },
+        rendered: {
+          title: "repo-summarizer",
+          description: "Summarize repository changes from GitHub.",
+          sections: [],
+        },
+        source: {
+          markdown:
+            "---\nname: repo-summarizer\ndescription: Summarize repository changes from GitHub.\n---\n# Steps\n\nRead the repository.",
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AppShell rendered={rendered} source={source} initialSkill={skill} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Import" }));
+    await userEvent.type(
+      screen.getByRole("textbox"),
+      "https://github.com/acme/skills/tree/main/repo-summarizer",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Import skill" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: "https://github.com/acme/skills/tree/main/repo-summarizer" }),
+      });
+    });
+    expect(await screen.findByText("repo-summarizer")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Import complete.");
+  });
+
   it("calls the visualise route with the current skill and renders the result", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       Response.json({
