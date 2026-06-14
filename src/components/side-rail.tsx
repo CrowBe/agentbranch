@@ -4,19 +4,32 @@
  * 240px labelled slideout on demand (DESIGN §3.4).
  */
 const NAV = [
-  { key: "build", label: "Build", icon: "✶", active: true },
-  { key: "import", label: "Import", icon: "⇪", active: false },
-  { key: "skills", label: "My skills", icon: "▤", active: false },
-  { key: "history", label: "History", icon: "↻", active: false },
-  { key: "templates", label: "Templates", icon: "◳", active: false },
+  { key: "build", label: "Build", icon: "✶" },
+  { key: "import", label: "Import", icon: "⇪" },
+  { key: "skills", label: "My skills", icon: "▤" },
+  { key: "history", label: "History", icon: "↻" },
+  { key: "templates", label: "Templates", icon: "◳" },
+  { key: "models", label: "Models", icon: "◈" },
 ] as const;
+
+export type SideRailView = (typeof NAV)[number]["key"];
 
 export function SideRail({
   expanded,
+  active = "build",
+  onBuild,
   onImport,
+  onSkills,
+  onHistory,
+  onModels,
 }: {
   expanded: boolean;
+  active?: SideRailView;
+  onBuild?: () => void;
   onImport?: () => void;
+  onSkills?: () => void;
+  onHistory?: () => void;
+  onModels?: () => void;
 }) {
   return (
     <nav
@@ -29,9 +42,9 @@ export function SideRail({
             <button
               type="button"
               aria-label={expanded ? undefined : item.label}
-              onClick={item.key === "import" ? onImport : undefined}
+              onClick={handlerFor(item.key, { onBuild, onImport, onSkills, onHistory, onModels })}
               className={`flex w-full items-center gap-3 rounded-[var(--radius-md)] px-2.5 py-2 text-left ${
-                item.active
+                item.key === active
                   ? "bg-primary/10 text-primary"
                   : "text-on-surface-variant hover:bg-surface-high"
               }`}
@@ -59,4 +72,22 @@ export function SideRail({
       </div>
     </nav>
   );
+}
+
+function handlerFor(
+  key: SideRailView,
+  handlers: {
+    readonly onBuild?: () => void;
+    readonly onImport?: () => void;
+    readonly onSkills?: () => void;
+    readonly onHistory?: () => void;
+    readonly onModels?: () => void;
+  },
+) {
+  if (key === "build") return handlers.onBuild;
+  if (key === "import") return handlers.onImport;
+  if (key === "skills") return handlers.onSkills;
+  if (key === "history") return handlers.onHistory;
+  if (key === "models") return handlers.onModels;
+  return undefined;
 }

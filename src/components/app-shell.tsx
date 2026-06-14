@@ -13,7 +13,8 @@ import {
 } from "@/modules/hero";
 import { applySkillEdit, type SkillSource } from "@/modules/skill";
 import { TopBar } from "./top-bar";
-import { SideRail } from "./side-rail";
+import { SideRail, type SideRailView } from "./side-rail";
+import { ModelConsole } from "./model-console";
 import {
   HeroPanel,
   type CapabilityPanel,
@@ -40,6 +41,7 @@ export function AppShell({
   initialSkill: SkillSource;
 }) {
   const [menuExpanded, setMenuExpanded] = useState(false);
+  const [consoleOpen, setConsoleOpen] = useState(false);
   const [view, setView] = useState<HeroView>("rendered");
   const [status, setStatus] = useState<string | null>(null);
   const [heroDocs, setHeroDocs] = useState({ rendered, source });
@@ -47,7 +49,7 @@ export function AppShell({
   const [currentSkillId, setCurrentSkillId] = useState<string | null>(null);
   const [messages, setMessages] = useState<BuildMessage[]>([]);
   const [entries, setEntries] = useState<InteractionEntry[]>([]);
-  const [interactionMode, setInteractionMode] = useState<"build" | "import">("build");
+  const [interactionMode, setInteractionMode] = useState<"build" | "import" | "skills" | "history">("build");
   const [busy, setBusy] = useState(false);
   const [toolBusy, setToolBusy] = useState(false);
   const [activeTool, setActiveTool] = useState<ToolAction | null>(null);
@@ -139,11 +141,20 @@ export function AppShell({
       <div className="flex min-h-0 flex-1">
         <SideRail
           expanded={menuExpanded}
+          active={activeRailView(interactionMode)}
+          onBuild={() => {
+            setInteractionMode("build");
+            setEntries([]);
+            setStatus(null);
+          }}
           onImport={() => {
             setInteractionMode("import");
             setEntries([]);
             setStatus(null);
           }}
+          onModels={() => setConsoleOpen(true)}
+          onSkills={handleSkills}
+          onHistory={handleHistory}
         />
         <main className="min-w-0 flex-1 overflow-hidden">
           <HeroPanel
@@ -171,6 +182,7 @@ export function AppShell({
           onImport={handleImport}
         />
       </div>
+      {consoleOpen && <ModelConsole onClose={() => setConsoleOpen(false)} />}
     </div>
   );
 
@@ -214,6 +226,108 @@ export function AppShell({
       setEntries((prev) => [...prev, entry(error, "error")]);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleSkills() {
+    if (busy) return;
+    setInteractionMode("skills");
+    setCapability(null);
+    setActiveTool(null);
+    setStatus("Loading skills...");
+    setEntries([]);
+
+    try {
+      const res = await fetch("/api/skills");
+      const body = (await res.json().catch(() => null)) as unknown;
+      if (!res.ok) {
+        const error = parseGenericError(body, res.status);
+        setStatus(error);
+        setEntries([entry(error, "error")]);
+        return;
+      }
+      const skills = toSkillList(body);
+      setStatus(skills.length > 0 ? "Skills loaded." : "No saved skills yet.");
+      setEntries(
+        skills.map((skill) => ({
+          id: skill.id,
+          label: `${skill.name} - ${skill.description}`,
+          actionLabel: "Open",
+          onAction: () => void handleOpenSkill(skill.id),
+        })),
+      );
+    } catch (cause) {
+      const error = friendlyError(String(cause));
+      setStatus(error);
+      setEntries([entry(error, "error")]);
+    }
+  }
+
+  async function handleOpenSkill(id: string) {
+    if (busy) return;
+    setStatus("Opening skill...");
+
+    try {
+      const res = await fetch(`/api/skills/${encodeURIComponent(id)}`);
+      const body = (await res.json().catch(() => null)) as unknown;
+      if (!res.ok) {
+        const error = parseGenericError(body, res.status);
+        setStatus(error);
+        setEntries((prev) => [...prev, entry(error, "error")]);
+        return;
+      }
+      const loaded = toSkillDetail(body);
+      setCurrent(loaded.skill.source);
+      setCurrentSkillId(loaded.skill.id);
+      setHeroDocs(renderHeroDocs(loaded.skill.source));
+      setView("rendered");
+      setCapability(null);
+      setStatus("Skill opened.");
+      setInteractionMode("build");
+      setEntries([entry(`Opened ${loaded.skill.source.frontmatter.name}.`, "muted")]);
+    } catch (cause) {
+      const error = friendlyError(String(cause));
+      setStatus(error);
+      setEntries((prev) => [...prev, entry(error, "error")]);
+    }
+  }
+
+  async function handleHistory() {
+    if (busy) return;
+    setInteractionMode("history");
+    setCapability(null);
+    setActiveTool(null);
+    setEntries([]);
+
+    if (!currentSkillId) {
+      setStatus("Open a saved skill first.");
+      setEntries([entry("Open a saved skill to view its run history.", "muted")]);
+      return;
+    }
+
+    setStatus("Loading history...");
+    try {
+      const res = await fetch(`/api/skills/${encodeURIComponent(currentSkillId)}/runs`);
+      const body = (await res.json().catch(() => null)) as unknown;
+      if (!res.ok) {
+        const error = parseGenericError(body, res.status);
+        setStatus(error);
+        setEntries([entry(error, "error")]);
+        return;
+      }
+      const history = toRunHistory(body);
+      const nextEntries = [
+        ...history.evalRuns.map((run) =>
+          entry(`Triggering eval ${run.status}: ${run.summary}`, run.status === "failed" ? "error" : undefined),
+        ),
+        ...history.testRuns.map((run) => entry(`Test run ${run.status}: ${run.prompt}`)),
+      ];
+      setStatus(nextEntries.length > 0 ? "History loaded." : "No saved runs yet.");
+      setEntries(nextEntries);
+    } catch (cause) {
+      const error = friendlyError(String(cause));
+      setStatus(error);
+      setEntries([entry(error, "error")]);
     }
   }
 
@@ -310,6 +424,10 @@ function renderHeroDocs(source: SkillSource): { rendered: RenderedDoc; source: S
     rendered: renderedRenderer.render(artifact),
     source: sourceRenderer.render(artifact),
   };
+}
+
+function activeRailView(mode: "build" | "import" | "skills" | "history"): SideRailView {
+  return mode;
 }
 
 async function* readSseEvents<TEvent extends { event: string; data: unknown }>(
@@ -447,6 +565,11 @@ function parseImportError(body: unknown, status: number): string {
   return friendlyError(error || `Import failed (${status}).`);
 }
 
+function parseGenericError(body: unknown, status: number): string {
+  const error = body && typeof body === "object" && "error" in body ? String(body.error) : "";
+  return friendlyError(error || `Request failed (${status}).`);
+}
+
 function toCapabilityPanel(
   action: ToolAction,
   surface: "insights" | "breakdown",
@@ -544,6 +667,70 @@ function isSkillSource(value: unknown): value is SkillSource {
     isRecord(value.frontmatter.extra) &&
     typeof value.body === "string"
   );
+}
+
+function toSkillList(value: unknown): readonly {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+}[] {
+  if (!isRecord(value) || !Array.isArray(value.skills)) {
+    throw new Error("Skills returned an unexpected response.");
+  }
+  return value.skills.map((skill) => {
+    if (
+      !isRecord(skill) ||
+      typeof skill.id !== "string" ||
+      typeof skill.name !== "string" ||
+      typeof skill.description !== "string"
+    ) {
+      throw new Error("Skills returned an unexpected response.");
+    }
+    return { id: skill.id, name: skill.name, description: skill.description };
+  });
+}
+
+function toSkillDetail(value: unknown): { readonly skill: { readonly id: string; readonly source: SkillSource } } {
+  if (
+    !isRecord(value) ||
+    !isRecord(value.skill) ||
+    typeof value.skill.id !== "string" ||
+    !isSkillSource(value.skill.source)
+  ) {
+    throw new Error("Skill returned an unexpected response.");
+  }
+  return { skill: { id: value.skill.id, source: value.skill.source } };
+}
+
+function toRunHistory(value: unknown): {
+  readonly testRuns: readonly { readonly status: string; readonly prompt: string }[];
+  readonly evalRuns: readonly { readonly status: string; readonly summary: string }[];
+} {
+  if (!isRecord(value) || !Array.isArray(value.testRuns) || !Array.isArray(value.evalRuns)) {
+    throw new Error("History returned an unexpected response.");
+  }
+  return {
+    testRuns: value.testRuns.map((run) => {
+      if (!isRecord(run) || typeof run.status !== "string" || !isRecord(run.scenario)) {
+        throw new Error("History returned an unexpected response.");
+      }
+      return {
+        status: run.status,
+        prompt: typeof run.scenario.prompt === "string" ? run.scenario.prompt : "Untitled scenario",
+      };
+    }),
+    evalRuns: value.evalRuns.map((run) => {
+      if (!isRecord(run) || typeof run.status !== "string" || !isRecord(run.result)) {
+        throw new Error("History returned an unexpected response.");
+      }
+      const result = run.result;
+      const summary =
+        isRecord(result.insight) && typeof result.insight.summary === "string"
+          ? result.insight.summary
+          : "No summary stored.";
+      return { status: run.status, summary };
+    }),
+  };
 }
 
 function isRenderedDoc(value: unknown): value is RenderedDoc {

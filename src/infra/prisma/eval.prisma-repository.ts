@@ -66,10 +66,10 @@ export function createPrismaEvalRunRepository(prisma: PrismaClient): EvalRunRepo
       }
     },
 
-    async listBySkill(skillId) {
+    async listBySkill(skillId, userId) {
       try {
         const rows = await prisma.evalRun.findMany({
-          where: { skillId },
+          where: { skillId, userId },
           orderBy: { createdAt: "desc" },
         });
         return ok(rows.map((row) => toEvalRun(row as EvalRunRow)));

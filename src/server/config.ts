@@ -1,3 +1,10 @@
+import type {
+  ModelSelection,
+  PrimitiveModelIds,
+  ProviderId,
+  ProviderProfile,
+} from "@/modules/model-router";
+
 /**
  * Environment config + feature flags, read once. Missing secrets are not an
  * error: each flag flips the composition root (container.ts) to a stub/memory
@@ -17,6 +24,20 @@ export type AppConfig = {
     readonly runAgent: string;
     readonly streamAgent: string;
   };
+  /**
+   * The model-router registry: every provider the platform knows, the server-pool
+   * keys behind them, and the boot-time active selection. Env sets the defaults;
+   * the model console switches provider/model at runtime (ARCHITECTURE §4).
+   */
+  readonly providerRegistry: readonly ProviderProfile[];
+  readonly serverKeys: Readonly<Record<ProviderId, { apiKey?: string; baseUrl?: string }>>;
+  readonly defaultSelection: ModelSelection;
+  /**
+   * Admin allowlist for instance-wide surfaces (the model console). When auth is
+   * configured, only these identities may read or change the active selection /
+   * credentials; with no list set, the surface is locked (fail-safe).
+   */
+  readonly admin: { readonly userIds: readonly string[]; readonly emails: readonly string[] };
   readonly clerkConfigured: boolean;
   readonly clerkProPlanSlug: string;
   readonly flags: {
@@ -61,14 +82,58 @@ export function readConfig(): AppConfig {
     nonEmpty(process.env.CLERK_SECRET_KEY) !== undefined &&
     nonEmpty(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) !== undefined;
 
+  const nousBaseUrl = nonEmpty(process.env.NOUS_BASE_URL) ?? DEFAULT_NOUS_BASE_URL;
+  // Per-provider model ids: the active provider honours the env routes; the
+  // other provider takes its own sensible defaults so it is ready to switch to.
+  const anthropicModelIds: PrimitiveModelIds = {
+    default: modelProvider === "anthropic" ? modelId : DEFAULT_ANTHROPIC_MODEL,
+    classify: nonEmpty(process.env.SKILLBUILDER_CLASSIFY_MODEL) ?? DEFAULT_ANTHROPIC_CLASSIFY_MODEL,
+    generate: nonEmpty(process.env.SKILLBUILDER_GENERATE_MODEL) ?? DEFAULT_ANTHROPIC_GENERATE_MODEL,
+    runAgent:
+      nonEmpty(process.env.SKILLBUILDER_RUN_AGENT_MODEL) ??
+      (modelProvider === "anthropic" ? modelId : DEFAULT_ANTHROPIC_MODEL),
+    streamAgent:
+      nonEmpty(process.env.SKILLBUILDER_STREAM_AGENT_MODEL) ??
+      (modelProvider === "anthropic" ? modelId : DEFAULT_ANTHROPIC_MODEL),
+  };
+  const nousModel = modelProvider === "nous" ? modelId : DEFAULT_NOUS_MODEL;
+  const nousModelIds: PrimitiveModelIds = {
+    default: nousModel,
+    classify: modelProvider === "nous" ? modelIds.classify : nousModel,
+    generate: modelProvider === "nous" ? modelIds.generate : nousModel,
+    runAgent: modelProvider === "nous" ? modelIds.runAgent : nousModel,
+    streamAgent: modelProvider === "nous" ? modelIds.streamAgent : nousModel,
+  };
+  const providerRegistry: readonly ProviderProfile[] = [
+    { id: "anthropic", label: "Anthropic (Claude)", kind: "anthropic", modelIds: anthropicModelIds },
+    {
+      id: "nous",
+      label: "Nous Portal",
+      kind: "openai-compatible",
+      baseUrl: nousBaseUrl,
+      modelIds: nousModelIds,
+    },
+  ];
+  const serverKeys = {
+    anthropic: { apiKey: anthropicApiKey },
+    nous: { apiKey: nousApiKey, baseUrl: nousBaseUrl },
+  };
+
   return {
     databaseUrl,
     modelProvider,
     anthropicApiKey,
     nousApiKey,
-    nousBaseUrl: nonEmpty(process.env.NOUS_BASE_URL) ?? DEFAULT_NOUS_BASE_URL,
+    nousBaseUrl,
     modelId,
     modelIds,
+    providerRegistry,
+    serverKeys,
+    defaultSelection: { providerId: modelProvider },
+    admin: {
+      userIds: parseList(process.env.SKILLBUILDER_ADMIN_USER_IDS),
+      emails: parseList(process.env.SKILLBUILDER_ADMIN_EMAILS).map((email) => email.toLowerCase()),
+    },
     clerkConfigured,
     clerkProPlanSlug: nonEmpty(process.env.SKILLBUILDER_PRO_PLAN_SLUG) ?? "pro",
     flags: {
@@ -98,4 +163,12 @@ function readModelProvider(params: {
 
 function nonEmpty(value: string | undefined): string | undefined {
   return value && value.trim().length > 0 ? value : undefined;
+}
+
+/** Split a comma-separated env value into trimmed, non-empty entries. */
+function parseList(value: string | undefined): string[] {
+  return (value ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
 }

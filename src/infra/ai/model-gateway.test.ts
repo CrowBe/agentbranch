@@ -2,7 +2,6 @@ import { beforeEach, describe, it, expect, vi } from "vitest";
 import type { Mock } from "vitest";
 import { z } from "zod";
 import { createModelGateway } from "./model-gateway";
-import { stubModelGateway } from "./stub-model-gateway";
 import { createMemoryRequestRateLimiter } from "@/infra/memory/rate-limit.memory-repository";
 import { createMemoryUsageRepository } from "@/infra/memory/usage.memory-repository";
 import { TIER_LIMITS } from "@/modules/usage";
@@ -640,13 +639,14 @@ describe("model gateway — generation controls", () => {
   });
 });
 
-describe("stub model gateway", () => {
-  it("is offline and fails both primitives with model_unavailable", async () => {
-    expect(stubModelGateway.hasModel).toBe(false);
-    const c = await stubModelGateway.classify({ prompt: "x", choices: ["a"], tag: platform });
-    const r = await stubModelGateway.runAgent({ system: "", messages: [], tools: [], tag: platform });
-    const s = await stubModelGateway.streamAgent({ system: "", messages: [], tools: [], tag: platform });
-    const g = await stubModelGateway.generate({
+describe("offline gateway (no model configured)", () => {
+  it("is offline and fails every primitive with model_unavailable", async () => {
+    const gateway = createModelGateway({ provider: noModel, usage: createMemoryUsageRepository() });
+    expect(gateway.hasModel).toBe(false);
+    const c = await gateway.classify({ prompt: "x", choices: ["a"], tag: platform });
+    const r = await gateway.runAgent({ system: "", messages: [], tools: [], tag: platform });
+    const s = await gateway.streamAgent({ system: "", messages: [], tools: [], tag: platform });
+    const g = await gateway.generate({
       system: "",
       prompt: "x",
       schema: z.object({ ok: z.boolean() }),
