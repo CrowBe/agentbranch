@@ -5,6 +5,7 @@ import type { TestRunRepository } from "@/modules/test-run";
 import type { EvalRunRepository } from "@/modules/triggering-eval";
 import type { AuthPort } from "@/modules/auth";
 import type { ModelGateway } from "@/modules/model-gateway";
+import type { ModelRouter } from "@/modules/model-router";
 
 import { readConfig, type AppConfig } from "./config";
 import { createMemorySkillRepository } from "@/infra/memory/skill.memory-repository";
@@ -19,10 +20,8 @@ import { createPrismaRequestRateLimiter } from "@/infra/prisma/rate-limit.prisma
 import { createPrismaTestRunRepository } from "@/infra/prisma/test-run.prisma-repository";
 import { createPrismaEvalRunRepository } from "@/infra/prisma/eval.prisma-repository";
 import { createUserProvisioningAuth } from "@/infra/prisma/user-provisioning-auth";
-import { createAnthropicProvider } from "@/infra/ai/anthropic-provider";
-import { createNousProvider } from "@/infra/ai/nous-provider";
+import { createModelRouter } from "@/infra/ai/model-router";
 import { createModelGateway } from "@/infra/ai/model-gateway";
-import { stubModelGateway } from "@/infra/ai/stub-model-gateway";
 import { createClerkAuth } from "@/infra/clerk/clerk-auth";
 import { createStubAuth } from "@/infra/clerk/stub-auth";
 import { createClerkTierResolver } from "@/infra/clerk/tier-resolver";
@@ -35,9 +34,12 @@ import { createClerkTierResolver } from "@/infra/clerk/tier-resolver";
 export type AppContainer = {
   readonly config: AppConfig;
   readonly auth: AuthPort;
-  // No raw `modelProvider` is exposed: nothing above the gateway touches the
-  // model. The provider is an internal wiring detail of `modelGateway`.
+  // No raw model provider is exposed: nothing above the gateway touches the
+  // model. The router (provider/model selection + credentials) is an internal
+  // wiring detail of the gateway, exposed only so the model-console route can
+  // read the registry and switch the active selection at runtime.
   readonly modelGateway: ModelGateway;
+  readonly modelRouter: ModelRouter;
   readonly skills: SkillRepository;
   readonly usage: UsageRepository;
   readonly requestRateLimiter: RequestRateLimiter;
@@ -54,17 +56,15 @@ export function getContainer(): AppContainer {
 
   const prisma = config.databaseUrl ? createPrismaClient(config.databaseUrl) : null;
 
-  const modelProvider =
-    config.modelProvider === "nous"
-      ? createNousProvider({
-          apiKey: config.nousApiKey,
-          modelIds: config.modelIds,
-          baseUrl: config.nousBaseUrl,
-        })
-      : createAnthropicProvider({
-          apiKey: config.anthropicApiKey,
-          modelIds: config.modelIds,
-        });
+  // The model router owns provider/model selection + credentials (server pool
+  // now, bring-your-own override at runtime). The gateway resolves the model
+  // through it per call, so the active provider/model can change at runtime via
+  // the model console without re-wiring (ARCHITECTURE §4 routing).
+  const modelRouter = createModelRouter({
+    profiles: config.providerRegistry,
+    serverKeys: config.serverKeys,
+    defaultSelection: config.defaultSelection,
+  });
   const usage = prisma ? createPrismaUsageRepository(prisma) : createMemoryUsageRepository();
   const requestRateLimiter = prisma
     ? createPrismaRequestRateLimiter(prisma)
@@ -74,18 +74,15 @@ export function getContainer(): AppContainer {
     : undefined;
 
   // The model gateway is the platform's single metered entry to the model. It
-  // degrades to the offline stub when no model is configured, so evaluation
-  // capabilities fail cleanly with `model_unavailable` (CONTEXT.md → Model gateway).
-  const modelGateway: ModelGateway = modelProvider.model
-    ? createModelGateway({
-        provider: modelProvider,
-        usage,
-        requestRateLimiter,
-        providerKind: config.modelProvider,
-        modelId: config.modelId,
-        tierFor,
-      })
-    : stubModelGateway;
+  // resolves through the router, so `hasModel` reflects the active selection and
+  // an unconfigured router fails cleanly with `model_unavailable` (CONTEXT.md →
+  // Model gateway) — no separate offline stub needed.
+  const modelGateway: ModelGateway = createModelGateway({
+    router: modelRouter,
+    usage,
+    requestRateLimiter,
+    tierFor,
+  });
 
   const auth = config.flags.hasAuth ? createClerkAuth() : createStubAuth();
 
@@ -93,6 +90,7 @@ export function getContainer(): AppContainer {
     config,
     auth: prisma && config.flags.hasAuth ? createUserProvisioningAuth(auth, prisma) : auth,
     modelGateway,
+    modelRouter,
     skills: prisma ? createPrismaSkillRepository(prisma) : createMemorySkillRepository(),
     usage,
     requestRateLimiter,

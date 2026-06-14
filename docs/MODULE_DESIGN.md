@@ -141,6 +141,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **portability** | `transformSkill`, types | — | stub (deferred engine) |
 | **build-loop** | `runBuildLoop`, `buildTools`, `BuildToolName`, `BuildLoopEvent` | — (consumes `ModelGateway`) | real |
 | **model-gateway** | `ModelGateway` (`classify`/`runAgent`/`streamAgent`/`generate`), `AccountingTag`, `GatewayTool`, `ModelProvider` | `ModelProvider` | real |
+| **model-router** | `ModelRouter` (`resolve`/`snapshot`/`setActive`/`setCredential`/`clearCredential`), `ProviderProfile`, `ModelSelection`, `RouterSnapshot`, selection helpers | `ModelRouter` | real |
 | **usage** | `checkCap`, `applyTurn`, `TIER_LIMITS`, types | `UsageRepository` | real |
 | **auth** | `AuthPort`, `AuthIdentity` | `AuthPort` | port |
 
@@ -170,8 +171,8 @@ placeholder):**
 | `prisma/client.ts` | — | PrismaClient + `@prisma/adapter-pg` (Prisma 7 driver adapter) |
 | `prisma/{skill,usage}.prisma-repository.ts` | `SkillRepository`, `UsageRepository` | real; test-run/eval Prisma repos follow same shape (todo) |
 | `prisma/user-provisioning-auth.ts` | `AuthPort` | wraps Clerk auth, provisions the `users` row on first sight |
-| `ai/model-gateway.ts` | `ModelGateway` | the metered gateway over a `ModelProvider`; routes accounting through `usage` |
-| `ai/stub-model-gateway.ts` | `ModelGateway` | offline default; every primitive fails `model_unavailable` |
+| `ai/model-gateway.ts` | `ModelGateway` | the metered gateway; resolves a `LanguageModel` per call from a `ModelRouter` (or a static `ModelProvider` in tests); routes accounting through `usage` |
+| `ai/model-router.ts` | `ModelRouter` | the provider/model selection authority: builds providers from the registry + server-pool keys, holds the runtime active selection + bring-your-own overrides (process-local), and resolves per primitive. Secret-free snapshot |
 | `ai/anthropic-provider.ts` | `ModelProvider` | Claude via `@ai-sdk/anthropic`; `model: null` when no key |
 | `ai/nous-provider.ts` | `ModelProvider` | Nous Portal via `@ai-sdk/openai-compatible`; `model: null` when no key |
 | `ai/stub-provider.ts` | `ModelProvider` | always `model: null` |
@@ -180,9 +181,13 @@ placeholder):**
 
 ### Server (`src/server`)
 
-- `config.ts` — reads env → `AppConfig` with `flags { hasDatabase, hasModel, hasAuth }`.
+- `config.ts` — reads env → `AppConfig` with `flags { hasDatabase, hasModel, hasAuth }`
+  and the **provider registry** (`providerRegistry` + `serverKeys` + `defaultSelection`)
+  the model router is built from.
 - `container.ts` — `getContainer(): AppContainer` (cached). Picks Prisma vs
-  memory, Clerk vs stub, Anthropic vs null **by flag**. `import "server-only"`.
+  memory, Clerk vs stub **by flag**; builds the **model router** from the registry
+  and wires the gateway to resolve through it (no model ⇒ `model_unavailable`).
+  `import "server-only"`.
 - `build-stream.ts` — `buildLoopResponse(input, provider)`: drives
   `runBuildLoop` and encodes events as an SSE `Response`.
 
@@ -190,12 +195,17 @@ placeholder):**
 
 - `app/page.tsx` (server) builds a demo skill and renders it through
   `heroCapability` → `AppShell`.
-- `app/api/build/route.ts` — auth → stream; the **model gateway** owns the key
-  and gates the `build` cap (the route never touches the raw model).
+- `app/api/build/route.ts` — auth → stream; the **model gateway** gates the
+  `build` cap and resolves the model through the router (the route never touches
+  the raw model or keys).
+- `app/api/model-router/route.ts` — auth-gated; GET the secret-free router
+  snapshot, POST to switch the active provider/model or store/clear a
+  bring-your-own key. Drives the **model console**.
 - `app/layout.tsx` — next/font + conditional `ClerkProvider`; `globals.css`
   holds the DESIGN tokens as CSS variables; `proxy.ts` is Clerk/passthrough.
 - `components/` — `app-shell`, `top-bar`, `side-rail`, `hero-panel`,
-  `view-toggle`, `tool-chips`, `interaction-panel`, `ui/{chip,button,pill}`.
+  `view-toggle`, `tool-chips`, `interaction-panel`, `model-console` (the
+  provider/model + auth overlay, opened from the rail), `ui/{chip,button,pill}`.
 
 ---
 
