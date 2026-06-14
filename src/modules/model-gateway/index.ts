@@ -15,6 +15,7 @@
  */
 export type {
   AccountingTag,
+  GatewaySystemPrompt,
   GatewayTool,
   AgentStep,
   AgentStreamPart,

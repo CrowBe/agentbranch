@@ -2,15 +2,8 @@ import { parseSkillMd } from "@/modules/skill";
 import type { ModelGateway } from "@/modules/model-gateway";
 import { isErr, type UserId } from "@/shared";
 import { buildTools } from "./tools";
+import { BUILD_LOOP_SYSTEM_PROMPT } from "./system-prompt";
 import type { BuildLoopInput, BuildLoopEvent } from "./build-loop.types";
-
-const SYSTEM_PROMPT = `You are SkillSmith's authoring agent. You help a user
-craft a single Claude Skill — an instruction-only SKILL.md (YAML frontmatter
-with name + description, then a markdown body). On a first draft call
-write_skill with the complete document. On revisions call edit_skill with an
-exact string replacement. Keep skills focused, with clear triggers and any
-constraints stated plainly. Never include runnable code — skills are
-instructions only.`;
 
 /**
  * Run the build loop and stream typed events.
@@ -31,7 +24,7 @@ export async function* runBuildLoop(
   userId: UserId,
 ): AsyncGenerator<BuildLoopEvent> {
   const opened = await gateway.streamAgent({
-    system: SYSTEM_PROMPT,
+    system: BUILD_LOOP_SYSTEM_PROMPT,
     messages: input.messages.map((m) => ({ role: m.role, content: m.content })),
     tools: buildTools,
     // The build loop spends a user's allowance under the `build` capability; the

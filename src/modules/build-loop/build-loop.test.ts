@@ -22,6 +22,7 @@ async function collect(gen: AsyncGenerator<BuildLoopEvent>): Promise<BuildLoopEv
  */
 function fakeGateway(
   outcome: AgentStreamPart[] | DomainError,
+  onInput?: (input: StreamAgentInput) => void,
 ): ModelGateway {
   return {
     hasModel: true,
@@ -29,8 +30,9 @@ function fakeGateway(
     runAgent: async () => err(domainError("model_unavailable", "n/a")),
     generate: async () => err(domainError("model_unavailable", "n/a")),
     async streamAgent(
-      _input: StreamAgentInput,
+      input: StreamAgentInput,
     ): Promise<Result<AsyncGenerator<AgentStreamPart>, DomainError>> {
+      onInput?.(input);
       if (!Array.isArray(outcome)) return err(outcome);
       const list = outcome;
       async function* parts(): AsyncGenerator<AgentStreamPart> {
@@ -68,5 +70,23 @@ describe("build loop", () => {
     expect(events.map((e) => e.event)).toEqual(["text", "tool", "tool", "skill", "done"]);
     const skill = events.find((e) => e.event === "skill");
     expect(skill?.data).toHaveProperty("source");
+  });
+
+  it("opens the authoring stream with a cacheable frozen system prompt", async () => {
+    let input: StreamAgentInput | undefined;
+    const gateway = fakeGateway([{ kind: "finish", finishReason: "stop" }], (seen) => {
+      input = seen;
+    });
+
+    await collect(
+      runBuildLoop({ messages: [{ role: "user", content: "Make a greeter" }] }, gateway, userId),
+    );
+
+    expect(input?.system).toMatchObject({
+      cacheControl: { type: "ephemeral" },
+    });
+    expect(typeof input?.system === "object" ? input.system.content.length : 0).toBeGreaterThan(
+      12_000,
+    );
   });
 });

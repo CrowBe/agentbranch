@@ -1,5 +1,5 @@
 import { generateObject, generateText, streamText, tool, stepCountIs, jsonSchema } from "ai";
-import type { LanguageModel, ToolSet } from "ai";
+import type { LanguageModel, SystemModelMessage, ToolSet } from "ai";
 import { z } from "zod";
 import {
   checkCap,
@@ -15,6 +15,7 @@ import type {
   ModelProvider,
   ModelGatewayPrimitive,
   AccountingTag,
+  GatewaySystemPrompt,
   GatewayTool,
   ClassifyInput,
   RunAgentInput,
@@ -171,7 +172,10 @@ export function createModelGateway(deps: {
       const admitted = await admit(
         input.tag,
         "runAgent",
-        modelInputBytes([input.system, ...input.messages.map((m) => m.content)]),
+        modelInputBytes([
+          systemPromptContent(input.system),
+          ...input.messages.map((m) => m.content),
+        ]),
       );
       if (isErr(admitted)) return admitted;
 
@@ -180,7 +184,7 @@ export function createModelGateway(deps: {
           model: admitted.value,
           maxOutputTokens: OUTPUT_LIMITS.runAgent,
           ...sonnetEffort?.medium,
-          system: input.system,
+          system: toSdkSystem(input.system),
           messages: input.messages.map((m) => ({ role: m.role, content: m.content })),
           tools: toSdkTools(input.tools),
           stopWhen: stepCountIs(8),
@@ -200,7 +204,10 @@ export function createModelGateway(deps: {
       const admitted = await admit(
         input.tag,
         "streamAgent",
-        modelInputBytes([input.system, ...input.messages.map((m) => m.content)]),
+        modelInputBytes([
+          systemPromptContent(input.system),
+          ...input.messages.map((m) => m.content),
+        ]),
       );
       if (isErr(admitted)) return admitted;
       const model = admitted.value;
@@ -220,7 +227,7 @@ export function createModelGateway(deps: {
           result = streamText({
             model,
             maxOutputTokens: OUTPUT_LIMITS.streamAgent,
-            system: input.system,
+            system: toSdkSystem(input.system),
             messages: input.messages.map((m) => ({ role: m.role, content: m.content })),
             tools: toSdkTools(input.tools),
             stopWhen: stepCountIs(8),
@@ -309,6 +316,21 @@ function modelInputBytes(parts: readonly string[]): number {
   return parts.reduce((total, part) => total + encoder.encode(part).byteLength, 0);
 }
 
+function systemPromptContent(system: GatewaySystemPrompt): string {
+  return typeof system === "string" ? system : system.content;
+}
+
+function toSdkSystem(system: GatewaySystemPrompt): string | SystemModelMessage {
+  if (typeof system === "string") return system;
+  return {
+    role: "system",
+    content: system.content,
+    providerOptions: system.cacheControl
+      ? { anthropic: { cacheControl: system.cacheControl } }
+      : undefined,
+  };
+}
+
 /** Adapt the gateway's `GatewayTool`s to the AI SDK's tool map (shared by run/stream). */
 function toSdkTools(tools: readonly GatewayTool[]): ToolSet {
   return Object.fromEntries(
@@ -350,12 +372,14 @@ function readTokenUsage(value: unknown): TokenUsageBreakdown {
   const cacheReadInputTokens = firstNumberDeep(obj, [
     "cacheReadInputTokens",
     "cache_read_input_tokens",
+    "cacheReadTokens",
     "cachedInputTokens",
     "cached_input_tokens",
   ]);
   const cacheCreationInputTokens = firstNumberDeep(obj, [
     "cacheCreationInputTokens",
     "cache_creation_input_tokens",
+    "cacheWriteTokens",
   ]);
   const rawInputTokens = firstNumberDeep(obj, [
     "inputTokens",

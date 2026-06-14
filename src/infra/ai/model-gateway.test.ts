@@ -357,11 +357,9 @@ describe("model gateway — stream accounting", () => {
       usage: {
         inputTokens: 120,
         outputTokens: 30,
-        providerMetadata: {
-          anthropic: {
-            cacheReadInputTokens: 70,
-            cacheCreationInputTokens: 10,
-          },
+        inputTokenDetails: {
+          cacheReadTokens: 70,
+          cacheWriteTokens: 10,
         },
       },
     } as never);
@@ -477,6 +475,42 @@ describe("model gateway — stream accounting", () => {
 });
 
 describe("model gateway — generation controls", () => {
+  it("forwards cache control on structured system prompts", async () => {
+    aiMocks.streamText.mockReturnValueOnce({
+      fullStream: parts([{ type: "finish", finishReason: "stop" }]),
+      totalUsage: Promise.resolve({ totalTokens: 1 }),
+    });
+    const gateway = createModelGateway({
+      provider: withModel,
+      usage: createMemoryUsageRepository(),
+    });
+
+    const stream = await gateway.streamAgent({
+      system: {
+        content: "stable prefix",
+        cacheControl: { type: "ephemeral", ttl: "5m" },
+      },
+      messages: [],
+      tools: [],
+      tag: platform,
+    });
+    if (!isErr(stream)) await collect(stream.value);
+
+    expect(aiMocks.streamText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: {
+          role: "system",
+          content: "stable prefix",
+          providerOptions: {
+            anthropic: {
+              cacheControl: { type: "ephemeral", ttl: "5m" },
+            },
+          },
+        },
+      }),
+    );
+  });
+
   it("sets explicit output ceilings on every model primitive", async () => {
     const generateObject = aiMocks.generateObject as Mock;
     const generateText = aiMocks.generateText as Mock;
