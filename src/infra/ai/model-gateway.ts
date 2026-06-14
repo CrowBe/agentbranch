@@ -1,5 +1,5 @@
 import { generateObject, generateText, streamText, tool, stepCountIs, jsonSchema } from "ai";
-import type { LanguageModel, SystemModelMessage, ToolSet } from "ai";
+import type { LanguageModel, ModelMessage, SystemModelMessage, ToolSet } from "ai";
 import { z } from "zod";
 import {
   checkCap,
@@ -15,6 +15,8 @@ import type {
   ModelProvider,
   ModelGatewayPrimitive,
   AccountingTag,
+  GatewayCacheControl,
+  GatewayMessage,
   GatewaySystemPrompt,
   GatewayTool,
   ClassifyInput,
@@ -185,7 +187,7 @@ export function createModelGateway(deps: {
           maxOutputTokens: OUTPUT_LIMITS.runAgent,
           ...sonnetEffort?.medium,
           system: toSdkSystem(input.system),
-          messages: input.messages.map((m) => ({ role: m.role, content: m.content })),
+          messages: input.messages.map(toSdkMessage),
           tools: toSdkTools(input.tools),
           stopWhen: stepCountIs(8),
         });
@@ -228,7 +230,7 @@ export function createModelGateway(deps: {
             model,
             maxOutputTokens: OUTPUT_LIMITS.streamAgent,
             system: toSdkSystem(input.system),
-            messages: input.messages.map((m) => ({ role: m.role, content: m.content })),
+            messages: input.messages.map(toSdkMessage),
             tools: toSdkTools(input.tools),
             stopWhen: stepCountIs(8),
           });
@@ -320,14 +322,24 @@ function systemPromptContent(system: GatewaySystemPrompt): string {
   return typeof system === "string" ? system : system.content;
 }
 
+function toAnthropicProviderOptions(cacheControl: GatewayCacheControl | undefined) {
+  return cacheControl ? { anthropic: { cacheControl } } : undefined;
+}
+
 function toSdkSystem(system: GatewaySystemPrompt): string | SystemModelMessage {
   if (typeof system === "string") return system;
   return {
     role: "system",
     content: system.content,
-    providerOptions: system.cacheControl
-      ? { anthropic: { cacheControl: system.cacheControl } }
-      : undefined,
+    providerOptions: toAnthropicProviderOptions(system.cacheControl),
+  };
+}
+
+function toSdkMessage(message: GatewayMessage): ModelMessage {
+  return {
+    role: message.role,
+    content: message.content,
+    providerOptions: toAnthropicProviderOptions(message.cacheControl),
   };
 }
 

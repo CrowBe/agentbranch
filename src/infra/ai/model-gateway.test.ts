@@ -511,6 +511,47 @@ describe("model gateway — generation controls", () => {
     );
   });
 
+  it("forwards cache control on structured messages", async () => {
+    aiMocks.streamText.mockReturnValueOnce({
+      fullStream: parts([{ type: "finish", finishReason: "stop" }]),
+      totalUsage: Promise.resolve({ totalTokens: 1 }),
+    });
+    const gateway = createModelGateway({
+      provider: withModel,
+      usage: createMemoryUsageRepository(),
+    });
+
+    const stream = await gateway.streamAgent({
+      system: "",
+      messages: [
+        {
+          role: "user",
+          content: "latest turn",
+          cacheControl: { type: "ephemeral" },
+        },
+      ],
+      tools: [],
+      tag: platform,
+    });
+    if (!isErr(stream)) await collect(stream.value);
+
+    expect(aiMocks.streamText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [
+          {
+            role: "user",
+            content: "latest turn",
+            providerOptions: {
+              anthropic: {
+                cacheControl: { type: "ephemeral" },
+              },
+            },
+          },
+        ],
+      }),
+    );
+  });
+
   it("sets explicit output ceilings on every model primitive", async () => {
     const generateObject = aiMocks.generateObject as Mock;
     const generateText = aiMocks.generateText as Mock;

@@ -1,5 +1,5 @@
 import { parseSkillMd } from "@/modules/skill";
-import type { ModelGateway } from "@/modules/model-gateway";
+import type { GatewayMessage, ModelGateway } from "@/modules/model-gateway";
 import { isErr, type UserId } from "@/shared";
 import { buildTools } from "./tools";
 import { BUILD_LOOP_SYSTEM_PROMPT } from "./system-prompt";
@@ -25,7 +25,7 @@ export async function* runBuildLoop(
 ): AsyncGenerator<BuildLoopEvent> {
   const opened = await gateway.streamAgent({
     system: BUILD_LOOP_SYSTEM_PROMPT,
-    messages: input.messages.map((m) => ({ role: m.role, content: m.content })),
+    messages: withLatestMessageCacheControl(input.messages),
     tools: buildTools,
     // The build loop spends a user's allowance under the `build` capability; the
     // gateway clears it against the tier cap before any part streams.
@@ -56,6 +56,17 @@ export async function* runBuildLoop(
         break;
     }
   }
+}
+
+function withLatestMessageCacheControl(
+  messages: BuildLoopInput["messages"],
+): readonly GatewayMessage[] {
+  const lastIndex = messages.length - 1;
+  return messages.map((message, index) => ({
+    role: message.role,
+    content: message.content,
+    ...(index === lastIndex ? { cacheControl: { type: "ephemeral" } as const } : {}),
+  }));
 }
 
 /** Translate a tool's output into preview events (skill replace / patch). */

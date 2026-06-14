@@ -89,4 +89,35 @@ describe("build loop", () => {
       12_000,
     );
   });
+
+  it("marks the latest message as cacheable for multi-turn reuse", async () => {
+    let input: StreamAgentInput | undefined;
+    const gateway = fakeGateway([{ kind: "finish", finishReason: "stop" }], (seen) => {
+      input = seen;
+    });
+
+    await collect(
+      runBuildLoop(
+        {
+          messages: [
+            { role: "user", content: "Make a greeter" },
+            { role: "assistant", content: "Drafted" },
+            { role: "user", content: "Make it concise" },
+          ],
+        },
+        gateway,
+        userId,
+      ),
+    );
+
+    expect(input?.messages).toEqual([
+      { role: "user", content: "Make a greeter" },
+      { role: "assistant", content: "Drafted" },
+      {
+        role: "user",
+        content: "Make it concise",
+        cacheControl: { type: "ephemeral" },
+      },
+    ]);
+  });
 });

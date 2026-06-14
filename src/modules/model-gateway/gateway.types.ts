@@ -74,7 +74,7 @@ export type ClassifyInput = {
 
 export type RunAgentInput = {
   readonly system: GatewaySystemPrompt;
-  readonly messages: readonly { readonly role: "user" | "assistant"; readonly content: string }[];
+  readonly messages: readonly GatewayMessage[];
   readonly tools: readonly GatewayTool[];
   readonly tag: AccountingTag;
 };
@@ -86,11 +86,19 @@ export type GatewaySystemPrompt =
   | string
   | {
       readonly content: string;
-      readonly cacheControl?: {
-        readonly type: "ephemeral";
-        readonly ttl?: "5m" | "1h";
-      };
+      readonly cacheControl?: GatewayCacheControl;
     };
+
+export type GatewayMessage = {
+  readonly role: "user" | "assistant";
+  readonly content: string;
+  readonly cacheControl?: GatewayCacheControl;
+};
+
+export type GatewayCacheControl = {
+  readonly type: "ephemeral";
+  readonly ttl?: "5m" | "1h";
+};
 
 export type GenerateInput<T> = {
   readonly system: string;
