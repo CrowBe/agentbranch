@@ -1,5 +1,5 @@
 import type { Result, SkillId, UserId, DomainError } from "@/shared";
-import type { Skill, SkillSource } from "./skill.types";
+import type { Skill, SkillSource, SkillVersion } from "./skill.types";
 
 /**
  * Persistence port for skills. The domain owns this interface; infra supplies
@@ -21,6 +21,8 @@ export interface SkillRepository {
   findById(id: SkillId, userId: UserId): Promise<Result<Skill | null, DomainError>>;
 
   listByUser(userId: UserId): Promise<Result<readonly Skill[], DomainError>>;
+
+  listVersions(id: SkillId, userId: UserId): Promise<Result<readonly SkillVersion[], DomainError>>;
 
   delete(id: SkillId, userId: UserId): Promise<Result<void, DomainError>>;
 }

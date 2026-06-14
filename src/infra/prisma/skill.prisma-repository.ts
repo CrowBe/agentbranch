@@ -3,6 +3,7 @@ import {
   makeSkill,
   type Skill,
   type SkillSource,
+  type SkillVersion,
   type SkillRepository,
 } from "@/modules/skill";
 import {
@@ -26,6 +27,17 @@ type SkillRow = {
   updatedAt: Date;
 };
 
+type SkillVersionRow = {
+  id: string;
+  skillId: string;
+  revision: number;
+  name: string;
+  description: string;
+  body: string;
+  frontmatterJson: unknown;
+  createdAt: Date;
+};
+
 /** Rehydrate the Skill aggregate from a persisted row. */
 function toSkill(row: SkillRow, latestRevision: number, latestVersionId?: string): Skill {
   return makeSkill({
@@ -44,6 +56,23 @@ function toSkill(row: SkillRow, latestRevision: number, latestVersionId?: string
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   });
+}
+
+function toSkillVersion(row: SkillVersionRow): SkillVersion {
+  return {
+    id: SkillVersionId(row.id),
+    skillId: SkillId(row.skillId),
+    revision: row.revision,
+    source: {
+      frontmatter: {
+        name: row.name,
+        description: row.description,
+        extra: (row.frontmatterJson as Record<string, unknown>) ?? {},
+      },
+      body: row.body,
+    },
+    createdAt: row.createdAt,
+  };
 }
 
 const columns = (source: SkillSource) => ({
@@ -112,6 +141,14 @@ export function createPrismaSkillRepository(prisma: PrismaClient): SkillReposito
         include: { versions: { orderBy: { revision: "desc" }, take: 1, select: { id: true, revision: true } } },
       });
       return ok(rows.map((r) => toSkill(r as SkillRow, r.versions[0]?.revision ?? 0, r.versions[0]?.id)));
+    },
+
+    async listVersions(id, userId) {
+      const rows = await prisma.skillVersion.findMany({
+        where: { skillId: id, skill: { userId } },
+        orderBy: { revision: "desc" },
+      });
+      return ok(rows.map((row) => toSkillVersion(row as SkillVersionRow)));
     },
 
     async delete(id, userId) {

@@ -1,16 +1,100 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { domainError, ok, UserId } from "@/shared";
-import { DELETE } from "./route";
+import { DELETE, GET } from "./route";
 
 const currentIdentity = vi.fn();
 const deleteSkill = vi.fn();
+const findById = vi.fn();
+const listVersions = vi.fn();
 
 vi.mock("@/server/container", () => ({
   getContainer: () => ({
     auth: { currentIdentity },
-    skills: { delete: deleteSkill },
+    skills: { delete: deleteSkill, findById, listVersions },
   }),
 }));
+
+describe("GET /api/skills/:id", () => {
+  beforeEach(() => {
+    currentIdentity.mockReset();
+    findById.mockReset();
+    listVersions.mockReset();
+  });
+
+  it("loads an owned skill with its versions", async () => {
+    currentIdentity.mockResolvedValue(ok({ userId: UserId("user-1") }));
+    findById.mockResolvedValue(ok({
+      id: "skill-1",
+      source: {
+        frontmatter: { name: "inbox-triage", description: "Sort mail.", extra: {} },
+        body: "# Goal",
+      },
+      latestRevision: 2,
+      latestVersionId: "version-2",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-02T00:00:00.000Z"),
+    }));
+    listVersions.mockResolvedValue(ok([
+      {
+        id: "version-2",
+        revision: 2,
+        source: {
+          frontmatter: { name: "inbox-triage", description: "Sort mail better.", extra: {} },
+          body: "# Goal\n\nImprove it.",
+        },
+        createdAt: new Date("2026-01-02T00:00:00.000Z"),
+      },
+    ]));
+
+    const response = await GET(new Request("https://example.test/api/skills/skill-1"), {
+      params: { id: "skill-1" },
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      skill: {
+        id: "skill-1",
+        source: {
+          frontmatter: { name: "inbox-triage", description: "Sort mail.", extra: {} },
+          body: "# Goal",
+        },
+        latestRevision: 2,
+        latestVersionId: "version-2",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-02T00:00:00.000Z",
+      },
+      versions: [
+        {
+          id: "version-2",
+          revision: 2,
+          source: {
+            frontmatter: { name: "inbox-triage", description: "Sort mail better.", extra: {} },
+            body: "# Goal\n\nImprove it.",
+          },
+          createdAt: "2026-01-02T00:00:00.000Z",
+        },
+      ],
+    });
+    expect(findById).toHaveBeenCalledWith("skill-1", "user-1");
+    expect(listVersions).toHaveBeenCalledWith("skill-1", "user-1");
+  });
+
+  it("returns not found for another user's skill", async () => {
+    currentIdentity.mockResolvedValue(ok({ userId: UserId("user-1") }));
+    findById.mockResolvedValue(ok(null));
+
+    const response = await GET(new Request("https://example.test/api/skills/skill-2"), {
+      params: { id: "skill-2" },
+    });
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: "Skill not found.",
+      code: "not_found",
+    });
+    expect(listVersions).not.toHaveBeenCalled();
+  });
+});
 
 describe("DELETE /api/skills/:id", () => {
   beforeEach(() => {
