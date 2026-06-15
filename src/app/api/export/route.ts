@@ -21,7 +21,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!parsed.ok) return invalidRequestResponse(parsed.error);
 
   const skill = skillFromRequest(parsed.value, identity.value);
-  const result = await runCapability(exportCapability, "claude", skill);
+  const result = await runCapability(exportCapability, "standard", skill);
 
   return result.ok ? Response.json(result.value) : domainErrorResponse(result.error);
 }
