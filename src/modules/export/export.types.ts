@@ -1,8 +1,8 @@
 import type { SkillSource } from "@/modules/skill";
 import type { Artifact } from "@/modules/skill-analysis";
 
-/** Export targets. Claude is the v1 authoring/runtime renderer (ARCHITECTURE §4). */
-export type ExportTarget = "claude" | "gem" | "gpt";
+/** Export target: the standard Agent Skills folder, installable across compatible runtimes. */
+export type ExportTarget = "standard";
 
 /** A single file in an export package. */
 export type ExportFile = {

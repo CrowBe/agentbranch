@@ -17,11 +17,31 @@ function fixtureSkill(): Skill {
 
 describe("export capability", () => {
   it("renders a standard skill-folder manifest", async () => {
-    const manifest = unwrap(await runCapability(exportCapability, "claude", fixtureSkill()));
-    expect(manifest.target).toBe("claude");
+    const manifest = unwrap(await runCapability(exportCapability, "standard", fixtureSkill()));
+    expect(manifest.target).toBe("standard");
     expect(manifest.rootDir).toBe("inbox-triage");
     expect(manifest.files[0]!.path).toBe("inbox-triage/SKILL.md");
     // round-trips back to a valid skill
     expect(parseSkillMd(manifest.files[0]!.contents).ok).toBe(true);
+  });
+
+  it("rejects exports that would violate SKILL.md frontmatter requirements", async () => {
+    const invalid = makeSkill({
+      id: SkillId("s1"),
+      userId: UserId("u1"),
+      source: {
+        frontmatter: { name: "   ", description: "d", extra: {} },
+        body: "# Body",
+      },
+      createdAt: new Date(0),
+      updatedAt: new Date(0),
+    });
+
+    const result = await runCapability(exportCapability, "standard", invalid);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.tag).toBe("seam_analyze_failed");
+      expect(result.error.message).toContain("Frontmatter is missing a `name`.");
+    }
   });
 });
