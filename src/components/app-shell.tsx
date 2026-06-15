@@ -307,27 +307,85 @@ export function AppShell({
 
     setStatus("Loading history...");
     try {
-      const res = await fetch(`/api/skills/${encodeURIComponent(currentSkillId)}/runs`);
-      const body = (await res.json().catch(() => null)) as unknown;
-      if (!res.ok) {
-        const error = parseGenericError(body, res.status);
+      const [runsRes, skillRes] = await Promise.all([
+        fetch(`/api/skills/${encodeURIComponent(currentSkillId)}/runs`),
+        fetch(`/api/skills/${encodeURIComponent(currentSkillId)}`),
+      ]);
+      const runsBody = (await runsRes.json().catch(() => null)) as unknown;
+      const skillBody = (await skillRes.json().catch(() => null)) as unknown;
+      if (!runsRes.ok) {
+        const error = parseGenericError(runsBody, runsRes.status);
         setStatus(error);
         setEntries([entry(error, "error")]);
         return;
       }
-      const history = toRunHistory(body);
+      if (!skillRes.ok) {
+        const error = parseGenericError(skillBody, skillRes.status);
+        setStatus(error);
+        setEntries([entry(error, "error")]);
+        return;
+      }
+      const history = toRunHistory(runsBody);
+      const detail = toSkillDetail(skillBody);
       const nextEntries = [
+        ...detail.versions.map((version) => ({
+          id: `version-${version.revision}`,
+          label: `Revision ${version.revision}${version.revision === detail.skill.latestRevision ? " (current)" : ""}: ${version.source.frontmatter.description}`,
+          actionLabel: "Restore",
+          onAction:
+            version.revision === detail.skill.latestRevision
+              ? undefined
+              : () => void handleRestoreVersion(detail.skill.id, version.revision),
+        })),
         ...history.evalRuns.map((run) =>
           entry(`Triggering eval ${run.status}: ${run.summary}`, run.status === "failed" ? "error" : undefined),
         ),
         ...history.testRuns.map((run) => entry(`Test run ${run.status}: ${run.prompt}`)),
       ];
-      setStatus(nextEntries.length > 0 ? "History loaded." : "No saved runs yet.");
+      setStatus(nextEntries.length > 0 ? "History loaded." : "No saved history yet.");
       setEntries(nextEntries);
     } catch (cause) {
       const error = friendlyError(String(cause));
       setStatus(error);
       setEntries([entry(error, "error")]);
+    }
+  }
+
+  async function handleRestoreVersion(id: string, revision: number) {
+    if (busy) return;
+    const confirmed = window.confirm(`Restore revision ${revision} as the current skill?`);
+    if (!confirmed) return;
+
+    setBusy(true);
+    setStatus("Restoring...");
+    try {
+      const res = await fetch(`/api/skills/${encodeURIComponent(id)}/restore`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ revision }),
+      });
+      const body = (await res.json().catch(() => null)) as unknown;
+      if (!res.ok) {
+        const error = parseGenericError(body, res.status);
+        setStatus(error);
+        setEntries((prev) => [...prev, entry(error, "error")]);
+        return;
+      }
+      const restored = toSkillDetail(body);
+      setCurrent(restored.skill.source);
+      setCurrentSkillId(restored.skill.id);
+      setHeroDocs(renderHeroDocs(restored.skill.source));
+      setView("rendered");
+      setCapability(null);
+      setStatus("Version restored.");
+      setEntries([entry(`Restored revision ${revision} as revision ${restored.skill.latestRevision}.`, "muted")]);
+      setInteractionMode("build");
+    } catch (cause) {
+      const error = friendlyError(String(cause));
+      setStatus(error);
+      setEntries((prev) => [...prev, entry(error, "error")]);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -690,16 +748,46 @@ function toSkillList(value: unknown): readonly {
   });
 }
 
-function toSkillDetail(value: unknown): { readonly skill: { readonly id: string; readonly source: SkillSource } } {
+function toSkillDetail(value: unknown): {
+  readonly skill: {
+    readonly id: string;
+    readonly source: SkillSource;
+    readonly latestRevision: number;
+  };
+  readonly versions: readonly {
+    readonly id: string;
+    readonly revision: number;
+    readonly source: SkillSource;
+  }[];
+} {
   if (
     !isRecord(value) ||
     !isRecord(value.skill) ||
     typeof value.skill.id !== "string" ||
-    !isSkillSource(value.skill.source)
+    !isSkillSource(value.skill.source) ||
+    typeof value.skill.latestRevision !== "number"
   ) {
     throw new Error("Skill returned an unexpected response.");
   }
-  return { skill: { id: value.skill.id, source: value.skill.source } };
+  const versions = Array.isArray(value.versions) ? value.versions.map((version) => {
+    if (
+      !isRecord(version) ||
+      typeof version.id !== "string" ||
+      typeof version.revision !== "number" ||
+      !isSkillSource(version.source)
+    ) {
+      throw new Error("Skill returned an unexpected response.");
+    }
+    return { id: version.id, revision: version.revision, source: version.source };
+  }) : [];
+  return {
+    skill: {
+      id: value.skill.id,
+      source: value.skill.source,
+      latestRevision: value.skill.latestRevision,
+    },
+    versions,
+  };
 }
 
 function toRunHistory(value: unknown): {

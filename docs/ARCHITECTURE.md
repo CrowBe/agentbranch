@@ -142,7 +142,7 @@ The build loop is **not thin** — it's the core and must feel good. Everything 
 
 - **`users`** — identity from Clerk (Google/GitHub).
 - **`skills`** — `id, user_id, name, description, body, frontmatter_json, created_at`.
-- **`skill_versions`** — append-only revisions of a skill (export is a pure function of a version; enables future regression evals). **Target state ([#72](https://github.com/CrowBe/SkillBuilder/issues/72)):** versioning is a product concept — restore-a-version lands as a *new* head revision (append-only stays append-only), with a default 10-version retention cap that never breaks stored run records.
+- **`skill_versions`** — append-only revisions of a skill (export is a pure function of a version; enables future regression evals). Versioning is a product concept: restore-a-version lands as a *new* head revision (append-only stays append-only). Retention keeps the latest 10 versions per skill; older versions are pruned, and stored run records survive because their version foreign keys are nullable with `onDelete: SetNull`.
 - **`usage`** — per-user token + turn counters (drives caps now; drives PAYG metering later).
 - **`eval_runs`** / **`test_runs`** — recorded triggering-eval and test-run results. **Target state ([#57](https://github.com/CrowBe/SkillBuilder/issues/57)):** each run carries a `skill_version_id` pinning the result to the revision it evaluated — the substrate for regression evals. **Read path ([#61](https://github.com/CrowBe/SkillBuilder/issues/61)):** list/fetch APIs + My skills / History surfaces re-render stored records through the seam renderers.
 

@@ -6,11 +6,12 @@ const currentIdentity = vi.fn();
 const deleteSkill = vi.fn();
 const findById = vi.fn();
 const listVersions = vi.fn();
+const restoreSkill = vi.fn();
 
 vi.mock("@/server/container", () => ({
   getContainer: () => ({
     auth: { currentIdentity },
-    skills: { delete: deleteSkill, findById, listVersions },
+    skills: { delete: deleteSkill, findById, listVersions, restore: restoreSkill },
   }),
 }));
 

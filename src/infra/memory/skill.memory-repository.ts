@@ -9,6 +9,7 @@ import {
 import {
   ok,
   err,
+  SKILL_VERSION_MAX,
   SkillId,
   SkillVersionId,
   type UserId,
@@ -57,6 +58,29 @@ export function createMemorySkillRepository(): SkillRepository {
         ...(versions.get(id) ?? []),
         { id: versionId, skillId: id, revision: next.latestRevision, source, createdAt: now },
       ]);
+      pruneVersions(id);
+      return ok(next);
+    },
+
+    async restore({ id, userId, revision }: { id: SkillIdT; userId: UserId; revision: number }) {
+      const existing = skills.get(id);
+      if (!existing || existing.userId !== userId) return err(domainError("not_found", `No skill ${id}.`));
+
+      const version = versions.get(id)?.find((item) => item.revision === revision);
+      if (!version) {
+        return err(domainError("not_found", `No revision ${revision} for skill ${id}.`));
+      }
+
+      const now = new Date();
+      const restored = reviseSkill(existing, version.source, now);
+      const versionId = SkillVersionId(crypto.randomUUID());
+      const next = { ...restored, latestVersionId: versionId };
+      skills.set(id, next);
+      versions.set(id, [
+        ...(versions.get(id) ?? []),
+        { id: versionId, skillId: id, revision: next.latestRevision, source: version.source, createdAt: now },
+      ]);
+      pruneVersions(id);
       return ok(next);
     },
 
@@ -83,4 +107,12 @@ export function createMemorySkillRepository(): SkillRepository {
       return ok(undefined);
     },
   };
+
+  function pruneVersions(id: SkillIdT) {
+    const retained = [...(versions.get(id) ?? [])]
+      .sort((a, b) => b.revision - a.revision)
+      .slice(0, SKILL_VERSION_MAX)
+      .sort((a, b) => a.revision - b.revision);
+    versions.set(id, retained);
+  }
 }
