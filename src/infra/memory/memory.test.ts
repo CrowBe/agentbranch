@@ -4,7 +4,7 @@ import { createMemorySkillRepository } from "./skill.memory-repository";
 import { createMemoryTestRunRepository } from "./test-run.memory-repository";
 import { createMemoryUsageRepository } from "./usage.memory-repository";
 import { parseSkillMd } from "@/modules/skill";
-import { unwrap, UserId } from "@/shared";
+import { SKILL_VERSION_MAX, unwrap, UserId } from "@/shared";
 
 describe("in-memory adapters", () => {
   it("skill repository creates, revises and lists by user", async () => {
@@ -81,6 +81,45 @@ describe("in-memory adapters", () => {
     expect(testRun.skillVersionId).toBe(created.latestVersionId);
     expect(evalRun.skillVersionId).toBe(created.latestVersionId);
     expect(saved.latestVersionId).not.toBe(created.latestVersionId);
+  });
+
+  it("restores a previous skill version as a new head revision", async () => {
+    const repo = createMemorySkillRepository();
+    const v1 = unwrap(parseSkillMd(`---\nname: t\ndescription: first\n---\nbody 1`));
+    const created = unwrap(await repo.create({ userId: UserId("u1"), source: v1 }));
+    const v2 = unwrap(parseSkillMd(`---\nname: t\ndescription: second\n---\nbody 2`));
+    unwrap(await repo.save({ id: created.id, userId: created.userId, source: v2 }));
+
+    const restored = unwrap(await repo.restore({
+      id: created.id,
+      userId: created.userId,
+      revision: 1,
+    }));
+
+    expect(restored.latestRevision).toBe(3);
+    expect(restored.source).toEqual(v1);
+    const versions = unwrap(await repo.listVersions(created.id, created.userId));
+    expect(versions.map((version) => version.revision)).toEqual([3, 2, 1]);
+    expect(versions[0]?.source).toEqual(v1);
+  });
+
+  it("retains only the latest skill versions", async () => {
+    const repo = createMemorySkillRepository();
+    const source = unwrap(parseSkillMd(`---\nname: t\ndescription: d1\n---\nbody 1`));
+    const created = unwrap(await repo.create({ userId: UserId("u1"), source }));
+
+    for (let revision = 2; revision <= SKILL_VERSION_MAX + 2; revision += 1) {
+      const next = unwrap(parseSkillMd(`---\nname: t\ndescription: d${revision}\n---\nbody ${revision}`));
+      unwrap(await repo.save({ id: created.id, userId: created.userId, source: next }));
+    }
+
+    const versions = unwrap(await repo.listVersions(created.id, created.userId));
+
+    expect(versions).toHaveLength(SKILL_VERSION_MAX);
+    expect(versions[0]?.revision).toBe(SKILL_VERSION_MAX + 2);
+    expect(versions.at(-1)?.revision).toBe(3);
+    await expect(repo.restore({ id: created.id, userId: created.userId, revision: 1 }))
+      .resolves.toMatchObject({ ok: false, error: { tag: "not_found" } });
   });
 
   it("usage repository accumulates across increments", async () => {

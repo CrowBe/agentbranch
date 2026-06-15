@@ -18,6 +18,12 @@ export interface SkillRepository {
     source: SkillSource;
   }): Promise<Result<Skill, DomainError>>;
 
+  restore(input: {
+    id: SkillId;
+    userId: UserId;
+    revision: number;
+  }): Promise<Result<Skill, DomainError>>;
+
   findById(id: SkillId, userId: UserId): Promise<Result<Skill | null, DomainError>>;
 
   listByUser(userId: UserId): Promise<Result<readonly Skill[], DomainError>>;

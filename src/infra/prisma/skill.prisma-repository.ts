@@ -9,6 +9,7 @@ import {
 import {
   ok,
   err,
+  SKILL_VERSION_MAX,
   SkillId,
   SkillVersionId,
   UserId,
@@ -120,10 +121,44 @@ export function createPrismaSkillRepository(prisma: PrismaClient): SkillReposito
           data: { skillId: id, revision: nextRevision, ...columns(source) },
           select: { id: true },
         });
+        await pruneOldVersions(tx, id);
         return { skill: skill[0], revision: nextRevision, versionId: version.id };
       });
       if (!saved) return err(domainError("not_found", `No skill ${id}.`));
       return ok(toSkill(saved.skill as SkillRow, saved.revision, saved.versionId));
+    },
+
+    async restore({ id, userId, revision }: { id: SkillIdT; userId: UserId; revision: number }) {
+      const restored = await prisma.$transaction(async (tx) => {
+        const target = await tx.skillVersion.findFirst({
+          where: { skillId: id, revision, skill: { userId } },
+        });
+        if (!target) return null;
+
+        const latest = await tx.skillVersion.findFirst({
+          where: { skillId: id, skill: { userId } },
+          orderBy: { revision: "desc" },
+          select: { revision: true },
+        });
+        if (!latest) return null;
+
+        const nextRevision = latest.revision + 1;
+        const source = toSkillVersion(target as SkillVersionRow).source;
+        const skill = await tx.skill.updateManyAndReturn({
+          where: { id, userId },
+          data: columns(source),
+        });
+        if (skill.length === 0) return null;
+
+        const version = await tx.skillVersion.create({
+          data: { skillId: id, revision: nextRevision, ...columns(source) },
+          select: { id: true },
+        });
+        await pruneOldVersions(tx, id);
+        return { skill: skill[0], revision: nextRevision, versionId: version.id };
+      });
+      if (!restored) return err(domainError("not_found", `No revision ${revision} for skill ${id}.`));
+      return ok(toSkill(restored.skill as SkillRow, restored.revision, restored.versionId));
     },
 
     async findById(id, userId) {
@@ -164,4 +199,21 @@ export function createPrismaSkillRepository(prisma: PrismaClient): SkillReposito
 /** Narrow Prisma's runtime errors into a domain error at the boundary. */
 export function asDomainError(cause: unknown) {
   return err(domainError("persistence_failed", "A database operation failed.", cause));
+}
+
+async function pruneOldVersions(
+  tx: Pick<PrismaClient, "skillVersion">,
+  skillId: SkillIdT,
+): Promise<void> {
+  const excess = await tx.skillVersion.findMany({
+    where: { skillId },
+    orderBy: { revision: "desc" },
+    skip: SKILL_VERSION_MAX,
+    select: { id: true },
+  });
+  if (excess.length === 0) return;
+
+  await tx.skillVersion.deleteMany({
+    where: { id: { in: excess.map((version) => version.id) } },
+  });
 }
