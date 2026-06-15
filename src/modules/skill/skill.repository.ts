@@ -12,6 +12,12 @@ export interface SkillRepository {
     source: SkillSource;
   }): Promise<Result<Skill, DomainError>>;
 
+  checkpoint(input: {
+    id?: SkillId;
+    userId: UserId;
+    source: SkillSource;
+  }): Promise<Result<Skill, DomainError>>;
+
   save(input: {
     id: SkillId;
     userId: UserId;

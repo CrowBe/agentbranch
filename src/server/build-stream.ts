@@ -24,11 +24,14 @@ export function buildLoopResponse(
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       let latestSource = input.current;
+      let draftSkillId = input.currentSkillId;
+      let checkpointingDisabled = false;
       try {
         for await (const event of runBuildLoop(input, gateway, userId)) {
           if (event.event === "skill") {
             latestSource = event.data.source;
             controller.enqueue(encoder.encode(encodeSse(event)));
+            await checkpointDraft(event.data.source);
             continue;
           }
 
@@ -54,12 +57,13 @@ export function buildLoopResponse(
 
             latestSource = edited.value;
             controller.enqueue(encoder.encode(encodeSse(event)));
+            await checkpointDraft(latestSource);
             continue;
           }
 
           if (event.event === "done" && latestSource) {
-            if (input.currentSkillId) {
-              const existing = await skills.findById(input.currentSkillId, userId);
+            if (draftSkillId) {
+              const existing = await skills.findById(draftSkillId, userId);
               if (!existing.ok) {
                 controller.enqueue(
                   encoder.encode(
@@ -78,7 +82,7 @@ export function buildLoopResponse(
               }
             }
 
-            if (!input.currentSkillId) {
+            if (!draftSkillId) {
               const tier = await tierFor(userId);
               const skillCap = await checkSkillCreateCap({ skills, userId, tier });
               if (!skillCap.ok) {
@@ -91,8 +95,8 @@ export function buildLoopResponse(
               }
             }
 
-            const persisted = input.currentSkillId
-              ? await skills.save({ id: input.currentSkillId, userId, source: latestSource })
+            const persisted = draftSkillId
+              ? await skills.save({ id: draftSkillId, userId, source: latestSource })
               : await skills.create({ userId, source: latestSource });
             if (!persisted.ok) {
               controller.enqueue(
@@ -125,6 +129,44 @@ export function buildLoopResponse(
         );
       } finally {
         controller.close();
+      }
+
+      async function checkpointDraft(source: typeof latestSource): Promise<void> {
+        if (!source || checkpointingDisabled) return;
+
+        if (!draftSkillId && !input.currentSkillId) {
+          const tier = await tierFor(userId);
+          const skillCap = await checkSkillCreateCap({ skills, userId, tier });
+          if (!skillCap.ok) {
+            checkpointingDisabled = true;
+            controller.enqueue(
+              encoder.encode(encodeSse({ event: "error", data: { message: skillCap.error.message } })),
+            );
+            return;
+          }
+        }
+
+        const checkpoint = await skills.checkpoint({ id: draftSkillId, userId, source });
+        if (!checkpoint.ok) {
+          checkpointingDisabled = true;
+          const message = input.currentSkillId ? "Skill not found." : checkpoint.error.message;
+          controller.enqueue(
+            encoder.encode(encodeSse({ event: "error", data: { message } })),
+          );
+          return;
+        }
+
+        if (!draftSkillId) {
+          draftSkillId = checkpoint.value.id;
+          controller.enqueue(
+            encoder.encode(
+              encodeSse({
+                event: "skill-checkpoint",
+                data: { skillId: checkpoint.value.id },
+              } satisfies BuildLoopEvent),
+            ),
+          );
+        }
       }
     },
   });

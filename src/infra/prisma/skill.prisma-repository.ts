@@ -101,16 +101,47 @@ export function createPrismaSkillRepository(prisma: PrismaClient): SkillReposito
       return ok(toSkill(skill as SkillRow, 1, skill.versions[0]?.id));
     },
 
+    async checkpoint({ id, userId, source }: { id?: SkillIdT; userId: UserId; source: SkillSource }) {
+      if (!id) {
+        const skill = await prisma.skill.create({
+          data: { userId, ...columns(source) },
+        });
+        return ok(toSkill(skill as SkillRow, 0));
+      }
+
+      const saved = await prisma.$transaction(async (tx) => {
+        const skill = await tx.skill.updateManyAndReturn({
+          where: { id, userId },
+          data: columns(source),
+        });
+        if (skill.length === 0) return null;
+
+        const latest = await tx.skillVersion.findFirst({
+          where: { skillId: id, skill: { userId } },
+          orderBy: { revision: "desc" },
+          select: { revision: true, id: true },
+        });
+        return { skill: skill[0], revision: latest?.revision ?? 0, versionId: latest?.id };
+      });
+      if (!saved) return err(domainError("not_found", `No skill ${id}.`));
+      return ok(toSkill(saved.skill as SkillRow, saved.revision, saved.versionId));
+    },
+
     async save({ id, userId, source }: { id: SkillIdT; userId: UserId; source: SkillSource }) {
       const saved = await prisma.$transaction(async (tx) => {
+        const existing = await tx.skill.findFirst({
+          where: { id, userId },
+          select: { id: true },
+        });
+        if (!existing) return null;
+
         const latest = await tx.skillVersion.findFirst({
           where: { skillId: id, skill: { userId } },
           orderBy: { revision: "desc" },
           select: { revision: true },
         });
-        if (!latest) return null;
 
-        const nextRevision = latest.revision + 1;
+        const nextRevision = (latest?.revision ?? 0) + 1;
         const skill = await tx.skill.updateManyAndReturn({
           where: { id, userId },
           data: columns(source),

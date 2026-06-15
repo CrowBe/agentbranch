@@ -69,8 +69,33 @@ describe("buildLoopResponse", () => {
 
     expect(done?.data.skillId).toEqual(expect.any(String));
     expect(done?.data.revision).toBe(1);
+    expect(events.find((e) => e.event === "skill-checkpoint")?.data.skillId).toBe(done?.data.skillId);
     const persisted = unwrap(await repo.findById(done!.data.skillId, userId));
     expect(persisted?.source.frontmatter.name).toBe("greeter");
+    expect(unwrap(await repo.listVersions(done!.data.skillId, userId))).toHaveLength(1);
+  });
+
+  it("checkpoints a first draft before the build finishes without cutting a revision", async () => {
+    const repo = createMemorySkillRepository();
+    const skillMd = `---\nname: greeter\ndescription: Greets people warmly\n---\nSay hello.`;
+    const response = buildLoopResponse(
+      { messages: [{ role: "user", content: "Make a greeter" }] },
+      fakeGateway([
+        { kind: "tool-result", tool: "write_skill", output: { content: skillMd } },
+      ]),
+      repo,
+      userId,
+    );
+
+    const events = await readEvents(response);
+    const checkpoint = events.find((e) => e.event === "skill-checkpoint");
+
+    expect(checkpoint?.data.skillId).toEqual(expect.any(String));
+    expect(events.find((e) => e.event === "done")).toBeUndefined();
+    const persisted = unwrap(await repo.findById(checkpoint!.data.skillId, userId));
+    expect(persisted?.source.frontmatter.name).toBe("greeter");
+    expect(persisted?.latestRevision).toBe(0);
+    expect(unwrap(await repo.listVersions(checkpoint!.data.skillId, userId))).toHaveLength(0);
   });
 
   it("streams a cap error instead of persisting a second free-tier skill", async () => {
@@ -134,6 +159,7 @@ describe("buildLoopResponse", () => {
     expect(done?.data.skillId).toBe(created.id);
     expect(done?.data.revision).toBe(2);
     expect(persisted?.source.body).toBe("Say hello in one sentence.");
+    expect(unwrap(await repo.listVersions(created.id, userId))).toHaveLength(2);
   });
 
   it("streams an error and does not persist when an edit cannot be applied", async () => {
