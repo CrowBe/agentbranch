@@ -28,6 +28,7 @@ export type BuildLoopDone = {
 export type BuildLoopEvent =
   | SseEvent<"text", { readonly delta: string }>
   | SseEvent<"skill", { readonly source: SkillSource }>
+  | SseEvent<"skill-checkpoint", { readonly skillId: SkillId }>
   | SseEvent<"skill-edit", { readonly oldStr: string; readonly newStr: string }>
   | SseEvent<"tool", { readonly name: string; readonly phase: "call" | "result" }>
   | SseEvent<"done", BuildLoopDone>

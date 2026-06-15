@@ -101,6 +101,8 @@ export function AppShell({
           setCurrent(latestSource);
           setHeroDocs(renderHeroDocs(latestSource));
           setCapability(null);
+        } else if (event.event === "skill-checkpoint") {
+          setCurrentSkillId(event.data.skillId);
         } else if (event.event === "skill-edit") {
           if (!latestSource) {
             setEntries((prev) => [...prev, entry("No draft exists to edit yet.", "error")]);
