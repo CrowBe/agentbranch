@@ -36,11 +36,18 @@ export type Skill = {
   readonly updatedAt: Date;
 };
 
+export type SkillVersionLintSummary = {
+  readonly score: number;
+  readonly grade: "A" | "B" | "C" | "D";
+  readonly counts: Readonly<Record<"error" | "warn" | "info", number>>;
+};
+
 export type SkillVersion = {
   readonly id: SkillVersionId;
   readonly skillId: SkillId;
   readonly revision: number;
   readonly source: SkillSource;
+  readonly lintSummary?: SkillVersionLintSummary;
   readonly createdAt: Date;
 };
 

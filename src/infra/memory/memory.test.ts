@@ -23,6 +23,12 @@ describe("in-memory adapters", () => {
     expect(mine).toHaveLength(1);
     expect(unwrap(await repo.listByUser(UserId("u2")))).toHaveLength(0);
     expect(unwrap(await repo.findById(created.id, UserId("u2")))).toBeNull();
+
+    const versions = unwrap(await repo.listVersions(created.id, created.userId));
+    expect(versions.map((version) => version.lintSummary)).toEqual([
+      { score: 58, grade: "D", counts: { error: 0, warn: 3, info: 2 } },
+      { score: 58, grade: "D", counts: { error: 0, warn: 3, info: 2 } },
+    ]);
   });
 
   it("deletes skills only for their owner", async () => {
@@ -101,6 +107,11 @@ describe("in-memory adapters", () => {
     const versions = unwrap(await repo.listVersions(created.id, created.userId));
     expect(versions.map((version) => version.revision)).toEqual([3, 2, 1]);
     expect(versions[0]?.source).toEqual(v1);
+    expect(versions[0]?.lintSummary).toEqual({
+      score: 58,
+      grade: "D",
+      counts: { error: 0, warn: 3, info: 2 },
+    });
   });
 
   it("retains only the latest skill versions", async () => {

@@ -55,6 +55,7 @@ model SkillVersion {
   description     String
   body            String   @db.Text
   frontmatterJson Json     @map("frontmatter_json")
+  lintSummaryJson Json?    @map("lint_summary_json")
   createdAt       DateTime @default(now()) @map("created_at")
 
   skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)

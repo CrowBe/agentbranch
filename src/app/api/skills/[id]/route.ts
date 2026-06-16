@@ -37,6 +37,7 @@ export async function GET(
       id: version.id,
       revision: version.revision,
       source: version.source,
+      lintSummary: version.lintSummary ?? null,
       createdAt: version.createdAt.toISOString(),
     })),
   });

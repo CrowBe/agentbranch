@@ -8,6 +8,7 @@
 export type {
   Skill,
   SkillVersion,
+  SkillVersionLintSummary,
   SkillSource,
   Frontmatter,
   SkillError,

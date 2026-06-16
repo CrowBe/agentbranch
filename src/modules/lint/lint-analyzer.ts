@@ -1,4 +1,4 @@
-import { serializeSkillMd, type Skill, skillDescription, skillName } from "@/modules/skill";
+import { serializeSkillMd, type Skill, type SkillSource } from "@/modules/skill";
 import type { AnalysisContext, Analyzer } from "@/modules/skill-analysis";
 import { ok, SKILL_BODY_MAX, SKILL_DESCRIPTION_MAX, SKILL_NAME_MAX } from "@/shared";
 import type { LintFinding, LintReport, LintSeverity, LintSummary } from "./lint.types";
@@ -74,18 +74,29 @@ export const lintAnalyzer: Analyzer<LintReport> = {
 };
 
 export function createLintReport(skill: Skill, referenceFiles: readonly string[] = []): LintReport {
-  const raw = serializeSkillMd(skill.source);
+  return createLintReportForSource(skill.source, referenceFiles);
+}
+
+export function createLintSummary(source: SkillSource): LintSummary {
+  return createLintReportForSource(source).summary;
+}
+
+export function createLintReportForSource(
+  source: SkillSource,
+  referenceFiles: readonly string[] = [],
+): LintReport {
+  const raw = serializeSkillMd(source);
   const findings: LintFinding[] = [];
-  const name = skillName(skill);
-  const description = skillDescription(skill);
-  const body = skill.source.body;
+  const name = source.frontmatter.name;
+  const description = source.frontmatter.description;
+  const body = source.body;
   const knownReferenceFiles = new Set(referenceFiles.map(normalizeReferencePath));
 
   addFinding(findings, raw, "name:", validateName(name));
   addFinding(findings, raw, "description:", validateDescription(description));
   findings.push(...validateDescriptionQuality(raw, name, description, body));
 
-  for (const key of Object.keys(skill.source.frontmatter.extra).sort()) {
+  for (const key of Object.keys(source.frontmatter.extra).sort()) {
     addFinding(findings, raw, `${key}:`, {
       rule: "frontmatter.unknown-key",
       severity: "info",
