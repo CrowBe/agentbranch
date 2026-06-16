@@ -43,6 +43,7 @@ describe("GET /api/skills/:id", () => {
           frontmatter: { name: "inbox-triage", description: "Sort mail better.", extra: {} },
           body: "# Goal\n\nImprove it.",
         },
+        lintSummary: { score: 76, grade: "B", counts: { error: 0, warn: 2, info: 0 } },
         createdAt: new Date("2026-01-02T00:00:00.000Z"),
       },
     ]));
@@ -72,6 +73,7 @@ describe("GET /api/skills/:id", () => {
             frontmatter: { name: "inbox-triage", description: "Sort mail better.", extra: {} },
             body: "# Goal\n\nImprove it.",
           },
+          lintSummary: { score: 76, grade: "B", counts: { error: 0, warn: 2, info: 0 } },
           createdAt: "2026-01-02T00:00:00.000Z",
         },
       ],

@@ -72,7 +72,13 @@ describe("buildLoopResponse", () => {
     expect(events.find((e) => e.event === "skill-checkpoint")?.data.skillId).toBe(done?.data.skillId);
     const persisted = unwrap(await repo.findById(done!.data.skillId, userId));
     expect(persisted?.source.frontmatter.name).toBe("greeter");
-    expect(unwrap(await repo.listVersions(done!.data.skillId, userId))).toHaveLength(1);
+    const versions = unwrap(await repo.listVersions(done!.data.skillId, userId));
+    expect(versions).toHaveLength(1);
+    expect(versions[0]?.lintSummary).toEqual({
+      score: 70,
+      grade: "C",
+      counts: { error: 0, warn: 2, info: 2 },
+    });
   });
 
   it("checkpoints a first draft before the build finishes without cutting a revision", async () => {

@@ -6,6 +6,7 @@ import {
   type SkillVersion,
   type SkillRepository,
 } from "@/modules/skill";
+import { createLintSummary } from "@/modules/lint";
 import {
   ok,
   err,
@@ -36,6 +37,7 @@ type SkillVersionRow = {
   description: string;
   body: string;
   frontmatterJson: unknown;
+  lintSummaryJson: unknown | null;
   createdAt: Date;
 };
 
@@ -72,6 +74,8 @@ function toSkillVersion(row: SkillVersionRow): SkillVersion {
       },
       body: row.body,
     },
+    lintSummary:
+      row.lintSummaryJson === null ? undefined : (row.lintSummaryJson as SkillVersion["lintSummary"]),
     createdAt: row.createdAt,
   };
 }
@@ -81,6 +85,11 @@ const columns = (source: SkillSource) => ({
   description: source.frontmatter.description,
   body: source.body,
   frontmatterJson: source.frontmatter.extra as object,
+});
+
+const versionColumns = (source: SkillSource) => ({
+  ...columns(source),
+  lintSummaryJson: createLintSummary(source),
 });
 
 /**
@@ -94,7 +103,7 @@ export function createPrismaSkillRepository(prisma: PrismaClient): SkillReposito
         data: {
           userId,
           ...columns(source),
-          versions: { create: { revision: 1, ...columns(source) } },
+          versions: { create: { revision: 1, ...versionColumns(source) } },
         },
         include: { versions: { orderBy: { revision: "desc" }, take: 1, select: { id: true } } },
       });
@@ -149,7 +158,7 @@ export function createPrismaSkillRepository(prisma: PrismaClient): SkillReposito
         if (skill.length === 0) return null;
 
         const version = await tx.skillVersion.create({
-          data: { skillId: id, revision: nextRevision, ...columns(source) },
+          data: { skillId: id, revision: nextRevision, ...versionColumns(source) },
           select: { id: true },
         });
         await pruneOldVersions(tx, id);
@@ -182,7 +191,7 @@ export function createPrismaSkillRepository(prisma: PrismaClient): SkillReposito
         if (skill.length === 0) return null;
 
         const version = await tx.skillVersion.create({
-          data: { skillId: id, revision: nextRevision, ...columns(source) },
+          data: { skillId: id, revision: nextRevision, ...versionColumns(source) },
           select: { id: true },
         });
         await pruneOldVersions(tx, id);

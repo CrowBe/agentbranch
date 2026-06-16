@@ -6,6 +6,7 @@ import {
   type SkillVersion,
   type SkillRepository,
 } from "@/modules/skill";
+import { createLintSummary } from "@/modules/lint";
 import {
   ok,
   err,
@@ -41,7 +42,14 @@ export function createMemorySkillRepository(): SkillRepository {
       });
       skills.set(skill.id, skill);
       versions.set(skill.id, [
-        { id: versionId, skillId: skill.id, revision: 1, source, createdAt: now },
+        {
+          id: versionId,
+          skillId: skill.id,
+          revision: 1,
+          source,
+          lintSummary: createLintSummary(source),
+          createdAt: now,
+        },
       ]);
       return ok(skill);
     },
@@ -79,7 +87,14 @@ export function createMemorySkillRepository(): SkillRepository {
       skills.set(id, next);
       versions.set(id, [
         ...(versions.get(id) ?? []),
-        { id: versionId, skillId: id, revision: next.latestRevision, source, createdAt: now },
+        {
+          id: versionId,
+          skillId: id,
+          revision: next.latestRevision,
+          source,
+          lintSummary: createLintSummary(source),
+          createdAt: now,
+        },
       ]);
       pruneVersions(id);
       return ok(next);
@@ -101,7 +116,14 @@ export function createMemorySkillRepository(): SkillRepository {
       skills.set(id, next);
       versions.set(id, [
         ...(versions.get(id) ?? []),
-        { id: versionId, skillId: id, revision: next.latestRevision, source: version.source, createdAt: now },
+        {
+          id: versionId,
+          skillId: id,
+          revision: next.latestRevision,
+          source: version.source,
+          lintSummary: createLintSummary(version.source),
+          createdAt: now,
+        },
       ]);
       pruneVersions(id);
       return ok(next);

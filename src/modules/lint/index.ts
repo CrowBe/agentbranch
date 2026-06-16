@@ -18,7 +18,7 @@ export const lintCapability = defineCapability<
   renderers: { insights: lintInsightsRenderer, breakdown: lintBreakdownRenderer },
 });
 
-export { createLintReport, lintAnalyzer } from "./lint-analyzer";
+export { createLintReport, createLintSummary, lintAnalyzer } from "./lint-analyzer";
 export { lintBreakdownRenderer, lintInsightsRenderer } from "./renderers";
 export type {
   LintBreakdown,
