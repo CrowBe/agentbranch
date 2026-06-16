@@ -2,6 +2,7 @@ import { AppShell } from "@/components/app-shell";
 import { makeSkill, parseSkillMd } from "@/modules/skill";
 import { runCapability } from "@/modules/skill-analysis";
 import { heroCapability } from "@/modules/hero";
+import { createLintSummary } from "@/modules/lint";
 import { unwrap, SkillId, UserId } from "@/shared";
 
 // A demo skill so the shell renders a real document through the seam. Replace
@@ -39,5 +40,12 @@ export default async function Home() {
   const rendered = unwrap(await runCapability(heroCapability, "rendered", skill));
   const sourceDoc = unwrap(await runCapability(heroCapability, "source", skill));
 
-  return <AppShell rendered={rendered} source={sourceDoc} initialSkill={source} />;
+  return (
+    <AppShell
+      rendered={rendered}
+      source={sourceDoc}
+      initialSkill={source}
+      initialLintSummary={createLintSummary(source)}
+    />
+  );
 }

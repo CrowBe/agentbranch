@@ -30,6 +30,46 @@ afterEach(() => {
 });
 
 describe("AppShell capability chips", () => {
+  it("opens the current skill quality report from the hero chip", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({
+        score: 73,
+        grade: "C",
+        summary: "This skill has a few warnings.",
+        findings: [],
+        watch: ["Add clearer usage boundaries."],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <AppShell
+        rendered={rendered}
+        source={source}
+        initialSkill={skill}
+        initialLintSummary={{ score: 73, grade: "C", counts: { error: 0, warn: 2, info: 1 } }}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Quality C 73/100" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/lint",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            skill,
+            currentSkillId: undefined,
+            surface: "insights",
+          }),
+        }),
+      );
+    });
+    expect(await screen.findByText("This skill has a few warnings.")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Quality ready.");
+  });
+
   it("imports pasted SKILL.md and renders the saved skill", async () => {
     const importedSkill: SkillSource = {
       frontmatter: {

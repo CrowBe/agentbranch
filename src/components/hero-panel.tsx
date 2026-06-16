@@ -1,4 +1,5 @@
 import type { RenderedDoc, SourceDoc, HeroView } from "@/modules/hero";
+import type { SkillVersionLintSummary } from "@/modules/skill";
 import { ViewToggle } from "./view-toggle";
 import { ToolChips, type ToolAction } from "./tool-chips";
 
@@ -23,6 +24,16 @@ export type CapabilityPanel =
       readonly title: string;
       readonly breakdown: EvaluationBreakdown;
     }
+  | {
+      readonly kind: "lint-insights";
+      readonly title: string;
+      readonly insight: LintInsightPanel;
+    }
+  | {
+      readonly kind: "lint-breakdown";
+      readonly title: string;
+      readonly breakdown: LintBreakdownPanel;
+    }
   | { readonly kind: "export"; readonly rootDir: string; readonly files: readonly ExportPanelFile[] };
 
 export type EvaluationToolAction = "test-run" | "triggering-eval";
@@ -32,6 +43,23 @@ export type InsightPanel = {
   readonly summary: string;
   readonly findings: readonly string[];
   readonly watch: readonly string[];
+};
+
+export type LintInsightPanel = {
+  readonly score: number;
+  readonly grade: SkillVersionLintSummary["grade"];
+  readonly summary: string;
+  readonly findings: readonly string[];
+  readonly watch: readonly string[];
+};
+
+export type LintBreakdownPanel = {
+  readonly summary: SkillVersionLintSummary;
+  readonly findings: readonly {
+    readonly rule: string;
+    readonly severity: "error" | "warn" | "info";
+    readonly message: string;
+  }[];
 };
 
 export type EvaluationBreakdown =
@@ -83,8 +111,12 @@ export function HeroPanel({
   capability,
   activeTool,
   toolBusy,
+  lintSummary,
+  lintBusy,
   onToolSelect,
+  onLintSelect,
   onEvaluationSurfaceChange,
+  onLintSurfaceChange,
 }: {
   rendered: RenderedDoc;
   source: SourceDoc;
@@ -93,8 +125,12 @@ export function HeroPanel({
   capability: CapabilityPanel | null;
   activeTool: ToolAction | null;
   toolBusy: boolean;
+  lintSummary?: SkillVersionLintSummary | null;
+  lintBusy: boolean;
   onToolSelect: (action: ToolAction) => void;
+  onLintSelect: () => void;
   onEvaluationSurfaceChange: (surface: "insights" | "breakdown") => void;
+  onLintSurfaceChange: (surface: "insights" | "breakdown") => void;
 }) {
   return (
     <section className="mx-auto flex h-full w-full max-w-3xl flex-col gap-4 px-6 py-8">
@@ -109,9 +145,15 @@ export function HeroPanel({
             panel={capability}
             busy={toolBusy}
             onEvaluationSurfaceChange={onEvaluationSurfaceChange}
+            onLintSurfaceChange={onLintSurfaceChange}
           />
         ) : view === "rendered" ? (
-          <RenderedView doc={rendered} />
+          <RenderedView
+            doc={rendered}
+            lintSummary={lintSummary}
+            lintBusy={lintBusy}
+            onLintSelect={onLintSelect}
+          />
         ) : (
           <SourceView doc={source} />
         )}
@@ -120,11 +162,35 @@ export function HeroPanel({
   );
 }
 
-function RenderedView({ doc }: { doc: RenderedDoc }) {
+function RenderedView({
+  doc,
+  lintSummary,
+  lintBusy,
+  onLintSelect,
+}: {
+  doc: RenderedDoc;
+  lintSummary?: SkillVersionLintSummary | null;
+  lintBusy: boolean;
+  onLintSelect: () => void;
+}) {
   return (
     <div className="flex flex-col gap-5">
       <header className="flex flex-col gap-2">
-        <h1 className="text-display-lg">{doc.title}</h1>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h1 className="text-display-lg">{doc.title}</h1>
+          {lintSummary && (
+            <button
+              type="button"
+              aria-label={`Quality ${lintSummary.grade} ${lintSummary.score}/100`}
+              onClick={onLintSelect}
+              disabled={lintBusy}
+              className={`text-label inline-flex items-center gap-2 rounded-full px-3 py-1.5 transition-opacity hover:opacity-80 disabled:cursor-wait disabled:opacity-60 ${lintTone(lintSummary)}`}
+            >
+              <span>Quality {lintSummary.grade}</span>
+              <span>{lintSummary.score}/100</span>
+            </button>
+          )}
+        </div>
         <p className="text-doc-rendered text-on-surface-variant">{doc.description}</p>
       </header>
       {doc.sections.map((section, i) => (
@@ -149,10 +215,12 @@ function CapabilityView({
   panel,
   busy,
   onEvaluationSurfaceChange,
+  onLintSurfaceChange,
 }: {
   panel: CapabilityPanel;
   busy: boolean;
   onEvaluationSurfaceChange: (surface: "insights" | "breakdown") => void;
+  onLintSurfaceChange: (surface: "insights" | "breakdown") => void;
 }) {
   if (panel.kind === "visualise") {
     return (
@@ -209,6 +277,52 @@ function CapabilityView({
     );
   }
 
+  if (panel.kind === "lint-breakdown") {
+    return (
+      <div className="flex flex-col gap-4">
+        <EvaluationSurfaceTabs value="breakdown" busy={busy} onChange={onLintSurfaceChange} />
+        <header className="flex flex-col gap-1">
+          <p className="text-label text-on-surface-variant">{panel.title}</p>
+          <h1 className="text-headline-md">
+            Grade {panel.breakdown.summary.grade} · {panel.breakdown.summary.score}/100
+          </h1>
+        </header>
+        <div className="flex flex-col gap-3">
+          {panel.breakdown.findings.length === 0 ? (
+            <p className="text-doc-rendered text-on-surface-variant">No deterministic lint findings.</p>
+          ) : (
+            panel.breakdown.findings.map((finding) => (
+              <section key={`${finding.rule}-${finding.message}`} className="rounded-[var(--radius-sm)] border border-outline-variant p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="text-doc-rendered-h">{finding.rule}</h2>
+                  <p className="text-label text-on-surface-variant">{finding.severity}</p>
+                </div>
+                <p className="text-doc-rendered mt-2 text-on-surface-variant">{finding.message}</p>
+              </section>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (panel.kind === "lint-insights") {
+    return (
+      <div className="flex flex-col gap-4">
+        <EvaluationSurfaceTabs value="insights" busy={busy} onChange={onLintSurfaceChange} />
+        <header className="flex flex-col gap-2">
+          <p className="text-label text-on-surface-variant">{panel.title}</p>
+          <h1 className="text-headline-md">
+            Grade {panel.insight.grade} · {panel.insight.score}/100
+          </h1>
+          <p className="text-doc-rendered text-on-surface-variant">{panel.insight.summary}</p>
+        </header>
+        <InsightList title="Findings" items={panel.insight.findings} />
+        <InsightList title="Watch" items={panel.insight.watch} />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <EvaluationSurfaceTabs value="insights" busy={busy} onChange={onEvaluationSurfaceChange} />
@@ -221,6 +335,12 @@ function CapabilityView({
       <InsightList title="Watch" items={panel.insight.watch} />
     </div>
   );
+}
+
+function lintTone(summary: SkillVersionLintSummary): string {
+  if (summary.counts.error > 0 || summary.grade === "D") return "bg-error/15 text-error";
+  if (summary.counts.warn > 0 || summary.grade === "C") return "bg-tertiary/15 text-tertiary";
+  return "bg-secondary/15 text-secondary";
 }
 
 function EvaluationProgressView({

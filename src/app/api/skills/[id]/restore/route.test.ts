@@ -49,6 +49,11 @@ describe("POST /api/skills/:id/restore", () => {
           body: "# Goal",
         },
         latestRevision: 3,
+        lintSummary: {
+          score: 73,
+          grade: "C",
+          counts: { error: 0, warn: 2, info: 1 },
+        },
         latestVersionId: "version-3",
         createdAt: "2026-01-01T00:00:00.000Z",
         updatedAt: "2026-01-03T00:00:00.000Z",

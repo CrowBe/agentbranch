@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { readSseEvents, type EvaluationEvent } from "@/shared";
 import type { RenderedDoc, SourceDoc, HeroView } from "@/modules/hero";
-import type { SkillSource } from "@/modules/skill";
+import type { SkillSource, SkillVersionLintSummary } from "@/modules/skill";
 import { TopBar } from "./top-bar";
 import { SideRail, type SideRailView } from "./side-rail";
 import { ModelConsole } from "./model-console";
@@ -13,6 +13,8 @@ import {
   type EvaluationBreakdown,
   type EvaluationToolAction,
   type InsightPanel,
+  type LintBreakdownPanel,
+  type LintInsightPanel,
 } from "./hero-panel";
 import { InteractionPanel } from "./interaction-panel";
 import type { ToolAction } from "./tool-chips";
@@ -28,18 +30,24 @@ export function AppShell({
   rendered,
   source,
   initialSkill,
+  initialLintSummary = null,
 }: {
   rendered: RenderedDoc;
   source: SourceDoc;
   initialSkill: SkillSource;
+  initialLintSummary?: SkillVersionLintSummary | null;
 }) {
   const [menuExpanded, setMenuExpanded] = useState(false);
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [view, setView] = useState<HeroView>("rendered");
   const [interactionMode, setInteractionMode] = useState<"build" | "import" | "skills" | "history">("build");
   const [toolBusy, setToolBusy] = useState(false);
+  const [lintBusy, setLintBusy] = useState(false);
   const [activeTool, setActiveTool] = useState<ToolAction | null>(null);
   const [capability, setCapability] = useState<CapabilityPanel | null>(null);
+  const [currentLintSummary, setCurrentLintSummary] = useState<SkillVersionLintSummary | null>(
+    initialLintSummary,
+  );
   const {
     status,
     setStatus,
@@ -62,6 +70,7 @@ export function AppShell({
     onStreamSkillChange: () => {
       setCapability(null);
       setActiveTool(null);
+      setCurrentLintSummary(null);
     },
   });
 
@@ -95,8 +104,12 @@ export function AppShell({
             capability={capability}
             activeTool={activeTool}
             toolBusy={toolBusy}
+            lintSummary={currentLintSummary}
+            lintBusy={lintBusy}
             onToolSelect={handleToolSelect}
+            onLintSelect={() => void handleLintSurfaceSelect("insights")}
             onEvaluationSurfaceChange={handleEvaluationSurfaceSelect}
+            onLintSurfaceChange={handleLintSurfaceSelect}
           />
           {status && (
             <p className="text-label px-6 pb-4 text-on-surface-variant" role="status">
@@ -146,6 +159,7 @@ export function AppShell({
 
       setCurrent(body.skill.source);
       setCurrentSkillId(body.skill.id);
+      setCurrentLintSummary(body.skill.lintSummary ?? null);
       setHeroDocs({ rendered: body.rendered, source: body.source });
       setView("rendered");
       setStatus("Import complete.");
@@ -209,6 +223,7 @@ export function AppShell({
       const loaded = toSkillDetail(body);
       setCurrent(loaded.skill.source);
       setCurrentSkillId(loaded.skill.id);
+      setCurrentLintSummary(loaded.skill.lintSummary ?? latestLintSummary(loaded));
       setHeroDocs(renderHeroDocs(loaded.skill.source));
       setView("rendered");
       setCapability(null);
@@ -260,7 +275,7 @@ export function AppShell({
       const nextEntries = [
         ...detail.versions.map((version) => ({
           id: `version-${version.revision}`,
-          label: `Revision ${version.revision}${version.revision === detail.skill.latestRevision ? " (current)" : ""}: ${version.source.frontmatter.description}`,
+          label: `Revision ${version.revision}${version.revision === detail.skill.latestRevision ? " (current)" : ""}${version.lintSummary ? ` - Quality ${version.lintSummary.grade} ${version.lintSummary.score}/100` : ""}: ${version.source.frontmatter.description}`,
           actionLabel: "Restore",
           onAction:
             version.revision === detail.skill.latestRevision
@@ -304,6 +319,7 @@ export function AppShell({
       const restored = toSkillDetail(body);
       setCurrent(restored.skill.source);
       setCurrentSkillId(restored.skill.id);
+      setCurrentLintSummary(restored.skill.lintSummary ?? latestLintSummary(restored));
       setHeroDocs(renderHeroDocs(restored.skill.source));
       setView("rendered");
       setCapability(null);
@@ -326,6 +342,44 @@ export function AppShell({
   async function handleEvaluationSurfaceSelect(surface: "insights" | "breakdown") {
     if (!activeTool || !isEvaluationTool(activeTool)) return;
     await runTool(activeTool, surface);
+  }
+
+  async function handleLintSurfaceSelect(surface: "insights" | "breakdown") {
+    const skill = current;
+    if (!skill || lintBusy) return;
+
+    setActiveTool(null);
+    setLintBusy(true);
+    setStatus("Quality running...");
+
+    try {
+      const res = await fetch("/api/lint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          skill,
+          currentSkillId: currentSkillId ?? undefined,
+          surface,
+        }),
+      });
+      const body = (await res.json().catch(() => null)) as unknown;
+      if (!res.ok) {
+        const error = parseGenericError(body, res.status);
+        setStatus(error);
+        setEntries((prev) => [...prev, entry(error, "error")]);
+        return;
+      }
+      setCapability(toLintPanel(surface, body));
+      const summary = lintSummaryFromResponse(surface, body);
+      if (summary) setCurrentLintSummary(summary);
+      setStatus("Quality ready.");
+    } catch (cause) {
+      const error = friendlyError(String(cause));
+      setStatus(error);
+      setEntries((prev) => [...prev, entry(error, "error")]);
+    } finally {
+      setLintBusy(false);
+    }
   }
 
   async function runTool(action: ToolAction, surface: "insights" | "breakdown") {
@@ -561,14 +615,54 @@ function isInsight(value: unknown): value is InsightPanel {
   );
 }
 
-function isImportResponse(
-  value: unknown,
-): value is { readonly skill: { readonly id: string; readonly source: SkillSource }; readonly rendered: RenderedDoc; readonly source: SourceDoc } {
+function isLintInsight(value: unknown): value is LintInsightPanel {
+  return (
+    isRecord(value) &&
+    typeof value.score === "number" &&
+    isLintGrade(value.grade) &&
+    typeof value.summary === "string" &&
+    Array.isArray(value.findings) &&
+    value.findings.every((item) => typeof item === "string") &&
+    Array.isArray(value.watch) &&
+    value.watch.every((item) => typeof item === "string")
+  );
+}
+
+function isLintBreakdown(value: unknown): value is LintBreakdownPanel {
+  return (
+    isRecord(value) &&
+    isLintSummary(value.summary) &&
+    Array.isArray(value.findings) &&
+    value.findings.every(isLintFinding)
+  );
+}
+
+function isLintFinding(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.rule === "string" &&
+    (value.severity === "error" || value.severity === "warn" || value.severity === "info") &&
+    typeof value.message === "string"
+  );
+}
+
+function isImportResponse(value: unknown): value is {
+  readonly skill: {
+    readonly id: string;
+    readonly source: SkillSource;
+    readonly lintSummary?: SkillVersionLintSummary | null;
+  };
+  readonly rendered: RenderedDoc;
+  readonly source: SourceDoc;
+} {
   return (
     isRecord(value) &&
     isRecord(value.skill) &&
     typeof value.skill.id === "string" &&
     isSkillSource(value.skill.source) &&
+    (!("lintSummary" in value.skill) ||
+      value.skill.lintSummary === null ||
+      isLintSummary(value.skill.lintSummary)) &&
     isRenderedDoc(value.rendered) &&
     isSourceDoc(value.source)
   );
@@ -611,11 +705,13 @@ function toSkillDetail(value: unknown): {
     readonly id: string;
     readonly source: SkillSource;
     readonly latestRevision: number;
+    readonly lintSummary?: SkillVersionLintSummary | null;
   };
   readonly versions: readonly {
     readonly id: string;
     readonly revision: number;
     readonly source: SkillSource;
+    readonly lintSummary?: SkillVersionLintSummary | null;
   }[];
 } {
   if (
@@ -632,20 +728,79 @@ function toSkillDetail(value: unknown): {
       !isRecord(version) ||
       typeof version.id !== "string" ||
       typeof version.revision !== "number" ||
-      !isSkillSource(version.source)
+      !isSkillSource(version.source) ||
+      ("lintSummary" in version &&
+        version.lintSummary !== null &&
+        !isLintSummary(version.lintSummary))
     ) {
       throw new Error("Skill returned an unexpected response.");
     }
-    return { id: version.id, revision: version.revision, source: version.source };
+    const lintSummary =
+      "lintSummary" in version && isLintSummary(version.lintSummary)
+        ? version.lintSummary
+        : null;
+    return {
+      id: version.id,
+      revision: version.revision,
+      source: version.source,
+      lintSummary,
+    };
   }) : [];
   return {
     skill: {
       id: value.skill.id,
       source: value.skill.source,
       latestRevision: value.skill.latestRevision,
+      lintSummary:
+        "lintSummary" in value.skill && isLintSummary(value.skill.lintSummary)
+          ? value.skill.lintSummary
+          : null,
     },
     versions,
   };
+}
+
+function latestLintSummary(
+  detail: ReturnType<typeof toSkillDetail>,
+): SkillVersionLintSummary | null {
+  return (
+    detail.versions.find((version) => version.revision === detail.skill.latestRevision)
+      ?.lintSummary ?? null
+  );
+}
+
+function toLintPanel(surface: "insights" | "breakdown", body: unknown): CapabilityPanel {
+  if (surface === "breakdown" && isLintBreakdown(body)) {
+    return { kind: "lint-breakdown", title: "Quality", breakdown: body };
+  }
+  if (surface === "insights" && isLintInsight(body)) {
+    return { kind: "lint-insights", title: "Quality", insight: body };
+  }
+  throw new Error("Quality returned an unexpected response.");
+}
+
+function lintSummaryFromResponse(
+  surface: "insights" | "breakdown",
+  body: unknown,
+): SkillVersionLintSummary | null {
+  if (surface === "breakdown" && isLintBreakdown(body)) return body.summary;
+  return null;
+}
+
+function isLintSummary(value: unknown): value is SkillVersionLintSummary {
+  return (
+    isRecord(value) &&
+    typeof value.score === "number" &&
+    isLintGrade(value.grade) &&
+    isRecord(value.counts) &&
+    typeof value.counts.error === "number" &&
+    typeof value.counts.warn === "number" &&
+    typeof value.counts.info === "number"
+  );
+}
+
+function isLintGrade(value: unknown): value is SkillVersionLintSummary["grade"] {
+  return value === "A" || value === "B" || value === "C" || value === "D";
 }
 
 function toRunHistory(value: unknown): {

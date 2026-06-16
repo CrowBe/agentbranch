@@ -2,7 +2,12 @@ import { getContainer } from "@/server/container";
 import { checkSkillCreateCap, parseSkillMd } from "@/modules/skill";
 import { REQUEST_RATE_LIMIT } from "@/modules/usage";
 import { createHeroArtifact, renderedRenderer, sourceRenderer } from "@/modules/hero";
-import { createLintReport, lintBreakdownRenderer, lintInsightsRenderer } from "@/modules/lint";
+import {
+  createLintReport,
+  createLintSummary,
+  lintBreakdownRenderer,
+  lintInsightsRenderer,
+} from "@/modules/lint";
 import { isErr } from "@/shared";
 import { domainErrorResponse } from "../_shared/skill-request";
 import { invalidRequestResponse, parseJsonRequest, parseTextRequest } from "../_shared/request-body";
@@ -59,6 +64,7 @@ export async function POST(request: Request): Promise<Response> {
       id: saved.value.id,
       source: saved.value.source,
       latestRevision: saved.value.latestRevision,
+      lintSummary: createLintSummary(saved.value.source),
     },
     rendered: renderedRenderer.render(artifact),
     source: sourceRenderer.render(artifact),

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getContainer } from "@/server/container";
+import { createLintSummary } from "@/modules/lint";
 import { isErr, SkillId } from "@/shared";
 import { domainErrorResponse, validationMessage } from "../../../_shared/skill-request";
 
@@ -39,6 +40,7 @@ export async function POST(
       id: restored.value.id,
       source: restored.value.source,
       latestRevision: restored.value.latestRevision,
+      lintSummary: createLintSummary(restored.value.source),
       latestVersionId: restored.value.latestVersionId ?? null,
       createdAt: restored.value.createdAt.toISOString(),
       updatedAt: restored.value.updatedAt.toISOString(),
