@@ -79,7 +79,7 @@ The seam carries **two capability shapes** (CONTEXT.md → Analysis / Evaluation
 the model gateway and may fail `model_unavailable`. Same `artifact → render`
 tail; different head.
 
-- **`ArtifactKind`** — closed union of valid kind strings (`"hero" | "skill-ir" | "export" | "test-run" | "triggering-eval"`). Add a new member here when a new capability needs its own artifact type. Free-string kinds are a compile error.
+- **`ArtifactKind`** — closed union of valid kind strings (`"hero" | "skill-ir" | "export" | "lint" | "test-run" | "triggering-eval"`). Add a new member here when a new capability needs its own artifact type. Free-string kinds are a compile error.
 - **`Artifact<K>`** — the base artifact type; `K` must be an `ArtifactKind`. Each capability extends this with its own fields.
 - **`Analyzer<A>`** — read a skill, emit a structured artifact. Async + `Result`
   (some analyzers call the model).
@@ -109,6 +109,7 @@ tail; different head.
 | Hero | analysis | `hero` | hero (sections + spans) | `rendered`, `source` | real |
 | Visualise | analysis | `visualise` | IR extraction | `mermaid` | extract = stub, render = real |
 | Export | analysis | `export` | instruction intent | `claude` (manifest) | real |
+| Lint | analysis | `lint` | frontmatter + body + refs quality rules | `report` | real |
 | Test run | evaluation | `test-run` | composes `gateway.runAgent` + mock-tool registry | `insights`, `breakdown` | run real; scenario/registry stubbed |
 | Triggering eval | evaluation | `triggering-eval` | composes `gateway.classify` over the field | `insights`, `breakdown` | run real; battery/distractors stubbed |
 
@@ -138,8 +139,10 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **test-run** | `testRunCapability`, `executeSkill`, `createMockToolRegistry`, `defaultMockToolRegistry`, `emailMockTool` | `TestRunRepository` | evaluation capability · run real · scenario/registry stubbed |
 | **triggering-eval** | `triggeringEvalCapability`, `runTriggeringEval`, `buildPromptBattery`, `distractorLibrary` | `EvalRunRepository` | evaluation capability · run real · battery/distractors stubbed |
 | **export** | `exportCapability`, manifest types | — | real |
+| **lint** | `lintCapability`, `LintReport`, `LintFinding` | — | real |
+| **skill-import** | `SkillImportFetcher`, `ImportedSkill` | `SkillImportFetcher` | port |
 | **portability** | `transformSkill`, types | — | stub (deferred engine) |
-| **build-loop** | `runBuildLoop`, `buildTools`, `BuildToolName`, `BuildLoopEvent` | — (consumes `ModelGateway`) | real |
+| **build-loop** | `runBuildLoop`, `buildTools`, `BuildToolName`, `BuildLoopEvent`, `formatTestRunFeedback`, `formatTriggeringEvalFeedback` | — (consumes `ModelGateway`) | real |
 | **model-gateway** | `ModelGateway` (`classify`/`runAgent`/`streamAgent`/`generate`), `AccountingTag`, `GatewayTool`, `ModelProvider` | `ModelProvider` | real |
 | **model-router** | `ModelRouter` (`resolve`/`snapshot`/`setActive`/`setCredential`/`clearCredential`), `ProviderProfile`, `ModelSelection`, `RouterSnapshot`, selection helpers | `ModelRouter` | real |
 | **usage** | `checkCap`, `applyTurn`, `TIER_LIMITS`, types | `UsageRepository` | real |
@@ -163,6 +166,14 @@ placeholder):**
 - `portability/portability-transform.ts` — returns `not_configured`; one engine,
   two surfaces, both deferred (ARCHITECTURE §9).
 
+**Eval feedback (build loop — closeable with eval results).** `formatTestRunFeedback`
+and `formatTriggeringEvalFeedback` are pure functions in `build-loop` that translate
+a structured evaluation artifact into an actionable user message; the client appends
+it to the conversation and re-submits, so Claude revises against observed evidence
+rather than guessing. Lives in `build-loop` (not the eval modules) because "what
+does Claude need to revise this skill?" is a build concern, not an evaluation
+concern (ARCHITECTURE §2 *Eval feedback*, §4 *Eval → build feedback*).
+
 ### Infra (`src/infra`)
 
 | Adapter | Implements | Notes |
@@ -178,6 +189,7 @@ placeholder):**
 | `ai/stub-provider.ts` | `ModelProvider` | always `model: null` |
 | `clerk/clerk-auth.ts` | `AuthPort` | real Clerk server auth |
 | `clerk/stub-auth.ts` | `AuthPort` | fixed dev identity |
+| `github/skill-import-fetcher.ts` | `SkillImportFetcher` | fetches a `SKILL.md` from a GitHub URL; guarded (requires token) |
 
 ### Server (`src/server`)
 

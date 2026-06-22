@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SkillBuilder — Architecture &amp; module map</title>
+    <title>SkillSmith — Architecture &amp; module map</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -144,7 +144,7 @@
   </head>
   <body>
     <div class="topbar">
-      <span class="brand">SkillBuilder <small>· architecture &amp; module map</small></span>
+      <span class="brand">SkillSmith <small>· architecture &amp; module map</small></span>
       <button class="toggle" onclick="(function(h){h.dataset.theme=h.dataset.theme==='dark'?'light':'dark';})(document.documentElement)">
         Toggle theme
       </button>
@@ -185,6 +185,7 @@
               <li><span class="api">page.tsx</span> — server: builds demo skill → seam → shell</li>
               <li><span class="api">layout.tsx</span> — fonts, conditional ClerkProvider</li>
               <li><span class="api">api/build/route.ts</span> — SSE build endpoint (auth → stream; the gateway owns the key)</li>
+              <li><span class="api">api/model-router/route.ts</span> — admin-gated (Clerk allowlist): GET snapshot · POST mutate active selection or bring-your-own key</li>
               <li><span class="api">globals.css</span> — DESIGN tokens as CSS vars</li>
               <li><span class="api">proxy.ts</span> — Clerk / passthrough (Next 16)</li>
             </ul>
@@ -196,6 +197,7 @@
               <li>app-shell · top-bar · side-rail</li>
               <li>hero-panel (Rendered | Source) · view-toggle</li>
               <li>tool-chips · interaction-panel</li>
+              <li>model-console (provider/model + bring-your-own key overlay; opened from the rail)</li>
               <li>ui/ chip · button · pill</li>
             </ul>
           </div>
@@ -221,7 +223,8 @@
             <div class="path">src/server/container.ts</div>
             <ul>
               <li>wires ports → adapters by env flags</li>
-              <li>secrets absent ⇒ memory + stub adapters</li>
+              <li>builds <b>model router</b> from provider registry; wires gateway to resolve through it</li>
+              <li>secrets absent ⇒ memory + stub adapters; no model ⇒ <code>model_unavailable</code></li>
               <li>exposes <span class="api">AppContainer</span></li>
             </ul>
           </div>
@@ -230,6 +233,7 @@
             <div class="path">src/server/config.ts</div>
             <ul>
               <li>reads env → <span class="api">flags</span> (hasDatabase / hasModel / hasAuth)</li>
+              <li>assembles <span class="api">providerRegistry</span> + <span class="api">serverKeys</span> + <span class="api">defaultSelection</span> the model router is built from</li>
             </ul>
           </div>
           <div class="card">
@@ -278,6 +282,7 @@
           <span class="cap"><b>hero</b> → rendered · source</span>
           <span class="cap"><b>visualise</b> → mermaid</span>
           <span class="cap"><b>export</b> → skill folder zip</span>
+          <span class="cap"><b>lint</b> → report</span>
           <span class="cap"><b>test-run</b> → insights · breakdown</span>
           <span class="cap"><b>triggering-eval</b> → insights · breakdown</span>
         </div>
@@ -360,15 +365,22 @@
           <div class="card">
             <h3>build-loop <span class="badge b-real">real</span></h3>
             <div class="path">modules/build-loop</div>
-            <div class="api">runBuildLoop · buildTools</div>
-            <ul><li>write_skill/edit_skill, streams to preview</li><li>reaches the model only via <code>gateway.streamAgent</code> — never the raw model or key</li></ul>
+            <div class="api">runBuildLoop · buildTools · BuildToolName · BuildLoopEvent · formatTestRunFeedback · formatTriggeringEvalFeedback</div>
+            <ul><li>write_skill/edit_skill, streams to preview via <code>gateway.streamAgent</code></li><li><b>closeable with eval feedback:</b> <code>format*Feedback</code> are pure functions that translate a structured eval artifact into an actionable user message; client appends + re-submits so Claude revises against evidence</li></ul>
           </div>
 
           <div class="card seam">
             <h3>model-gateway <span class="badge b-real">real</span></h3>
             <div class="path">modules/model-gateway</div>
             <div class="api">classify · runAgent · streamAgent · generate</div>
-            <ul><li>the platform's single metered entry to the model; owns the <span class="api">ModelProvider</span> port + the <code>AccountingTag</code> (account · platform)</li><li>routes accounting through <b>usage</b>; consumers: build loop + evaluation</li></ul>
+            <ul><li>the platform's single metered entry to the model; calls <span class="api">ModelRouter.resolve(primitive)</span> to get a <code>LanguageModel</code> per call — never holds the key</li><li><code>AccountingTag</code> (account · platform); routes accounting through <b>usage</b>; consumers: build loop + evaluation</li></ul>
+          </div>
+
+          <div class="card">
+            <h3>model-router <span class="badge b-real">real</span></h3>
+            <div class="path">modules/model-router</div>
+            <div class="api">ModelRouter · resolve · snapshot · setActive · setCredential · clearCredential</div>
+            <ul><li>owns the provider registry, server-pool keys, and runtime-mutable active selection; resolves a <code>LanguageModel</code> per primitive</li><li>bring-your-own key overrides win when present; secret-free <code>snapshot()</code> never leaks keys</li><li>selection is process-local + single (per-user isolation is a future port swap)</li></ul>
           </div>
 
           <div class="card">
@@ -415,7 +427,7 @@
           <div class="card">
             <h3>ai <span class="badge b-wired">wired</span></h3>
             <div class="path">infra/ai</div>
-            <ul><li>model-gateway (the ModelGateway adapter) + stub-model-gateway (offline)</li><li>anthropic-provider · nous-provider (ModelProvider, guarded) · stub-provider</li></ul>
+            <ul><li>model-gateway.ts (ModelGateway adapter)</li><li>model-router.ts (ModelRouter adapter — registry, server-pool keys, BYO overrides)</li><li>anthropic-provider · nous-provider (ModelProvider, guarded) · stub-provider (model: null)</li></ul>
           </div>
           <div class="card">
             <h3>clerk <span class="badge b-wired">wired</span></h3>
@@ -484,7 +496,7 @@
       </div>
 
       <footer>
-        SkillBuilder · generated for the architecture review. Source of truth: <code>docs/ARCHITECTURE.md</code> ·
+        SkillSmith · generated for the architecture review. Source of truth: <code>docs/ARCHITECTURE.md</code> ·
         visual system: <code>docs/DESIGN.md</code> · agent map: <code>docs/MODULE_DESIGN.md</code>. Status badges
         reflect the scaffold commit; update them as stubs graduate.
       </footer>
