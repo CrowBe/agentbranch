@@ -2,13 +2,17 @@ import { encodeSse, isErr, type DomainError, type EvaluationEvent, type Result }
 
 export type EvaluationSurface = "insights" | "breakdown";
 export type EvaluationEmit = (event: EvaluationEvent) => void;
+export type EvaluationResponse = {
+  readonly body: unknown;
+  readonly result?: unknown;
+};
 
 export function wantsSse(request: Request): boolean {
   return request.headers.get("accept")?.includes("text/event-stream") ?? false;
 }
 
 export function evaluationStreamResponse(
-  run: (emit: EvaluationEmit) => Promise<Result<unknown, DomainError>>,
+  run: (emit: EvaluationEmit) => Promise<Result<EvaluationResponse, DomainError>>,
   surface: EvaluationSurface,
 ): Response {
   const encoder = new TextEncoder();
@@ -24,7 +28,7 @@ export function evaluationStreamResponse(
           emit({ event: "error", data: { message: result.error.message, code: result.error.tag } });
           return;
         }
-        emit({ event: "artifact", data: { surface, body: result.value } });
+        emit({ event: "artifact", data: { surface, body: result.value.body, result: result.value.result } });
       } catch (cause) {
         emit({ event: "error", data: { message: String(cause) } });
       } finally {
