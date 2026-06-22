@@ -2,8 +2,14 @@
 
 import { useState } from "react";
 import { readSseEvents, type EvaluationEvent } from "@/shared";
+import {
+  formatTestRunFeedback,
+  formatTriggeringEvalFeedback,
+} from "@/modules/build-loop/feedback-formatters";
 import type { RenderedDoc, SourceDoc, HeroView } from "@/modules/hero";
 import type { SkillSource, SkillVersionLintSummary } from "@/modules/skill";
+import type { TestRunResult } from "@/modules/test-run";
+import type { TriggeringResult } from "@/modules/triggering-eval";
 import { TopBar } from "./top-bar";
 import { SideRail, type SideRailView } from "./side-rail";
 import { ModelConsole } from "./model-console";
@@ -11,6 +17,7 @@ import {
   HeroPanel,
   type CapabilityPanel,
   type EvaluationBreakdown,
+  type EvaluationFeedbackResult,
   type EvaluationToolAction,
   type InsightPanel,
   type LintBreakdownPanel,
@@ -110,6 +117,8 @@ export function AppShell({
             onLintSelect={() => void handleLintSurfaceSelect("insights")}
             onEvaluationSurfaceChange={handleEvaluationSurfaceSelect}
             onLintSurfaceChange={handleLintSurfaceSelect}
+            onReviseWithFeedback={handleReviseWithFeedback}
+            feedbackBusy={busy || toolBusy}
           />
           {status && (
             <p className="text-label px-6 pb-4 text-on-surface-variant" role="status">
@@ -339,6 +348,14 @@ export function AppShell({
     await runTool(action, "insights");
   }
 
+  function handleReviseWithFeedback(result: EvaluationFeedbackResult) {
+    const feedback =
+      result.kind === "test-run"
+        ? formatTestRunFeedback(result)
+        : formatTriggeringEvalFeedback(result);
+    void handleSend(feedback);
+  }
+
   async function handleEvaluationSurfaceSelect(surface: "insights" | "breakdown") {
     if (!activeTool || !isEvaluationTool(activeTool)) return;
     await runTool(activeTool, surface);
@@ -446,7 +463,7 @@ export function AppShell({
         setStatus(`Case ${event.data.index}/${event.data.total} checked.`);
         setCapability((prev) => appendProgressCase(prev, action, event.data));
       } else if (event.event === "artifact") {
-        setCapability(toCapabilityPanel(action, surface, event.data.body));
+        setCapability(toCapabilityPanel(action, surface, event.data.body, event.data.result));
         setStatus(`${toolLabel(action)} ready.`);
       } else if (event.event === "error") {
         failed = true;
@@ -544,6 +561,7 @@ function toCapabilityPanel(
   action: ToolAction,
   surface: "insights" | "breakdown",
   body: unknown,
+  result?: unknown,
 ): CapabilityPanel {
   if (action === "visualise" && isRecord(body) && typeof body.mermaid === "string") {
     return { kind: "visualise", mermaid: body.mermaid };
@@ -566,10 +584,25 @@ function toCapabilityPanel(
   }
 
   if (isEvaluationTool(action) && isInsight(body)) {
-    return { kind: "insights", action, title: toolLabel(action), insight: body };
+    return {
+      kind: "insights",
+      action,
+      title: toolLabel(action),
+      insight: body,
+      result: toEvaluationFeedbackResult(action, result),
+    };
   }
 
   throw new Error("Capability returned an unexpected response.");
+}
+
+function toEvaluationFeedbackResult(
+  action: EvaluationToolAction,
+  result: unknown,
+): EvaluationFeedbackResult | undefined {
+  if (action === "test-run" && isTestRunResult(result)) return result;
+  if (action === "triggering-eval" && isTriggeringResult(result)) return result;
+  return undefined;
 }
 
 function isEvaluationTool(action: ToolAction): action is EvaluationToolAction {
@@ -859,6 +892,19 @@ function isTestRunBreakdown(
   );
 }
 
+function isTestRunResult(value: unknown): value is TestRunResult {
+  return (
+    isRecord(value) &&
+    value.kind === "test-run" &&
+    isRecord(value.scenario) &&
+    typeof value.scenario.prompt === "string" &&
+    isRecord(value.scenario.seedData) &&
+    Array.isArray(value.transcript) &&
+    value.transcript.every(isTranscriptStep) &&
+    isInsight(value.insight)
+  );
+}
+
 function isTranscriptStep(value: unknown): boolean {
   if (!isRecord(value) || typeof value.kind !== "string") return false;
   if (value.kind === "model") return typeof value.text === "string";
@@ -875,6 +921,17 @@ function isTriggeringBreakdown(
     typeof value.passed === "boolean" &&
     Array.isArray(value.cases) &&
     value.cases.every(isTriggeringCase)
+  );
+}
+
+function isTriggeringResult(value: unknown): value is TriggeringResult {
+  return (
+    isRecord(value) &&
+    value.kind === "triggering-eval" &&
+    typeof value.passed === "boolean" &&
+    Array.isArray(value.cases) &&
+    value.cases.every(isTriggeringCase) &&
+    isInsight(value.insight)
   );
 }
 

@@ -22,7 +22,10 @@ export type EvaluationEvent =
         readonly rationale: string;
       }
     >
-  | SseEvent<"artifact", { readonly surface: "insights" | "breakdown"; readonly body: unknown }>
+  | SseEvent<
+      "artifact",
+      { readonly surface: "insights" | "breakdown"; readonly body: unknown; readonly result?: unknown }
+    >
   | SseEvent<"error", { readonly message: string; readonly code?: string }>;
 
 /** Encode a typed event into the SSE wire format. Accepts any event shape so a

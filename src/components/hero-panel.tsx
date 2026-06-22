@@ -1,5 +1,8 @@
 import type { RenderedDoc, SourceDoc, HeroView } from "@/modules/hero";
 import type { SkillVersionLintSummary } from "@/modules/skill";
+import type { TestRunResult } from "@/modules/test-run";
+import type { TriggeringResult } from "@/modules/triggering-eval";
+import { Button } from "./ui/button";
 import { ViewToggle } from "./view-toggle";
 import { ToolChips, type ToolAction } from "./tool-chips";
 
@@ -17,6 +20,7 @@ export type CapabilityPanel =
       readonly action: EvaluationToolAction;
       readonly title: string;
       readonly insight: InsightPanel;
+      readonly result?: EvaluationFeedbackResult;
     }
   | {
       readonly kind: "breakdown";
@@ -37,6 +41,7 @@ export type CapabilityPanel =
   | { readonly kind: "export"; readonly rootDir: string; readonly files: readonly ExportPanelFile[] };
 
 export type EvaluationToolAction = "test-run" | "triggering-eval";
+export type EvaluationFeedbackResult = TestRunResult | TriggeringResult;
 
 export type InsightPanel = {
   readonly verdict: "good" | "needs-attention" | "failing";
@@ -117,6 +122,8 @@ export function HeroPanel({
   onLintSelect,
   onEvaluationSurfaceChange,
   onLintSurfaceChange,
+  onReviseWithFeedback,
+  feedbackBusy,
 }: {
   rendered: RenderedDoc;
   source: SourceDoc;
@@ -131,6 +138,8 @@ export function HeroPanel({
   onLintSelect: () => void;
   onEvaluationSurfaceChange: (surface: "insights" | "breakdown") => void;
   onLintSurfaceChange: (surface: "insights" | "breakdown") => void;
+  onReviseWithFeedback: (result: EvaluationFeedbackResult) => void;
+  feedbackBusy: boolean;
 }) {
   return (
     <section className="mx-auto flex h-full w-full max-w-3xl flex-col gap-4 px-6 py-8">
@@ -146,6 +155,8 @@ export function HeroPanel({
             busy={toolBusy}
             onEvaluationSurfaceChange={onEvaluationSurfaceChange}
             onLintSurfaceChange={onLintSurfaceChange}
+            onReviseWithFeedback={onReviseWithFeedback}
+            feedbackBusy={feedbackBusy}
           />
         ) : view === "rendered" ? (
           <RenderedView
@@ -216,11 +227,15 @@ function CapabilityView({
   busy,
   onEvaluationSurfaceChange,
   onLintSurfaceChange,
+  onReviseWithFeedback,
+  feedbackBusy,
 }: {
   panel: CapabilityPanel;
   busy: boolean;
   onEvaluationSurfaceChange: (surface: "insights" | "breakdown") => void;
   onLintSurfaceChange: (surface: "insights" | "breakdown") => void;
+  onReviseWithFeedback: (result: EvaluationFeedbackResult) => void;
+  feedbackBusy: boolean;
 }) {
   if (panel.kind === "visualise") {
     return (
@@ -333,6 +348,18 @@ function CapabilityView({
       </header>
       <InsightList title="Findings" items={panel.insight.findings} />
       <InsightList title="Watch" items={panel.insight.watch} />
+      {panel.result && (
+        <div>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={feedbackBusy}
+            onClick={() => onReviseWithFeedback(panel.result!)}
+          >
+            Revise with this feedback
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

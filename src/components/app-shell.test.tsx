@@ -340,4 +340,123 @@ describe("AppShell capability chips", () => {
       }),
     );
   });
+
+  it("sends triggering eval feedback back through the build loop", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        sseResponse([
+          {
+            event: "artifact",
+            data: {
+              surface: "insights",
+              body: {
+                verdict: "failing",
+                summary: "The skill fires on unrelated email prompts.",
+                findings: ["Matches calendar prompts."],
+                watch: ["Also fires on email drafting."],
+              },
+              result: {
+                kind: "triggering-eval",
+                passed: false,
+                insight: {
+                  verdict: "failing",
+                  summary: "The skill fires on unrelated email prompts.",
+                  findings: ["Matches calendar prompts."],
+                  watch: ["Also fires on email drafting."],
+                },
+                cases: [
+                  {
+                    prompt: "Draft a customer follow-up email.",
+                    expected: "silent",
+                    actual: "fire",
+                    pass: false,
+                    rationale: "The description is too broad.",
+                  },
+                ],
+              },
+            },
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(sseResponse([{ event: "done", data: { skillId: "skill-1" } }]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AppShell rendered={rendered} source={source} initialSkill={skill} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Triggers" }));
+    await screen.findByText("The skill fires on unrelated email prompts.");
+
+    await userEvent.click(screen.getByRole("button", { name: "Revise with this feedback" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        "/api/build",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+    const buildRequest = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+    expect(buildRequest.messages).toEqual([
+      expect.objectContaining({
+        role: "user",
+        content: expect.stringContaining("Triggering eval - failing"),
+      }),
+    ]);
+    expect(buildRequest.messages[0].content).toContain("Draft a customer follow-up email.");
+    expect(buildRequest.current).toEqual(skill);
+  });
+
+  it("shows the revise action on test-run insights", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      sseResponse([
+        {
+          event: "artifact",
+          data: {
+            surface: "insights",
+            body: {
+              verdict: "needs-attention",
+              summary: "The skill skipped prioritisation.",
+              findings: ["Called the ticket search tool."],
+              watch: [],
+            },
+            result: {
+              kind: "test-run",
+              scenario: { prompt: "Summarise recent tickets.", seedData: { customer: "Acme" } },
+              insight: {
+                verdict: "needs-attention",
+                summary: "The skill skipped prioritisation.",
+                findings: ["Called the ticket search tool."],
+                watch: [],
+              },
+              transcript: [
+                { kind: "model", text: "I will inspect tickets." },
+                { kind: "tool-call", tool: "ticket.search", input: { customer: "Acme" } },
+              ],
+            },
+          },
+        },
+      ]),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AppShell rendered={rendered} source={source} initialSkill={skill} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Run" }));
+
+    expect(await screen.findByText("The skill skipped prioritisation.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Revise with this feedback" })).toBeInTheDocument();
+  });
 });
+
+function sseResponse(events: readonly { readonly event: string; readonly data: unknown }[]): Response {
+  const encoder = new TextEncoder();
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        events.forEach((event) => controller.enqueue(encoder.encode(encodeSse(event))));
+        controller.close();
+      },
+    }),
+    { headers: { "Content-Type": "text/event-stream; charset=utf-8" } },
+  );
+}

@@ -25,6 +25,7 @@ import {
   evaluationStreamResponse,
   wantsSse,
   type EvaluationEmit,
+  type EvaluationResponse,
   type EvaluationSurface,
 } from "../_shared/evaluation-stream";
 
@@ -72,7 +73,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const rendered = await runTestRun(parsed.value, authIdentity, surface.data);
   if (isErr(rendered)) return domainErrorResponse(rendered.error);
-  return Response.json(rendered.value);
+  return Response.json(rendered.value.body);
 }
 
 async function runTestRun(
@@ -80,7 +81,7 @@ async function runTestRun(
   identity: AuthIdentity,
   surface: EvaluationSurface,
   emit?: EvaluationEmit,
-): Promise<Result<unknown, DomainError>> {
+): Promise<Result<EvaluationResponse, DomainError>> {
   const container = getContainer();
   const skill = skillFromRequest(request, identity);
   emit?.({ event: "eval-progress", data: { message: "Preparing mock world." } });
@@ -101,7 +102,10 @@ async function runTestRun(
   });
   if (isErr(recorded)) return err(recorded.error);
 
-  return ok(testRunCapability.renderers[surface].render(result.value));
+  return ok({
+    body: testRunCapability.renderers[surface].render(result.value),
+    result: result.value,
+  });
 }
 
 async function resolvedSkillVersionId(
