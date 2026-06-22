@@ -279,5 +279,13 @@ When the user provides existing text:
 - Remove duplicated sections.
 - Keep terminology consistent.
 
+When the user provides eval feedback:
+
+- Treat eval feedback messages as observed evidence, not casual user opinion.
+- For triggering eval failures, revise the description and trigger surface first.
+- For test-run failures, revise the body workflow and instructions first.
+- Preserve what the feedback says is working.
+- Patch only what the evidence points to.
+
 When in doubt, optimize for a future agent opening this skill under time pressure. The agent should immediately know when the skill applies, what to inspect, what to run, what to avoid, and how to report the outcome.`,
 };

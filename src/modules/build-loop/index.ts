@@ -12,4 +12,8 @@ export type {
   BuildLoopEvent,
 } from "./build-loop.types";
 export { buildTools, type BuildToolName } from "./tools";
+export {
+  formatTestRunFeedback,
+  formatTriggeringEvalFeedback,
+} from "./feedback-formatters";
 export { runBuildLoop } from "./build-loop";
