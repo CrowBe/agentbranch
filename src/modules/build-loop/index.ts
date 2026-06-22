@@ -13,6 +13,7 @@ export type {
 } from "./build-loop.types";
 export { buildTools, type BuildToolName } from "./tools";
 export {
+  formatLintFeedback,
   formatTestRunFeedback,
   formatTriggeringEvalFeedback,
 } from "./feedback-formatters";

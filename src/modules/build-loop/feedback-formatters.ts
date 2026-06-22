@@ -1,5 +1,6 @@
 import type { TestRunResult, TranscriptStep } from "@/modules/test-run";
 import type { CaseResult, TriggeringResult } from "@/modules/triggering-eval";
+import type { LintFinding, LintReport } from "@/modules/lint";
 
 export function formatTriggeringEvalFeedback(result: TriggeringResult): string {
   const lines = [
@@ -52,9 +53,37 @@ export function formatTestRunFeedback(result: TestRunResult): string {
   ].join("\n");
 }
 
+export function formatLintFeedback(report: LintReport): string | null {
+  if (report.findings.length === 0) return null;
+
+  return [
+    `Lint - Quality ${report.summary.grade} ${report.summary.score}/100`,
+    "",
+    "The deterministic lint pass found issues in the current SKILL.md.",
+    "",
+    ...formatLintSection("Errors:", report.findings, "error"),
+    "",
+    ...formatLintSection("Warnings:", report.findings, "warn"),
+    "",
+    ...formatLintSection("Info:", report.findings, "info"),
+    "",
+    "Please revise the skill to address these lint findings. Fix errors first, then tighten warnings.",
+  ].join("\n");
+}
+
 function formatList(label: string, items: readonly string[]): string[] {
   if (items.length === 0) return [label, "- None."];
   return [label, ...items.map((item) => `- ${item}`)];
+}
+
+function formatLintSection(
+  label: string,
+  findings: readonly LintFinding[],
+  severity: LintFinding["severity"],
+): string[] {
+  const matching = findings.filter((finding) => finding.severity === severity);
+  if (matching.length === 0) return [label, "- None."];
+  return [label, ...matching.map((finding) => `- ${finding.message}`)];
 }
 
 function formatFailedCase(caseResult: CaseResult): string[] {

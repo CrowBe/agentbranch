@@ -4,7 +4,13 @@ import {
   checkSkillCreateCap,
   type SkillRepository,
 } from "@/modules/skill";
-import { runBuildLoop, type BuildLoopInput, type BuildLoopEvent } from "@/modules/build-loop";
+import { createLintReportForSource } from "@/modules/lint";
+import {
+  formatLintFeedback,
+  runBuildLoop,
+  type BuildLoopInput,
+  type BuildLoopEvent,
+} from "@/modules/build-loop";
 import type { ModelGateway } from "@/modules/model-gateway";
 import type { Tier } from "@/modules/usage";
 
@@ -32,6 +38,17 @@ export function buildLoopResponse(
             latestSource = event.data.source;
             controller.enqueue(encoder.encode(encodeSse(event)));
             await checkpointDraft(event.data.source);
+            const feedback = formatLintFeedback(createLintReportForSource(event.data.source));
+            if (feedback) {
+              controller.enqueue(
+                encoder.encode(
+                  encodeSse({
+                    event: "lint-feedback",
+                    data: { feedback },
+                  } satisfies BuildLoopEvent),
+                ),
+              );
+            }
             continue;
           }
 

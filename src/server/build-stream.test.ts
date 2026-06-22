@@ -70,6 +70,9 @@ describe("buildLoopResponse", () => {
     expect(done?.data.skillId).toEqual(expect.any(String));
     expect(done?.data.revision).toBe(1);
     expect(events.find((e) => e.event === "skill-checkpoint")?.data.skillId).toBe(done?.data.skillId);
+    expect(events.find((e) => e.event === "lint-feedback")?.data.feedback).toContain(
+      "Lint - Quality C 70/100",
+    );
     const persisted = unwrap(await repo.findById(done!.data.skillId, userId));
     expect(persisted?.source.frontmatter.name).toBe("greeter");
     const versions = unwrap(await repo.listVersions(done!.data.skillId, userId));
@@ -79,6 +82,25 @@ describe("buildLoopResponse", () => {
       grade: "C",
       counts: { error: 0, warn: 2, info: 2 },
     });
+  });
+
+  it("does not emit lint feedback when a written skill is clean", async () => {
+    const repo = createMemorySkillRepository();
+    const skillMd = `---\nname: calendar-planner\ndescription: Plan calendar meetings from plain language requests.\n---\n# Steps\n\n- Review the requested date, time, attendees, and meeting purpose.\n- Check availability before proposing slots.\n\n## When not to use\n\nDo not use for non-calendar requests.\n\n## Example\n\nInput: Find time with Ana tomorrow. Output: Suggested meeting slots with conflicts noted.`;
+    const response = buildLoopResponse(
+      { messages: [{ role: "user", content: "Make a calendar planner" }] },
+      fakeGateway([
+        { kind: "tool-result", tool: "write_skill", output: { content: skillMd } },
+        { kind: "finish", finishReason: "stop" },
+      ]),
+      repo,
+      userId,
+    );
+
+    const events = await readEvents(response);
+
+    expect(events.find((e) => e.event === "lint-feedback")).toBeUndefined();
+    expect(events.find((e) => e.event === "done")?.data.skillId).toEqual(expect.any(String));
   });
 
   it("checkpoints a first draft before the build finishes without cutting a revision", async () => {

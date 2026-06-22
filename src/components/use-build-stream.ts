@@ -37,15 +37,29 @@ export function useBuildStream({
 
   async function send(message: string) {
     if (busy) return;
+    await sendBuild(message, messages, current, currentSkillId, true);
+  }
+
+  async function sendBuild(
+    message: string,
+    priorMessages: readonly BuildMessage[],
+    startingSource: SkillSource | null,
+    startingSkillId: string | null,
+    allowLintAutoFeedback: boolean,
+  ) {
     onBuildStart();
-    const nextMessages: BuildMessage[] = [...messages, { role: "user", content: message }];
+    const nextMessages: BuildMessage[] = [...priorMessages, { role: "user", content: message }];
     setMessages(nextMessages);
     setEntries((prev) => [...prev, entry(message)]);
     setStatus("Building...");
     setBusy(true);
     onStreamSkillChange();
     let assistantText = "";
-    let latestSource = current;
+    let latestSource = startingSource;
+    let latestSkillId = startingSkillId;
+    let completedMessages: readonly BuildMessage[] = nextMessages;
+    let pendingLintFeedback: string | null = null;
+    let completed = false;
 
     try {
       const res = await fetch("/api/build", {
@@ -54,7 +68,7 @@ export function useBuildStream({
         body: JSON.stringify({
           messages: nextMessages,
           current: latestSource ?? undefined,
-          currentSkillId: currentSkillId ?? undefined,
+          currentSkillId: latestSkillId ?? undefined,
         }),
       });
       if (!res.ok) {
@@ -80,7 +94,10 @@ export function useBuildStream({
           setCurrent(latestSource);
           setHeroDocs(renderHeroDocs(latestSource));
           onStreamSkillChange();
+        } else if (event.event === "lint-feedback") {
+          pendingLintFeedback = event.data.feedback;
         } else if (event.event === "skill-checkpoint") {
+          latestSkillId = event.data.skillId;
           setCurrentSkillId(event.data.skillId);
         } else if (event.event === "skill-edit") {
           if (!latestSource) {
@@ -100,19 +117,33 @@ export function useBuildStream({
           setStatus(friendlyError(event.data.message));
           setEntries((prev) => [...prev, entry(friendlyError(event.data.message), "error")]);
         } else if (event.event === "done") {
-          if (event.data.skillId) setCurrentSkillId(event.data.skillId);
+          if (event.data.skillId) {
+            latestSkillId = event.data.skillId;
+            setCurrentSkillId(event.data.skillId);
+          }
           setStatus("Build complete.");
+          completed = true;
         }
       }
 
       if (assistantText.trim()) {
-        setMessages((prev) => [...prev, { role: "assistant", content: assistantText.trim() }]);
+        completedMessages = [...nextMessages, { role: "assistant", content: assistantText.trim() }];
+        setMessages([...completedMessages]);
       }
     } catch (cause) {
       setStatus(String(cause));
       setEntries((prev) => [...prev, entry(String(cause), "error")]);
     } finally {
       setBusy(false);
+    }
+
+    if (
+      completed &&
+      pendingLintFeedback &&
+      allowLintAutoFeedback &&
+      !isLintFeedbackMessage(message)
+    ) {
+      await sendBuild(pendingLintFeedback, completedMessages, latestSource, latestSkillId, false);
     }
   }
 
@@ -154,6 +185,10 @@ function upsertAssistant(entries: InteractionEntry[], label: string): Interactio
     return [...entries.slice(0, -1), { ...last, label }];
   }
   return [...entries, { id: "assistant-stream", label }];
+}
+
+function isLintFeedbackMessage(message: string): boolean {
+  return message.startsWith("Lint - Quality ");
 }
 
 export function friendlyError(message: string): string {
