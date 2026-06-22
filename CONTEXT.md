@@ -17,8 +17,12 @@ A persisted skill in our DB — `SKILL.md` source plus identity and timestamps. 
 _Avoid_: skill row, skill entity, document
 
 **Build loop**:
-The core agentic loop — Claude (via Vercel AI SDK) writes/edits the `SKILL.md` through `write_skill`/`edit_skill`, streaming to the preview.
+The core agentic loop — Claude (via Vercel AI SDK) writes/edits the `SKILL.md` through `write_skill`/`edit_skill`, streaming to the preview. The loop is closeable with **eval feedback**: evaluation results and lint reports can be injected back into the conversation as messages, enabling Claude to revise from observed evidence.
 _Avoid_: chat, conversation, agent loop, generation
+
+**Eval feedback**:
+A formatted summary of an Evaluation result (or Lint artifact) injected as a user message into the build loop conversation — giving Claude the specific failure cases, model rationale, and behavioural evidence it needs to revise the skill precisely. Produced by a **feedback formatter** (a pure function in the `build-loop` module). User-triggered from the **Insights** surface for evaluation results; auto-injected after `write_skill` for lint (deferred). The formatter lives in `build-loop`, not in the eval modules — the concern is "what does Claude need to author a revision?" not "how do I describe my result?".
+_Avoid_: feedback loop (the pattern, not the artifact), revision prompt (doesn't name the source), eval summary (that's Insights — the user-facing surface)
 
 **Skill-analysis seam**:
 The architectural spine — the shared pattern *read skill → emit a structured artifact → render it for a surface*. Built once; every capability is a renderer on it, not a new pipeline.
@@ -136,6 +140,7 @@ _Avoid_: preview/raw, doc/code, formatted/plain
 - **Visualise** is an Analysis capability whose Artifact is the **Skill IR**; each IR node carries a **Source-span**.
 - A **Test run** drives the **Mock-tool registry**; a **Triggering eval** drives the **Distractor library** + **Prompt battery**. Both are Evaluation capabilities.
 - An **Evaluation capability** emits an **Evaluation result** (the run-record Artifact), which renders to **Insights** (default, plain-language) and a detailed breakdown (depth on demand) — two renderers, one result.
+- **Eval feedback** connects the seam's evaluation output back to the build loop's input: a feedback formatter (pure function in `build-loop`) translates an Evaluation result or Lint artifact into a user message. **Insights** is what the *user* reads; eval feedback is what *Claude* reads to author the revision. The same result serves both surfaces.
 - An **Evaluation result** is ephemeral on the seam; it is persisted as an **Evaluation record** (§6). Analysis artifacts are never persisted — they recompute. The result is rendered *now*; the record is re-rendered *later*.
 - The **Portability transform** is one engine feeding two surfaces (cross-provider validation, cross-primitive export) — both deferred in v1.
 
