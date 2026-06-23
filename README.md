@@ -5,7 +5,8 @@
 
 **Craft agent skills you can trust** — author a skill in a chat-driven loop, watch it take shape live, then prove it works before you ship.
 
-> Working name (previously *SkillBuilder*) — the repository name will follow.
+> Working name. A broader **AgentEquip** direction is being explored in docs, but
+> SkillSmith remains the current product shape.
 
 ---
 
@@ -132,7 +133,9 @@ That last download is the end-to-end proof: a standard skill folder, authored an
 | Doc | What's in it |
 |-----|--------------|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | What we build and why — product, system, data, app layout. The source of truth, with a domain glossary. |
+| [`docs/MODULE_DESIGN.md`](docs/MODULE_DESIGN.md) | The module map, dependency rules, seam shape, and extension rules. |
 | [`docs/DESIGN.md`](docs/DESIGN.md) | The visual design system — themes, type, color, spacing, components. |
+| [`docs/AGENTEQUIP_PROPOSAL.md`](docs/AGENTEQUIP_PROPOSAL.md) | Forward proposal for broadening from SkillSmith to AgentEquip. |
 
 ---
 
