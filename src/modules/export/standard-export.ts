@@ -4,7 +4,7 @@ import { domainError, err, ok } from "@/shared";
 import type { ExportArtifact, ExportManifest } from "./export.types";
 
 /** Read a skill -> export artifact (its instruction intent + identity). */
-export const exportAnalyzer: Analyzer<ExportArtifact> = {
+export const exportAnalyzer: Analyzer<Skill, ExportArtifact> = {
   kind: "export",
   async analyze(skill: Skill) {
     const serialized = serializeSkillMd(skill.source);

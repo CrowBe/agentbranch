@@ -1,4 +1,3 @@
-import type { Skill } from "@/modules/skill";
 import type { ModelGateway } from "@/modules/model-gateway";
 import { mapResult, err, domainError, type Result, type DomainError } from "@/shared";
 import type {
@@ -15,13 +14,15 @@ import type {
 /**
  * Define an ANALYSIS capability — an analyzer composed with its renderers.
  * Keeps the seam's shape honest: a feature is "an analyzer + named renderers".
+ * `Input` is inferred from the analyzer's signature; no need to pass it explicitly.
  */
 export function defineCapability<
+  Input,
   A extends Artifact,
   Surfaces extends Record<string, unknown>,
 >(
-  capability: Omit<AnalysisCapability<A, Surfaces>, "mode">,
-): AnalysisCapability<A, Surfaces> {
+  capability: Omit<AnalysisCapability<Input, A, Surfaces>, "mode">,
+): AnalysisCapability<Input, A, Surfaces> {
   return { mode: "analysis", ...capability };
 }
 
@@ -29,47 +30,51 @@ export function defineCapability<
  * Define an EVALUATION capability — an evaluator composed with its renderers
  * (the default surface is Insights). The evaluator owns its method; the model
  * gateway is handed in at run time via `runEvaluation`.
+ * `Input` is inferred from the evaluator's signature; no need to pass it explicitly.
  */
 export function defineEvaluation<
+  Input,
   A extends Artifact,
   Surfaces extends Record<string, unknown>,
 >(
-  capability: Omit<EvaluationCapability<A, Surfaces>, "mode">,
-): EvaluationCapability<A, Surfaces> {
+  capability: Omit<EvaluationCapability<Input, A, Surfaces>, "mode">,
+): EvaluationCapability<Input, A, Surfaces> {
   return { mode: "evaluation", ...capability };
 }
 
 /**
- * Run an ANALYSIS capability end-to-end: skill → artifact (analyze) → surface
+ * Run an ANALYSIS capability end-to-end: input → artifact (analyze) → surface
  * (render). The static pipeline, built once. Runs offline — no gateway needed.
  */
 export async function runCapability<
+  Input,
   A extends Artifact,
   Surfaces extends Record<string, unknown>,
   K extends keyof Surfaces,
 >(
-  capability: AnalysisCapability<A, Surfaces>,
+  capability: AnalysisCapability<Input, A, Surfaces>,
   surface: K,
-  skill: Skill,
+  input: Input,
   context?: AnalysisContext,
 ): Promise<Result<Surfaces[K], DomainError>> {
-  const artifact = await capability.analyzer.analyze(skill, context);
+  const artifact = await capability.analyzer.analyze(input, context);
   return mapResult(artifact, (a) => capability.renderers[surface].render(a));
 }
 
 /**
- * Run an EVALUATION capability end-to-end: skill → evaluation result (evaluate)
+ * Run an EVALUATION capability end-to-end: input → evaluation result (evaluate)
  * → surface (render). The dynamic pipeline. Guards `model_unavailable` *here*,
  * once — so no evaluator re-checks for a model; offline degrades gracefully.
  */
 export async function runEvaluation<
+  Input,
   A extends Artifact,
   Surfaces extends Record<string, unknown>,
   K extends keyof Surfaces,
 >(
-  capability: EvaluationCapability<A, Surfaces>,
+  capability: EvaluationCapability<Input, A, Surfaces>,
   surface: K,
-  skill: Skill,
+  input: Input,
   gateway: ModelGateway,
 ): Promise<Result<Surfaces[K], DomainError>> {
   if (!gateway.hasModel) {
@@ -80,7 +85,7 @@ export async function runEvaluation<
       ),
     );
   }
-  const result = await capability.evaluator.evaluate(skill, gateway);
+  const result = await capability.evaluator.evaluate(input, gateway);
   return mapResult(result, (a) => capability.renderers[surface].render(a));
 }
 

@@ -10,10 +10,7 @@ import { heroAnalyzer } from "./hero-analyzer";
 import { renderedRenderer, sourceRenderer } from "./renderers";
 import type { RenderedDoc, SourceDoc } from "./hero.types";
 
-export const heroCapability = defineCapability<
-  import("./hero.types").HeroArtifact,
-  { rendered: RenderedDoc; source: SourceDoc }
->({
+export const heroCapability = defineCapability({
   name: "hero",
   analyzer: heroAnalyzer,
   renderers: { rendered: renderedRenderer, source: sourceRenderer },

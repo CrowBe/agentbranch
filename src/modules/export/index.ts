@@ -8,7 +8,7 @@ import { defineCapability } from "@/modules/skill-analysis";
 import { exportAnalyzer, standardRenderer } from "./standard-export";
 import type { ExportArtifact, ExportManifest } from "./export.types";
 
-export const exportCapability = defineCapability<ExportArtifact, { standard: ExportManifest }>({
+export const exportCapability = defineCapability({
   name: "export",
   analyzer: exportAnalyzer,
   renderers: { standard: standardRenderer },

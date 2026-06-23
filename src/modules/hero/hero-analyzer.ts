@@ -8,7 +8,7 @@ import type { HeroArtifact, DocSection } from "./hero.types";
  * sections, each tagged with a source-span into the serialized SKILL.md so
  * either renderer (and later, point-and-annotate) can map back to source.
  */
-export const heroAnalyzer: Analyzer<HeroArtifact> = {
+export const heroAnalyzer: Analyzer<Skill, HeroArtifact> = {
   kind: "hero",
   async analyze(skill: Skill) {
     return ok(createHeroArtifact(skill.source));

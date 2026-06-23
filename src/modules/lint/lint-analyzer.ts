@@ -66,7 +66,7 @@ const VAGUE_STEP_PATTERN =
   /^\s*(?:[-*]|\d+\.)\s+(?:understand|ensure|consider|think about|help(?:\s+with)?|improve|handle|manage|support)\b/im;
 const LONG_PARAGRAPH_LENGTH = 700;
 
-export const lintAnalyzer: Analyzer<LintReport> = {
+export const lintAnalyzer: Analyzer<Skill, LintReport> = {
   kind: "lint",
   async analyze(skill: Skill, context?: AnalysisContext) {
     return ok(createLintReport(skill, context?.referenceFiles ?? []));

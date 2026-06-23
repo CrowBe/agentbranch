@@ -9,10 +9,7 @@ import { lintAnalyzer } from "./lint-analyzer";
 import { lintBreakdownRenderer, lintInsightsRenderer } from "./renderers";
 import type { LintBreakdown, LintInsights, LintReport } from "./lint.types";
 
-export const lintCapability = defineCapability<
-  LintReport,
-  { insights: LintInsights; breakdown: LintBreakdown }
->({
+export const lintCapability = defineCapability({
   name: "lint",
   analyzer: lintAnalyzer,
   renderers: { insights: lintInsightsRenderer, breakdown: lintBreakdownRenderer },
