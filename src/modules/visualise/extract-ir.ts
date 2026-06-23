@@ -11,7 +11,7 @@ import type { SkillIR, IrNode, IrEdge } from "./ir.types";
  * offline. When the caller supplies a gateway + accounting tag, the model emits
  * the richer IR; otherwise the deterministic fallback keeps the seam usable.
  */
-export const irAnalyzer: Analyzer<SkillIR> = {
+export const irAnalyzer: Analyzer<Skill, SkillIR> = {
   kind: "skill-ir",
   async analyze(skill: Skill, context?: AnalysisContext) {
     const gateway = context?.gateway;

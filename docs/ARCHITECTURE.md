@@ -89,6 +89,7 @@ The seam carries **two capability shapes** — same `artifact → render` tail, 
 |---|---|---|---|---|
 | **Rendered hero** | analysis | frontmatter + body | friendly structured document (sans-serif) | richer doc layout / inline editing |
 | **Visualise** | analysis | skill IR (nodes+edges+source-spans) | Mermaid | interactive canvas (React Flow) |
+| **Lint** | analysis | frontmatter + body quality rules → `LintReport` | Insights (score/grade + actionable findings) + Breakdown (full finding list with source-spans) | per-primitive rule sets as new equipment types land |
 | **Cross-runtime validation** | evaluation | run triggering battery on other runtimes' models → per-runtime results | — (deferred) | per-runtime results grid |
 | **Test run** | evaluation | run skill vs. mock-tool registry → result | **Insights** (+ transcript on demand) | richer scenarios / multi-run |
 | **Triggering eval** | evaluation | run skill vs. distractors + battery → result | **Insights** (+ pass/fail breakdown) | scored / workflow / regression |
@@ -131,12 +132,13 @@ The build loop is **not thin** — it's the core and must feel good. Everything 
 
 1. **Auth + meter** — Clerk (Google+GitHub), Postgres, per-turn + per-token counter. Thin = no admin UI, enforced caps only.
 2. **Build loop** — Claude via the model gateway's `streamAgent`; `write_skill`/`edit_skill`; SSE to preview. **Polished, not thin.** Closeable with **eval feedback** — triggering-eval and test-run Insights feed back as messages, giving Claude the failure cases and rationale to make targeted revisions.
-3. **Visualise** — model emits skill IR; thin IR→Mermaid renderer; 1 generation; no diagram editing.
-4. **Test run** — single run, 1 generated scenario, mock-tool registry with 1–2 mock integrations (email first), Claude only.
-5. **Triggering eval** — small distractor library (~10), small prompt battery, "did it fire?" boolean. No judge model yet.
-6. **Export** — copy + the standard skill folder `.zip`.
-7. **Cross-runtime validation** — **stubbed** (engine designed, not built; [#65](https://github.com/CrowBe/SkillBuilder/issues/65)).
-8. **Billing** — Clerk subscription tiers (Free + one Pro), gating capabilities 4/5. Thin = no PAYG.
+3. **Lint** — pure analysis, zero tokens, uncapped; auto-runs on every version after `write_skill`. Insights + Breakdown renderers. The seam's `Analyzer<Input, A>` design makes lint rule sets portable to future equipment primitive types.
+4. **Visualise** — model emits skill IR; thin IR→Mermaid renderer; 1 generation; no diagram editing.
+5. **Test run** — single run, 1 generated scenario, mock-tool registry with 1–2 mock integrations (email first), Claude only.
+6. **Triggering eval** — small distractor library (~10), small prompt battery, "did it fire?" boolean. No judge model yet.
+7. **Export** — copy + the standard skill folder `.zip`.
+8. **Cross-runtime validation** — **stubbed** (engine designed, not built; [#65](https://github.com/CrowBe/SkillBuilder/issues/65)).
+9. **Billing** — Clerk subscription tiers (Free + one Pro), gating capabilities 5/6. Thin = no PAYG.
 
 ---
 
@@ -199,7 +201,6 @@ Designed-for, not built. Each reuses an existing seam, so it's a renderer/config
 **Deferred capabilities:**
 
 - **Skill import** (paste `SKILL.md` text / GitHub URL) — the acquisition wedge: same parse → persist → render path as the build loop, no authoring required ([#66](https://github.com/CrowBe/SkillBuilder/issues/66)).
-- **Skill lint** — a static quality report (spec compliance, structure, description/trigger heuristics): a pure analysis capability on the seam, zero tokens, auto-run on every version ([#69](https://github.com/CrowBe/SkillBuilder/issues/69)–[#71](https://github.com/CrowBe/SkillBuilder/issues/71)).
 - **Cross-runtime validation** (does the skill trigger/behave on Codex/Gemini-class models?) — the existing triggering battery run via provider swap through the model gateway; per-runtime results grid ([#65](https://github.com/CrowBe/SkillBuilder/issues/65)).
 - **Interactive visualise canvas** ("Claude design"-style point-and-annotate) — IR→React Flow renderer; **point-and-annotate falls out for free**: node → its source-span → inject that span as precise context into the next chat turn.
 - **Richer evals** — workflow evals (run the full loop, LLM-as-judge against rubrics) → regression evals (pin a scenario set, track score across edits = the retention hook).

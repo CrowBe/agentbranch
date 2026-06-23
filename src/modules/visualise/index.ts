@@ -10,7 +10,7 @@ import { irAnalyzer } from "./extract-ir";
 import { mermaidRenderer, type MermaidSource } from "./mermaid-renderer";
 import type { SkillIR } from "./ir.types";
 
-export const visualiseCapability = defineCapability<SkillIR, { mermaid: MermaidSource }>({
+export const visualiseCapability = defineCapability({
   name: "visualise",
   analyzer: irAnalyzer,
   renderers: { mermaid: mermaidRenderer },

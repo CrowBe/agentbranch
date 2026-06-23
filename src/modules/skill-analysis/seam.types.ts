@@ -1,4 +1,3 @@
-import type { Skill } from "@/modules/skill";
 import type { AccountingTag, ModelGateway } from "@/modules/model-gateway";
 import type { Result, DomainError } from "@/shared";
 
@@ -55,17 +54,21 @@ export type AnalysisContext = {
 };
 
 /**
- * Step one of an ANALYSIS capability: read a skill → emit a structured artifact
+ * Step one of an ANALYSIS capability: read an input → emit a structured artifact
  * from its text alone. Pure enough to run offline; no model, no gateway. Async +
  * Result because some analyzers (e.g. visualise's IR) may call a bounded model.
+ *
+ * `Input` is the primitive type being analyzed — `Skill` for all current
+ * capabilities, but any future primitive type (AgentProfile, ToolContract, …)
+ * for capabilities that lint or visualise those primitives.
  */
-export interface Analyzer<A extends Artifact> {
+export interface Analyzer<Input, A extends Artifact> {
   readonly kind: A["kind"];
-  analyze(skill: Skill, context?: AnalysisContext): Promise<Result<A, DomainError>>;
+  analyze(input: Input, context?: AnalysisContext): Promise<Result<A, DomainError>>;
 }
 
 /**
- * Step one of an EVALUATION capability: run the skill through a model and emit
+ * Step one of an EVALUATION capability: run the input through a model and emit
  * a structured result. Owns its *method* — it builds its own conditions
  * (scenario / distractors / battery) — but is handed its *resource*: model
  * access, via the `gateway` (CONTEXT.md → Model gateway). The evaluator composes
@@ -73,10 +76,12 @@ export interface Analyzer<A extends Artifact> {
  * never touches the raw model, the key, or token accounting. Fails
  * `model_unavailable` when the gateway has no model; that guard lives once in
  * `runEvaluation`, not in each evaluator.
+ *
+ * `Input` mirrors `Analyzer` — the primitive type being evaluated.
  */
-export interface Evaluator<A extends Artifact> {
+export interface Evaluator<Input, A extends Artifact> {
   readonly kind: A["kind"];
-  evaluate(skill: Skill, gateway: ModelGateway): Promise<Result<A, DomainError>>;
+  evaluate(input: Input, gateway: ModelGateway): Promise<Result<A, DomainError>>;
 }
 
 /**
@@ -92,16 +97,20 @@ export interface Renderer<A extends Artifact, Surface> {
 
 /**
  * An ANALYSIS capability: one analyzer feeding one-or-more named renderers.
- * The Rendered hero, Source view, Visualise and Export are analysis capabilities
- * — same shape, different artifact and renderers.
+ * The Rendered hero, Source view, Visualise, Lint and Export are analysis
+ * capabilities — same shape, different input type, artifact and renderers.
+ *
+ * `Input` is the primitive type the analyzer reads (Skill today; any future
+ * equipment primitive once those capabilities land).
  */
 export interface AnalysisCapability<
+  Input,
   A extends Artifact,
   Surfaces extends Record<string, unknown>,
 > {
   readonly mode: "analysis";
   readonly name: string;
-  readonly analyzer: Analyzer<A>;
+  readonly analyzer: Analyzer<Input, A>;
   readonly renderers: { readonly [K in keyof Surfaces]: Renderer<A, Surfaces[K]> };
 }
 
@@ -109,23 +118,28 @@ export interface AnalysisCapability<
  * An EVALUATION capability: one evaluator feeding one-or-more named renderers.
  * Test run and Triggering eval are evaluation capabilities — the artifact is an
  * evaluation result, and its default renderer is Insights (ARCHITECTURE §3.1).
+ *
+ * `Input` mirrors `AnalysisCapability` — the primitive type being evaluated.
  */
 export interface EvaluationCapability<
+  Input,
   A extends Artifact,
   Surfaces extends Record<string, unknown>,
 > {
   readonly mode: "evaluation";
   readonly name: string;
-  readonly evaluator: Evaluator<A>;
+  readonly evaluator: Evaluator<Input, A>;
   readonly renderers: { readonly [K in keyof Surfaces]: Renderer<A, Surfaces[K]> };
 }
 
 /**
  * A capability on the seam — analysis (static, text-only) or evaluation
- * (dynamic, runs the skill through a model). Discriminated by `mode`. Both share
- * the `artifact → render` tail; they differ only in how the artifact is produced.
+ * (dynamic, runs the primitive through a model). Discriminated by `mode`. Both
+ * share the `artifact → render` tail; they differ only in how the artifact is
+ * produced.
  */
 export type Capability<
+  Input,
   A extends Artifact,
   Surfaces extends Record<string, unknown>,
-> = AnalysisCapability<A, Surfaces> | EvaluationCapability<A, Surfaces>;
+> = AnalysisCapability<Input, A, Surfaces> | EvaluationCapability<Input, A, Surfaces>;

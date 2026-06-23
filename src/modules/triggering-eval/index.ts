@@ -11,6 +11,7 @@
  */
 import { defineEvaluation } from "@/modules/skill-analysis";
 import type { Evaluator, Renderer, Insight } from "@/modules/skill-analysis";
+import type { Skill } from "@/modules/skill";
 import { runTriggeringEval } from "./run-eval";
 import type { CaseResult, TriggeringResult } from "./triggering-eval.types";
 
@@ -33,7 +34,7 @@ export { buildPromptBattery, generatePromptBattery } from "./prompt-battery";
 export { runTriggeringEval } from "./run-eval";
 export type { EvalRunRepository } from "./eval.repository";
 
-const triggeringEvaluator: Evaluator<TriggeringResult> = {
+const triggeringEvaluator: Evaluator<Skill, TriggeringResult> = {
   kind: "triggering-eval",
   evaluate: (skill, gateway) =>
     // Triggering an eval is user-attributable work → `account` tag, declaring the

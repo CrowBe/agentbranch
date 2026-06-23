@@ -55,7 +55,7 @@ function fixtureSkill(): Skill {
   });
 }
 
-const analyzer: Analyzer<WordCount> = {
+const analyzer: Analyzer<Skill, WordCount> = {
   kind: "hero",
   async analyze(skill) {
     return ok({ kind: "hero", count: skill.source.body.split(/\s+/).length });
@@ -67,7 +67,7 @@ const countText: Renderer<WordCount, string> = {
   render: (a) => `${a.count} words`,
 };
 
-const evaluator: Evaluator<Verdict> = {
+const evaluator: Evaluator<Skill, Verdict> = {
   kind: "triggering-eval",
   // Owns its method: builds its own conditions (the "fire" choice) and composes
   // the verdict from the gateway's `classify` primitive. Resource handed in

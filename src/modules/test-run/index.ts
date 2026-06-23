@@ -13,6 +13,7 @@
  */
 import { defineEvaluation } from "@/modules/skill-analysis";
 import type { Evaluator, Renderer, Insight } from "@/modules/skill-analysis";
+import type { Skill } from "@/modules/skill";
 import { executeSkill } from "./execute-skill";
 import type { Scenario, TestRunResult, TranscriptStep } from "./test-run.types";
 
@@ -39,7 +40,7 @@ export {
 export { executeSkill } from "./execute-skill";
 export type { TestRunRepository } from "./test-run.repository";
 
-const testRunEvaluator: Evaluator<TestRunResult> = {
+const testRunEvaluator: Evaluator<Skill, TestRunResult> = {
   kind: "test-run",
   evaluate: (skill, gateway) =>
     // A test run is user-attributable work → `account` tag, declaring the
