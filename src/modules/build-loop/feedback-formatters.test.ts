@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { TestRunResult } from "@/modules/test-run";
 import type { TriggeringResult } from "@/modules/triggering-eval";
+import type { LintReport } from "@/modules/lint";
 import {
+  formatLintFeedback,
   formatTestRunFeedback,
   formatTriggeringEvalFeedback,
 } from "./feedback-formatters";
@@ -120,5 +122,51 @@ describe("eval feedback formatters", () => {
 
       Please revise the skill to address this test-run evidence. The body workflow and instructions are the primary targets."
     `);
+  });
+
+  it("formats lint findings by severity", () => {
+    const report: LintReport = {
+      kind: "lint",
+      summary: { score: 55, grade: "D", counts: { error: 1, warn: 1, info: 0 } },
+      findings: [
+        {
+          rule: "frontmatter.description.required",
+          severity: "error",
+          message: "Your skill needs a frontmatter `description` so agents know when to use it.",
+        },
+        {
+          rule: "body.examples.missing",
+          severity: "warn",
+          message: "Add an example so the intended behaviour is concrete.",
+        },
+      ],
+    };
+
+    expect(formatLintFeedback(report)).toMatchInlineSnapshot(`
+      "Lint - Quality D 55/100
+
+      The deterministic lint pass found issues in the current SKILL.md.
+
+      Errors:
+      - Your skill needs a frontmatter \`description\` so agents know when to use it.
+
+      Warnings:
+      - Add an example so the intended behaviour is concrete.
+
+      Info:
+      - None.
+
+      Please revise the skill to address these lint findings. Fix errors first, then tighten warnings."
+    `);
+  });
+
+  it("skips lint feedback for clean reports", () => {
+    const report: LintReport = {
+      kind: "lint",
+      summary: { score: 100, grade: "A", counts: { error: 0, warn: 0, info: 0 } },
+      findings: [],
+    };
+
+    expect(formatLintFeedback(report)).toBeNull();
   });
 });

@@ -161,6 +161,52 @@ describe("AppShell capability chips", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Import complete.");
   });
 
+  it("auto-injects lint feedback after a written skill with findings", async () => {
+    const writtenSkill: SkillSource = {
+      frontmatter: {
+        name: "calendar-planner",
+        description: "Plan calendar meetings from plain language requests.",
+        extra: {},
+      },
+      body: "# Steps\n\nCheck availability.",
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        sseResponse([
+          { event: "skill", data: { source: writtenSkill } },
+          { event: "skill-checkpoint", data: { skillId: "skill-1" } },
+          {
+            event: "lint-feedback",
+            data: {
+              feedback:
+                "Lint - Quality C 70/100\n\nWarnings:\n- Add an example so the intended behaviour is concrete.",
+            },
+          },
+          { event: "done", data: { skillId: "skill-1", revision: 1 } },
+        ]),
+      )
+      .mockResolvedValueOnce(sseResponse([{ event: "done", data: { skillId: "skill-1", revision: 2 } }]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AppShell rendered={rendered} source={source} initialSkill={skill} />);
+
+    await userEvent.type(screen.getByRole("textbox"), "Make a calendar planner");
+    await userEvent.click(screen.getByRole("button", { name: "Build skill" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const lintRequest = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
+    expect(lintRequest.messages).toEqual([
+      { role: "user", content: "Make a calendar planner" },
+      expect.objectContaining({
+        role: "user",
+        content: expect.stringContaining("Lint - Quality C 70/100"),
+      }),
+    ]);
+    expect(lintRequest.current).toEqual(writtenSkill);
+    expect(lintRequest.currentSkillId).toBe("skill-1");
+  });
+
   it("calls the visualise route with the current skill and renders the result", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       Response.json({

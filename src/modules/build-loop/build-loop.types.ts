@@ -30,6 +30,7 @@ export type BuildLoopEvent =
   | SseEvent<"skill", { readonly source: SkillSource }>
   | SseEvent<"skill-checkpoint", { readonly skillId: SkillId }>
   | SseEvent<"skill-edit", { readonly oldStr: string; readonly newStr: string }>
+  | SseEvent<"lint-feedback", { readonly feedback: string }>
   | SseEvent<"tool", { readonly name: string; readonly phase: "call" | "result" }>
   | SseEvent<"done", BuildLoopDone>
   | SseEvent<"error", { readonly message: string }>;
