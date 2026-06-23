@@ -21,7 +21,7 @@ The core agentic loop — Claude (via Vercel AI SDK) writes/edits the `SKILL.md`
 _Avoid_: chat, conversation, agent loop, generation
 
 **Eval feedback**:
-A formatted summary of an Evaluation result (or Lint artifact) injected as a user message into the build loop conversation — giving Claude the specific failure cases, model rationale, and behavioural evidence it needs to revise the skill precisely. Produced by a **feedback formatter** (a pure function in the `build-loop` module). User-triggered from the **Insights** surface for evaluation results; lint auto-injection is the next feedback increment. The formatter lives in `build-loop`, not in the eval modules — the concern is "what does Claude need to author a revision?" not "how do I describe my result?".
+A formatted summary of an Evaluation result (or Lint artifact) injected as a user message into the build loop conversation — giving Claude the specific failure cases, model rationale, and behavioural evidence it needs to revise the skill precisely. Produced by a **feedback formatter** (a pure function in the `build-loop` module). User-triggered from the **Insights** surface for evaluation results; auto-injected after `write_skill` for lint findings. The formatter lives in `build-loop`, not in the eval modules — the concern is "what does Claude need to author a revision?" not "how do I describe my result?".
 _Avoid_: feedback loop (the pattern, not the artifact), revision prompt (doesn't name the source), eval summary (that's Insights — the user-facing surface)
 
 **Skill-analysis seam**:

@@ -174,8 +174,10 @@ Why later:
 
 ## Execution order
 
-1. **Close the eval-feedback loop**
-   Finish the current feedback epic, including lint feedback if accepted.
+1. **Keep the eval-feedback loop sharp**
+   Evaluation feedback and lint feedback now close the build loop. Keep new
+   primitives on the same pattern: structured finding → formatted feedback →
+   targeted revision.
 
 2. **Document the AgentEquip direction**
    Update architecture language to define Equipment, Equipment primitive, and
