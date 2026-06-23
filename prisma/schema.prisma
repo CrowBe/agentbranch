@@ -1,4 +1,4 @@
-// SkillBuilder data model — mirrors docs/ARCHITECTURE.md §6.
+// SkillSmith data model — mirrors docs/ARCHITECTURE.md §6.
 // The schema is *export-agnostic*: export shapes are rendered from the skill
 // record, never stored. Persistence adapters live in src/infra/prisma.
 

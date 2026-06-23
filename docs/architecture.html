@@ -256,7 +256,7 @@
         <div class="flow">
           <div class="step"><div class="k">Skill</div><div class="v">the aggregate</div><div class="m">SKILL.md → source</div></div>
           <div class="chev">›</div>
-          <div class="step"><div class="k">Analyze</div><div class="v">read → artifact</div><div class="m">Analyzer&lt;A&gt;.analyze(skill)</div></div>
+          <div class="step"><div class="k">Analyze</div><div class="v">input → artifact</div><div class="m">Analyzer&lt;Input,A&gt;.analyze(input)</div></div>
           <div class="chev">›</div>
           <div class="step"><div class="k">Artifact</div><div class="v">structured + spans</div><div class="m">Artifact&lt;ArtifactKind&gt; / SourceSpan</div></div>
           <div class="chev">›</div>
@@ -366,7 +366,7 @@
             <h3>build-loop <span class="badge b-real">real</span></h3>
             <div class="path">modules/build-loop</div>
             <div class="api">runBuildLoop · buildTools · BuildToolName · BuildLoopEvent · formatTestRunFeedback · formatTriggeringEvalFeedback</div>
-            <ul><li>write_skill/edit_skill, streams to preview via <code>gateway.streamAgent</code></li><li><b>closeable with eval feedback:</b> <code>format*Feedback</code> are pure functions that translate a structured eval artifact into an actionable user message; client appends + re-submits so Claude revises against evidence</li></ul>
+            <ul><li>write_skill/edit_skill, streams to preview via <code>gateway.streamAgent</code></li><li><b>closeable with eval feedback:</b> <code>format*Feedback</code> are pure functions that translate structured eval/lint artifacts into an actionable user message; client appends + re-submits so Claude revises against evidence</li></ul>
           </div>
 
           <div class="card seam">

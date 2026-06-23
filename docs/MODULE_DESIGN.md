@@ -22,7 +22,7 @@ with in-memory/stub adapters for offline use. A **composition root**
 env flags. **Presentation** (`src/app`, `src/components`) renders. A shared
 **kernel** (`src/shared`) carries cross-cutting primitives and depends on
 nothing of ours. The **skill-analysis seam** is the spine: most features are a
-*renderer* on it, not a new pipeline.
+capability on it, not a new pipeline.
 
 ```
 Presentation  (src/app, src/components)         depends ↓ on server + module barrels
@@ -64,28 +64,29 @@ domain. The composition root is the only outer-to-inner wiring point.
 (ARCHITECTURE §3.1).
 
 ```
-analysis  Skill ─▶ Analyzer<A>.analyze() ──▶ Artifact ──▶ Renderer<A,S>.render() ─▶ Surface
+analysis  Input ─▶ Analyzer<Input,A>.analyze() ──▶ Artifact ──▶ Renderer<A,S>.render() ─▶ Surface
                                        (carries SourceSpans)
-          └──────────────── runCapability(capability, surface, skill) ─────────────────┘
+          └──────────────── runCapability(capability, surface, input) ─────────────────┘
 
-evaluation Skill ─▶ Evaluator<A>.evaluate(skill, gateway) ─▶ Artifact ─▶ Renderer<A,S> ─▶ Surface
+evaluation Input ─▶ Evaluator<Input,A>.evaluate(input, gateway) ─▶ Artifact ─▶ Renderer<A,S> ─▶ Surface
                           (owns method, model handed in)   (+ Insight)
-          └────────── runEvaluation(capability, surface, skill, gateway) ──────────────┘
+          └────────── runEvaluation(capability, surface, input, gateway) ──────────────┘
                           (guards model_unavailable once, here)
 ```
 
 The seam carries **two capability shapes** (CONTEXT.md → Analysis / Evaluation):
-**analysis** is static and runs offline; **evaluation** runs the skill through
+**analysis** is static and runs offline; **evaluation** runs the input through
 the model gateway and may fail `model_unavailable`. Same `artifact → render`
-tail; different head.
+tail; different head. Current concrete inputs are Skills; the generic `Input`
+slot lets future equipment primitives reuse the same seam.
 
 - **`ArtifactKind`** — closed union of valid kind strings (`"hero" | "skill-ir" | "export" | "lint" | "test-run" | "triggering-eval"`). Add a new member here when a new capability needs its own artifact type. Free-string kinds are a compile error.
 - **`Artifact<K>`** — the base artifact type; `K` must be an `ArtifactKind`. Each capability extends this with its own fields.
-- **`Analyzer<A>`** — read a skill, emit a structured artifact. Async + `Result`
-  (some analyzers call the model).
-- **`Evaluator<A>`** — run the skill through the model and emit a result
+- **`Analyzer<Input, A>`** — read an input, emit a structured artifact. Async +
+  `Result` (some analyzers call the model).
+- **`Evaluator<Input, A>`** — run the input through the model and emit a result
   artifact. Owns its *method* (builds its own scenario / battery / distractors);
-  the **model gateway** is handed in (`evaluate(skill, gateway)`). Composes the
+  the **model gateway** is handed in (`evaluate(input, gateway)`). Composes the
   gateway's `classify` / `runAgent` / `generate` primitives; never touches the
   key or token accounting.
 - **`Renderer<A, S>`** — pure, synchronous: artifact → one surface. Swapping the
@@ -109,7 +110,7 @@ tail; different head.
 | Hero | analysis | `hero` | hero (sections + spans) | `rendered`, `source` | real |
 | Visualise | analysis | `visualise` | IR extraction | `mermaid` | extract = stub, render = real |
 | Export | analysis | `export` | instruction intent | `claude` (manifest) | real |
-| Lint | analysis | `lint` | frontmatter + body + refs quality rules | `report` | real |
+| Lint | analysis | `lint` | frontmatter + body + refs quality rules | `insights`, `breakdown` | real |
 | Test run | evaluation | `test-run` | composes `gateway.runAgent` + mock-tool registry | `insights`, `breakdown` | run real; scenario/registry stubbed |
 | Triggering eval | evaluation | `triggering-eval` | composes `gateway.classify` over the field | `insights`, `breakdown` | run real; battery/distractors stubbed |
 
@@ -180,7 +181,7 @@ concern (ARCHITECTURE §2 *Eval feedback*, §4 *Eval → build feedback*).
 |---|---|---|
 | `memory/{skill,usage,test-run,eval}.memory-repository.ts` | the four repos | **offline default**, tested |
 | `prisma/client.ts` | — | PrismaClient + `@prisma/adapter-pg` (Prisma 7 driver adapter) |
-| `prisma/{skill,usage}.prisma-repository.ts` | `SkillRepository`, `UsageRepository` | real; test-run/eval Prisma repos follow same shape (todo) |
+| `prisma/{skill,usage,test-run,eval}.prisma-repository.ts` | `SkillRepository`, `UsageRepository`, `TestRunRepository`, `EvalRunRepository` | real |
 | `prisma/user-provisioning-auth.ts` | `AuthPort` | wraps Clerk auth, provisions the `users` row on first sight |
 | `ai/model-gateway.ts` | `ModelGateway` | the metered gateway; resolves a `LanguageModel` per call from a `ModelRouter` (or a static `ModelProvider` in tests); routes accounting through `usage` |
 | `ai/model-router.ts` | `ModelRouter` | the provider/model selection authority: builds providers from the registry + server-pool keys, holds the runtime active selection + bring-your-own overrides (process-local), and resolves per primitive. Secret-free snapshot |
@@ -200,7 +201,7 @@ concern (ARCHITECTURE §2 *Eval feedback*, §4 *Eval → build feedback*).
   memory, Clerk vs stub **by flag**; builds the **model router** from the registry
   and wires the gateway to resolve through it (no model ⇒ `model_unavailable`).
   `import "server-only"`.
-- `build-stream.ts` — `buildLoopResponse(input, provider)`: drives
+- `build-stream.ts` — `buildLoopResponse(input, gateway, skills, userId)`: drives
   `runBuildLoop` and encodes events as an SSE `Response`.
 
 ### Presentation (`src/app`, `src/components`)
@@ -210,6 +211,8 @@ concern (ARCHITECTURE §2 *Eval feedback*, §4 *Eval → build feedback*).
 - `app/api/build/route.ts` — auth → stream; the **model gateway** gates the
   `build` cap and resolves the model through the router (the route never touches
   the raw model or keys).
+- `app/api/{test-run,triggering-eval}/route.ts` — auth → evaluation stream when
+  requested; records runs against the current skill version.
 - `app/api/model-router/route.ts` — **admin-gated** (the selection is
   instance-wide): GET the secret-free router snapshot, POST to switch the active
   provider/model or store/clear a bring-your-own key. With Clerk auth on, only an
@@ -253,8 +256,8 @@ Add a new tag to the union in `errors.ts` only when none of the above fits. Free
 
 Almost every change is one of these. If a task fits neither, surface it.
 
-1. **New capability / view / analysis** → a **renderer on the seam**.
-   Ask *"what renderer is this?"* before *"what service?"*. Write an
+1. **New capability / view / analysis** → a **capability on the seam**.
+   Ask *"what input, artifact, and renderer is this?"* before *"what service?"*. Write an
    `Analyzer` (if a new artifact) and one or more `Renderer`s, compose with
    `defineCapability`, expose from the module's `index.ts`. No new pipeline.
 
