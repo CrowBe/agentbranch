@@ -1,0 +1,18 @@
+#!/bin/sh
+# Non-blocking doc-drift nudge. If a commit touches src/ but no docs/, remind the
+# author/agent to re-verify the docs haven't drifted. The deterministic half
+# (public surface + STUB claims) is enforced in CI via `pnpm check:docs`; this
+# hook covers the semantic half a static check can't see. Always exits 0 — it
+# never blocks a commit.
+staged=$(git diff --cached --name-only)
+
+echo "$staged" | grep -qE '^src/' || exit 0
+echo "$staged" | grep -qE '^docs/' && exit 0
+
+cat <<'MSG'
+ⓘ doc-drift nudge: this commit changes src/ but no docs/.
+  If you changed a module's public surface, its status, or a stubbed behaviour,
+  re-check docs/MODULE_DESIGN.md and docs/ARCHITECTURE.md so they read as
+  current state before pushing. (Deterministic checks: pnpm check:docs)
+MSG
+exit 0

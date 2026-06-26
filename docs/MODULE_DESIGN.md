@@ -111,8 +111,8 @@ slot lets future equipment primitives reuse the same seam.
 | Visualise | analysis | `visualise` | IR extraction | `mermaid` | extract = stub, render = real |
 | Export | analysis | `export` | instruction intent | `claude` (manifest) | real |
 | Lint | analysis | `lint` | frontmatter + body + refs quality rules | `insights`, `breakdown` | real |
-| Test run | evaluation | `test-run` | composes `gateway.runAgent` + mock-tool registry | `insights`, `breakdown` | run real; scenario/registry stubbed |
-| Triggering eval | evaluation | `triggering-eval` | composes `gateway.classify` over the field | `insights`, `breakdown` | run real; battery/distractors stubbed |
+| Test run | evaluation | `test-run` | composes `gateway.runAgent` + mock-tool registry | `insights`, `breakdown` | run + world generation real (scenario + mock tools generated, cached); email mock = offline fallback |
+| Triggering eval | evaluation | `triggering-eval` | composes `gateway.classify` over the field | `insights`, `breakdown` | run + battery generation real (cached); distractor library a static v1 seed |
 
 Run an analysis: `runCapability(heroCapability, "rendered", skill)` →
 `Result<RenderedDoc, DomainError>`. Run an evaluation:
@@ -137,11 +137,11 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **skill-analysis** | `defineCapability`, `runCapability`, `Analyzer/Renderer/Capability/SourceSpan/Artifact` | — | real |
 | **hero** | `heroCapability`, `HeroView`, doc types | — | real |
 | **visualise** | `visualiseCapability`, IR + Mermaid types | — | extract stub · render real |
-| **test-run** | `testRunCapability`, `executeSkill`, `createMockToolRegistry`, `defaultMockToolRegistry`, `emailMockTool` | `TestRunRepository` | evaluation capability · run real · scenario/registry stubbed |
-| **triggering-eval** | `triggeringEvalCapability`, `runTriggeringEval`, `buildPromptBattery`, `distractorLibrary` | `EvalRunRepository` | evaluation capability · run real · battery/distractors stubbed |
+| **test-run** | `testRunCapability`, `executeSkill`, `createMockToolRegistry`, `defaultMockToolRegistry`, `emailMockTool` | `TestRunRepository` | evaluation capability · run + world generation real · email mock = offline fallback |
+| **triggering-eval** | `triggeringEvalCapability`, `runTriggeringEval`, `generatePromptBattery`, `distractorLibrary` | `EvalRunRepository` | evaluation capability · run + battery generation real · distractor library static v1 seed |
 | **export** | `exportCapability`, manifest types | — | real |
 | **lint** | `lintCapability`, `LintReport`, `LintFinding` | — | real |
-| **skill-import** | `SkillImportFetcher`, `ImportedSkill` | `SkillImportFetcher` | port |
+| **skill-import** | `SkillImportFetcher`, `SkillImportFetchError` | `SkillImportFetcher` | port |
 | **portability** | `transformSkill`, types | — | stub (deferred engine) |
 | **build-loop** | `runBuildLoop`, `buildTools`, `BuildToolName`, `BuildLoopEvent`, `formatTestRunFeedback`, `formatTriggeringEvalFeedback` | — (consumes `ModelGateway`) | real |
 | **model-gateway** | `ModelGateway` (`classify`/`runAgent`/`streamAgent`/`generate`), `AccountingTag`, `GatewayTool`, `ModelProvider` | `ModelProvider` | real |
@@ -155,15 +155,6 @@ placeholder):**
 - `visualise/extract-ir.ts` — derives a deterministic linear flowchart from
   headings; v1 replaces with a model-emitted IR. The IR *shape* is the real
   contract.
-- `test-run/execute-skill.ts` — the *run* is real (composes `gateway.runAgent`
-  with the mock tools as handlers, then `gateway.generate` for the Insight). The
-  stub is the *inputs*: scenario + registry default to a single email mock
-  (`STUB` in-file); v1 infers the registry from the skill and generates a
-  stressing scenario.
-- `triggering-eval/run-eval.ts` — the *run* is real (composes `gateway.classify`
-  over candidate-vs-distractor field, then `gateway.generate` for the Insight).
-  The stub is the *inputs*: `prompt-battery.ts` + `distractor-library.ts` are
-  static/keyword (`STUB` in-file); v1 generates them.
 - `portability/portability-transform.ts` — returns `not_configured`; one engine,
   two surfaces, both deferred (ARCHITECTURE §9).
 

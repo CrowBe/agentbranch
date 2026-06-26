@@ -335,17 +335,17 @@
           </div>
 
           <div class="card">
-            <h3>test-run <span class="badge b-real">run real</span><span class="badge b-stub">inputs stub</span></h3>
+            <h3>test-run <span class="badge b-real">run + world gen real</span></h3>
             <div class="path">modules/test-run</div>
             <div class="api">testRunCapability · executeSkill · createMockToolRegistry</div>
-            <ul><li>evaluation capability: composes <code>gateway.runAgent</code> + mock tools, then <code>generate</code> → Insight</li><li>scenario + registry stubbed (email mock); port: <span class="api">TestRunRepository</span></li></ul>
+            <ul><li>evaluation capability: composes <code>gateway.runAgent</code> + mock tools, then <code>generate</code> → Insight</li><li>scenario + mock tools generated (cached); email mock = offline fallback; port: <span class="api">TestRunRepository</span></li></ul>
           </div>
 
           <div class="card">
-            <h3>triggering-eval <span class="badge b-real">run real</span><span class="badge b-stub">inputs stub</span></h3>
+            <h3>triggering-eval <span class="badge b-real">run + battery gen real</span></h3>
             <div class="path">modules/triggering-eval</div>
-            <div class="api">triggeringEvalCapability · runTriggeringEval · buildPromptBattery · distractorLibrary</div>
-            <ul><li>evaluation capability: composes <code>gateway.classify</code> over candidate-vs-distractor, then <code>generate</code> → Insight</li><li>battery + distractors stubbed; port: <span class="api">EvalRunRepository</span></li></ul>
+            <div class="api">triggeringEvalCapability · runTriggeringEval · generatePromptBattery · distractorLibrary</div>
+            <ul><li>evaluation capability: composes <code>gateway.classify</code> over candidate-vs-distractor, then <code>generate</code> → Insight</li><li>battery generated (cached); distractor library static v1 seed; port: <span class="api">EvalRunRepository</span></li></ul>
           </div>
 
           <div class="card">
