@@ -108,7 +108,7 @@ slot lets future equipment primitives reuse the same seam.
 | Capability | Shape | Module | Analyzer / Evaluator | Renderer(s) | Status |
 |---|---|---|---|---|---|
 | Hero | analysis | `hero` | hero (sections + spans) | `rendered`, `source` | real |
-| Visualise | analysis | `visualise` | IR extraction | `mermaid` | extract = stub, render = real |
+| Visualise | analysis | `visualise` | IR extraction | `mermaid` | extraction model-backed (deterministic offline fallback); render real |
 | Export | analysis | `export` | instruction intent | `claude` (manifest) | real |
 | Lint | analysis | `lint` | frontmatter + body + refs quality rules | `insights`, `breakdown` | real |
 | Test run | evaluation | `test-run` | composes `gateway.runAgent` + mock-tool registry | `insights`, `breakdown` | run + world generation real (scenario + mock tools generated, cached); email mock = offline fallback |
@@ -136,7 +136,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **skill** | `parseSkillMd`, `serializeSkillMd`, `makeSkill`, `reviseSkill`, `skillName/Description`, types | `SkillRepository` | real |
 | **skill-analysis** | `defineCapability`, `runCapability`, `Analyzer/Renderer/Capability/SourceSpan/Artifact` | — | real |
 | **hero** | `heroCapability`, `HeroView`, doc types | — | real |
-| **visualise** | `visualiseCapability`, IR + Mermaid types | — | extract stub · render real |
+| **visualise** | `visualiseCapability`, IR + Mermaid types | — | extraction model-backed · deterministic offline fallback · render real |
 | **test-run** | `testRunCapability`, `executeSkill`, `createMockToolRegistry`, `defaultMockToolRegistry`, `emailMockTool` | `TestRunRepository` | evaluation capability · run + world generation real · email mock = offline fallback |
 | **triggering-eval** | `triggeringEvalCapability`, `runTriggeringEval`, `generatePromptBattery`, `distractorLibrary` | `EvalRunRepository` | evaluation capability · run + battery generation real · distractor library static v1 seed |
 | **export** | `exportCapability`, manifest types | — | real |
@@ -152,9 +152,6 @@ interface (marked `STUB` in-file) · **port** = interface only.
 **Stub boundaries (where the real interface is set but behaviour is a
 placeholder):**
 
-- `visualise/extract-ir.ts` — derives a deterministic linear flowchart from
-  headings; v1 replaces with a model-emitted IR. The IR *shape* is the real
-  contract.
 - `portability/portability-transform.ts` — returns `not_configured`; one engine,
   two surfaces, both deferred (ARCHITECTURE §9).
 
