@@ -234,4 +234,28 @@ Supporting policy: publishers are attributable (OAuth-only identity, already tru
 
 **Build order (when greenlit) — moderation leads, distribution follows:** 1. lint policy rules (useful to every author today, tap or no tap) → 2. adversarial battery → 3. `safetyReviewCapability` → 4. publication domain (pinned version, slug, tier, hash, rate limit) → 5. tap repo + bot (PR flow, open-source lint CI, hosted-gate checks, auto-merge, revert path) → 6. reviewed tier + Skill library surface (Templates becomes a view over the reviewed tier).
 
+### 9.2 Equipment primitives & composition (broadening beyond Skill)
+
+The seam is built so `Skill` is the *first* concrete input, not the only possible one: `Analyzer<Input, A>` / `Evaluator<Input, A>` take a generic input ([§2](#2-glossary--the-domain-language), [§3.1](#31-the-skill-analysis-seam-the-spine)). Broadening the product means adding more **equipment primitives** — declarative artifacts that change what an agent can do, know, decide, or safely access — each with its own source model, analyzer/lint, renderer, and optionally an evaluator, all on the existing seam (no new pipeline).
+
+The broadening earns its keep only when a **second** primitive ships and **composition** becomes possible: cross-primitive evaluation questions the single-primitive product can't ask —
+
+- Does this Skill call this Tool correctly?
+- Does the Tool's output match the Response schema?
+- Does the Skill stay inside the declared Policy?
+
+Composition is **additive on the seam** — an evaluator gets richer input context, it does not become a new pipeline.
+
+**Primitive order (each earns the next):**
+
+1. **Response schemas** — structured output definitions (JSON Schema / typed shapes). Cheapest first step: pure lint is immediately useful, validates deterministically, and feeds Tool inputs/outputs and eval expectations. No runtime orchestration.
+2. **Tool contracts** — typed input/output plus descriptions, examples, failure modes, safety notes. Enables the first relational evaluation; the first relational test extends **Test run** so a Skill calls a mocked Tool contract and the call arguments/output shape are validated.
+3. **Policies / guardrails** — declarative constraints on allowed actions, confirmations, and data/network/file/output access. Lint catches obvious violations; evaluation tests whether the constraint holds under pressure.
+4. **Agent profiles** (later) — durable identity + defaults (system prompt, role, tone, model preference, default equipment). Analysis is easy; the evaluation half needs rubric / LLM-judge support.
+5. **Knowledge packs** (later) — bounded reference knowledge, lightweight RAG-adjacent, no vector DB. Meaningful only when evaluated as part of a profile + skill + tool bundle.
+
+Supporting work on the way: **user-authored test materials** (let users seed Triggering eval / Test run with their own positive/negative prompts and scenarios — extends existing evaluators before becoming a top-level primitive) and **regression comparison** across evaluation records ([§6](#6-data-model-sketch); Richer evals above) so a revision's improvement or regression is visible.
+
+**Smallest useful composition** — the bar for being more than a single-primitive tool: *here is a Skill, a Tool contract, and a Response schema; does the Skill call the Tool correctly and produce valid output?* Broader than single-primitive validation without dragging in container runtime, vector DBs, or subagent routing — the **non-goals for the first expansion**.
+
 ---
