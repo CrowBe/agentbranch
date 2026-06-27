@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ---------------------------------------------------------------------------
-   SkillSmith design tokens — DESIGN.md.
+   agent.branch design tokens — DESIGN.md.
    Semantic role names are identical across themes; only the colour layer
    swaps. Light is the default (the welcoming face); dark is a power-user
    preference set via [data-theme="dark"].

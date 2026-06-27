@@ -1,8 +1,8 @@
 {
-  "name": "skillsmith",
+  "name": "agentbranch",
   "version": "0.1.0",
   "private": true,
-  "description": "Craft and test agent skills — author, visualise, test-run, validate triggering, and export.",
+  "description": "Version, review, and validate agent skills before they ship.",
   "type": "module",
   "scripts": {
     "dev": "next dev",

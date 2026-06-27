@@ -10,7 +10,7 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", weight: ["40
 const jetbrains = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains", weight: ["400", "500"] });
 
 export const metadata: Metadata = {
-  title: "SkillSmith",
+  title: "agent.branch",
   description: "Craft, test, and export agent skills you can trust.",
 };
 

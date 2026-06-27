@@ -137,7 +137,7 @@ function copyForMode(mode: "build" | "import" | "skills" | "history") {
   return {
     title: "Describe your skill",
     empty:
-      "Tell SkillSmith what you want the skill to do — it writes it live in the document beside you.",
+      "Tell agent.branch what you want the skill to do — it writes it live in the document beside you.",
     placeholder: "e.g. Sort my inbox into respond, archive, escalate",
     button: "Build skill",
     busy: "Building...",
