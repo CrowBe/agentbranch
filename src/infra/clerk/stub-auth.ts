@@ -4,7 +4,7 @@ import { ok, UserId } from "@/shared";
 /** A fixed dev identity so the shell renders signed-in with no Clerk keys. */
 const DEV_IDENTITY: AuthIdentity = {
   userId: UserId("dev-user"),
-  email: "dev@skillbuilder.local",
+  email: "dev@agentbranch.local",
 };
 
 /**

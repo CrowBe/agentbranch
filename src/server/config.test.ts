@@ -35,7 +35,7 @@ describe("readConfig", () => {
 
   it("uses Nous defaults when Nous is the selected provider", () => {
     replaceEnv({
-      SKILLBUILDER_MODEL_PROVIDER: "nous",
+      AGENTBRANCH_MODEL_PROVIDER: "nous",
       NOUS_API_KEY: "nous-key",
     });
 
@@ -69,10 +69,10 @@ describe("readConfig", () => {
 
   it("lets explicit model and Nous base URL override defaults", () => {
     replaceEnv({
-      SKILLBUILDER_MODEL_PROVIDER: "nous",
+      AGENTBRANCH_MODEL_PROVIDER: "nous",
       NOUS_API_KEY: "nous-key",
       NOUS_BASE_URL: "https://example.test/v1",
-      SKILLBUILDER_MODEL: "Hermes-4-70B",
+      AGENTBRANCH_MODEL: "Hermes-4-70B",
     });
 
     const config = readConfig();
@@ -84,11 +84,11 @@ describe("readConfig", () => {
   it("lets primitive model routes override the provider defaults", () => {
     replaceEnv({
       ANTHROPIC_API_KEY: "anthropic-key",
-      SKILLBUILDER_MODEL: "claude-opus-custom",
-      SKILLBUILDER_CLASSIFY_MODEL: "claude-haiku-custom",
-      SKILLBUILDER_GENERATE_MODEL: "claude-sonnet-custom",
-      SKILLBUILDER_RUN_AGENT_MODEL: "claude-run-custom",
-      SKILLBUILDER_STREAM_AGENT_MODEL: "claude-stream-custom",
+      AGENTBRANCH_MODEL: "claude-opus-custom",
+      AGENTBRANCH_CLASSIFY_MODEL: "claude-haiku-custom",
+      AGENTBRANCH_GENERATE_MODEL: "claude-sonnet-custom",
+      AGENTBRANCH_RUN_AGENT_MODEL: "claude-run-custom",
+      AGENTBRANCH_STREAM_AGENT_MODEL: "claude-stream-custom",
     });
 
     const config = readConfig();
@@ -104,20 +104,20 @@ describe("readConfig", () => {
 
   it("lets the Clerk Pro plan slug override the default", () => {
     replaceEnv({
-      SKILLBUILDER_PRO_PLAN_SLUG: "skillbuilder-pro",
+      AGENTBRANCH_PRO_PLAN_SLUG: "agentbranch-pro",
     });
 
     const config = readConfig();
 
-    expect(config.clerkProPlanSlug).toBe("skillbuilder-pro");
+    expect(config.clerkProPlanSlug).toBe("agentbranch-pro");
   });
 
   it("rejects unsupported model providers", () => {
     replaceEnv({
-      SKILLBUILDER_MODEL_PROVIDER: "bogus",
+      AGENTBRANCH_MODEL_PROVIDER: "bogus",
     });
 
-    expect(() => readConfig()).toThrow(/Unsupported SKILLBUILDER_MODEL_PROVIDER/);
+    expect(() => readConfig()).toThrow(/Unsupported AGENTBRANCH_MODEL_PROVIDER/);
   });
 });
 
@@ -127,13 +127,13 @@ function replaceEnv(env: Record<string, string>): void {
   delete process.env.ANTHROPIC_API_KEY;
   delete process.env.NOUS_API_KEY;
   delete process.env.NOUS_BASE_URL;
-  delete process.env.SKILLBUILDER_MODEL;
-  delete process.env.SKILLBUILDER_CLASSIFY_MODEL;
-  delete process.env.SKILLBUILDER_GENERATE_MODEL;
-  delete process.env.SKILLBUILDER_RUN_AGENT_MODEL;
-  delete process.env.SKILLBUILDER_STREAM_AGENT_MODEL;
-  delete process.env.SKILLBUILDER_MODEL_PROVIDER;
-  delete process.env.SKILLBUILDER_PRO_PLAN_SLUG;
+  delete process.env.AGENTBRANCH_MODEL;
+  delete process.env.AGENTBRANCH_CLASSIFY_MODEL;
+  delete process.env.AGENTBRANCH_GENERATE_MODEL;
+  delete process.env.AGENTBRANCH_RUN_AGENT_MODEL;
+  delete process.env.AGENTBRANCH_STREAM_AGENT_MODEL;
+  delete process.env.AGENTBRANCH_MODEL_PROVIDER;
+  delete process.env.AGENTBRANCH_PRO_PLAN_SLUG;
   delete process.env.CLERK_SECRET_KEY;
   delete process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
   Object.assign(process.env, env);

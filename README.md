@@ -84,7 +84,7 @@ The default provider is Anthropic (Claude). Get a key from the [Anthropic Consol
 ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
-Alternatively, use the OpenAI-compatible [Nous Portal](https://portal.nousresearch.com/) — set `NOUS_API_KEY` and `SKILLBUILDER_MODEL_PROVIDER="nous"`. The server owns the key; it never reaches the browser. With auth on, the in-app **model console** (rail → Models) can switch provider/model at runtime, but env is enough for an E2E run.
+Alternatively, use the OpenAI-compatible [Nous Portal](https://portal.nousresearch.com/) — set `NOUS_API_KEY` and `AGENTBRANCH_MODEL_PROVIDER="nous"`. The server owns the key; it never reaches the browser. With auth on, the in-app **model console** (rail → Models) can switch provider/model at runtime, but env is enough for an E2E run.
 
 #### Postgres — *optional, for persistence that survives restarts*
 
@@ -111,7 +111,7 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="pk_test_..."
 CLERK_SECRET_KEY="sk_test_..."
 ```
 
-Both must be present for auth to switch on; with only one set, the app stays on the stub identity. When auth is on, the model console is admin-gated — list yourself in `SKILLBUILDER_ADMIN_EMAILS` (or `SKILLBUILDER_ADMIN_USER_IDS`) or it locks (fail-safe).
+Both must be present for auth to switch on; with only one set, the app stays on the stub identity. When auth is on, the model console is admin-gated — list yourself in `AGENTBRANCH_ADMIN_EMAILS` (or `AGENTBRANCH_ADMIN_USER_IDS`) or it locks (fail-safe).
 
 ### Step 3 — walk the flow
 

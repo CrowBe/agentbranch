@@ -5,7 +5,7 @@ import type { AuthIdentity } from "./auth.types";
  * selection + credentials apply to the whole running instance, ARCHITECTURE §4
  * routing). An allowlist, not a role system: an identity is an admin when its
  * Clerk user id or its (case-insensitive) email is listed. Sourced from env
- * (`SKILLBUILDER_ADMIN_USER_IDS` / `SKILLBUILDER_ADMIN_EMAILS`) via config.
+ * (`AGENTBRANCH_ADMIN_USER_IDS` / `AGENTBRANCH_ADMIN_EMAILS`) via config.
  */
 export type AdminPolicy = {
   readonly userIds: readonly string[];
