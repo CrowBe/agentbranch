@@ -90,11 +90,12 @@ flowchart LR
     end
 ```
 
-The seam carries **two capability shapes** (CONTEXT.md → Analysis / Evaluation):
-**analysis** is static and runs offline; **evaluation** runs the input through
-the model gateway and may fail `model_unavailable`. Same `artifact → render`
-tail; different head. Current concrete inputs are Skills; the generic `Input`
-slot lets future equipment primitives reuse the same seam.
+Both shapes share one `artifact → render` tail and differ only at the head, as
+the diagram shows: **analysis** wraps an `Analyzer` (static, offline);
+**evaluation** wraps an `Evaluator` (runs through the model gateway, can fail
+`model_unavailable`). Why the split exists and which capabilities are which is
+ARCHITECTURE §3.1 — this section is the mechanics. Concrete inputs are Skills
+today; the generic `Input` slot lets future equipment primitives reuse the seam.
 
 - **`ArtifactKind`** — closed union of valid kind strings (`"hero" | "skill-ir" | "export" | "lint" | "test-run" | "triggering-eval"`). Add a new member here when a new capability needs its own artifact type. Free-string kinds are a compile error.
 - **`Artifact<K>`** — the base artifact type; `K` must be an `ArtifactKind`. Each capability extends this with its own fields.
