@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { runTriggeringEval, buildPromptBattery, generatePromptBattery } from "./index";
+import { runTriggeringEval, generatePromptBattery } from "./index";
+import { buildPromptBattery } from "./prompt-battery";
 import { makeSkill, parseSkillMd, type Skill } from "@/modules/skill";
 import type { GenerateInput, ModelGateway } from "@/modules/model-gateway";
 import { domainError, err, ok, unwrap, SkillId, UserId } from "@/shared";

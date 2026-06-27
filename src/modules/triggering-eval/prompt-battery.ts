@@ -6,11 +6,10 @@ import { isErr, ok, type DomainError, type Result } from "@/shared";
 import type { PromptCase } from "./triggering-eval.types";
 
 /**
- * Build the positive/negative prompt battery for a skill.
- *
- * STUB: v1 generates these from the skill via the model. Here we derive a tiny
- * deterministic battery from the description keywords so the eval runner is
- * exercisable offline. The shape (positive + negative cases) is the real contract.
+ * Build a tiny deterministic prompt battery from the skill's description
+ * keywords — no model call. Used as an offline fixture in tests; the live eval
+ * path uses `generatePromptBattery` (model-backed). The shape (positive +
+ * negative cases) is the real contract either way.
  */
 export function buildPromptBattery(skill: Skill): readonly PromptCase[] {
   const keyword = firstKeyword(skill.source.frontmatter.description) ?? skillName(skill);
