@@ -1,6 +1,10 @@
 # agent.branch — Domain Language
 
-The ubiquitous-language contract for agent.branch. One term per concept, opinionated, with the aliases to avoid. This is the *language* layer; `docs/ARCHITECTURE.md` §2 is the product-decision glossary and stays the source of truth for *why* each decision was made. When they overlap, this file sharpens the word and ARCHITECTURE carries the rationale.
+The ubiquitous-language contract for agent.branch: the canonical word for each
+concept and the aliases to avoid. This is the *language* layer — `docs/ARCHITECTURE.md`
+§2 carries the full definition and the *why*, and stays the source of truth for
+both. When they overlap, this file sharpens the word; ARCHITECTURE carries the
+rationale. Keep definitions there, not here.
 
 ## Language
 
@@ -9,7 +13,7 @@ The product's unit of work — a reusable, instruction-only instruction set for 
 _Avoid_: prompt, agent, bot, automation
 
 **`SKILL.md`**:
-A skill's source file — YAML frontmatter (`name`, `description`) + markdown body. The lossless source of truth a skill round-trips through.
+A skill's source file — YAML frontmatter (`name`, `description`) + markdown body. The lossless source a skill round-trips through.
 _Avoid_: spec, config, manifest
 
 **Skill record**:
@@ -17,23 +21,23 @@ A persisted skill in our DB — `SKILL.md` source plus identity and timestamps. 
 _Avoid_: skill row, skill entity, document
 
 **Build loop**:
-The core agentic loop — Claude (via Vercel AI SDK) writes/edits the `SKILL.md` through `write_skill`/`edit_skill`, streaming to the preview. The loop is closeable with **eval feedback**: evaluation results and lint reports can be injected back into the conversation as messages, enabling Claude to revise from observed evidence.
+The core agentic loop — Claude writes/edits the `SKILL.md` through `write_skill`/`edit_skill`, streaming to the preview. Closeable with **eval feedback**.
 _Avoid_: chat, conversation, agent loop, generation
 
 **Eval feedback**:
-A formatted summary of an Evaluation result (or Lint artifact) injected as a user message into the build loop conversation — giving Claude the specific failure cases, model rationale, and behavioural evidence it needs to revise the skill precisely. Produced by a **feedback formatter** (a pure function in the `build-loop` module). User-triggered from the **Insights** surface for evaluation results; auto-injected after `write_skill` for lint findings. The formatter lives in `build-loop`, not in the eval modules — the concern is "what does Claude need to author a revision?" not "how do I describe my result?".
+A formatted summary of an Evaluation result (or Lint artifact) injected as a user message into the build loop, so Claude revises from observed evidence rather than guessing. Produced by a **feedback formatter** — a pure function in the `build-loop` module.
 _Avoid_: feedback loop (the pattern, not the artifact), revision prompt (doesn't name the source), eval summary (that's Insights — the user-facing surface)
 
 **Skill-analysis seam**:
-The architectural spine — the shared pattern *read input → emit a structured artifact → render it for a surface*. Built once; every capability is a seam capability, not a new pipeline. Current concrete inputs are Skills; the generic `Analyzer<Input, A>` / `Evaluator<Input, A>` shape is ready for future equipment primitives.
+The architectural spine — the shared pattern *read input → emit a structured artifact → render it for a surface*. Built once; every capability plugs in, never a new pipeline.
 _Avoid_: pipeline, service, the analyzer
 
 **Analysis capability**:
-A *static* capability on the seam — reads an input and derives a structured view. Pure, deterministic, no model call (or a single bounded one), no agent loop. The Rendered hero, Source view, Visualise, Lint, and Export are analysis capabilities over Skill today.
+A *static* capability on the seam — reads an input and derives a structured view. Pure, runs offline. Wraps an **Analyzer** (`analyze(input)`).
 _Avoid_: render, view (those name the output, not the capability)
 
 **Evaluation capability**:
-A *dynamic* capability on the seam — runs an input through a model and observes its behaviour. Non-deterministic, costs tokens. Test run and Triggering eval are evaluation capabilities over Skill today. An Evaluator **owns its method, not its resources**: it builds its own conditions (Scenario / distractor field / Prompt battery) and runs the input, but model access is handed in via the **model gateway**. Its signature is `evaluate(input, gateway)`; the evaluator constructs its own world, calling the gateway when its method needs a model.
+A *dynamic* capability on the seam — runs an input through a model and observes its behaviour. Costs tokens, needs a model. Wraps an **Evaluator** (`evaluate(input, gateway)`) that owns its method, not its resources (see *Distinctions*).
 _Avoid_: execution, validation (overloaded), check
 
 **Artifact**:
@@ -41,55 +45,51 @@ The structured thing an analyzer emits before rendering, discriminated by a clos
 _Avoid_: output, result, payload, IR (the IR is one artifact kind, not the category)
 
 **Skill IR**:
-*One* artifact kind, produced by Visualise — nodes + edges, each carrying a source-span back into `SKILL.md`. A Visualise concept, not the seam itself.
+*One* artifact kind, produced by Visualise — nodes + edges, each carrying a **source-span** back into `SKILL.md`. A Visualise concept, not the seam itself.
 _Avoid_: graph, AST, model (it is not the whole seam)
 
 **Evaluation result**:
-The Artifact an Evaluation capability emits — the structured run-record (which prompts fired, pass/fail, the mock-tool transcript) **plus an `insight`** (the model-written interpretation, see **Insight**). Ephemeral, lives on the seam, *never shown raw*. Internal term; never user copy.
+The Artifact an Evaluation capability emits — the structured run-record plus an `insight`. Ephemeral, lives on the seam, *never shown raw*. Internal term; never user copy.
 _Avoid_: report (smells like a data wall), results table, output, log
 
 **Insights**:
-*User-facing term* for the default rendered surface of an Evaluation result — a meaningful, plain-language presentation the user can act on ("fires on the right prompts, watch this one"). The **Insights renderer** is *pure*: it shapes the result's `insight` field (the model interpretation, produced by the evaluator via `gateway.generate`) into a display view-model. A second renderer — the **breakdown** — sits behind it for technical depth (the raw cases / transcript), the same Rendered/Source duality as the hero. One artifact, two pure renderers.
+*User-facing term* for the default rendered surface of an Evaluation result — plain language the user can act on. A pure renderer shapes the result's `insight` field; a **breakdown** renderer sits behind it for technical depth.
 _Avoid_: report, results, test output, eval data
 
 **Model gateway**:
-The platform's *single, controlled, metered* entry point to the model — its own module (`src/modules/model-gateway`). Owns the AI-SDK call plumbing; exposes **fine intent-level primitives** (`classify`, `runAgent`) that callers compose into their own method. Every model call in the platform passes through it. It is pure *mechanism* — it knows nothing about "selection", "scenario", or any evaluation kind. It does **not** pick the provider/model or hold the credential: it resolves a `LanguageModel` per call from the **model router** (below). Consumers: evaluation (now), portability transform + mock-data generation + the build loop (later). Depends on the **usage** module for accounting policy; the caller declares an **accounting tag** on each call.
+The platform's *single, controlled, metered* entry to the model — its own module (`src/modules/model-gateway`). Exposes fine intent-level **primitives** (`classify`/`runAgent`/`generate`); every model call passes through it. Pure mechanism — it does not pick the provider/model or hold the key (that's the **model router**), and knows no capability kinds.
 _Avoid_: harness (evaluation-narrow + banned jargon), engine (that's the portability transform), runner, the SDK, model provider (that's the raw `LanguageModel` port the gateway resolves through the router)
 
 **Model router**:
-The platform's *single, controlled* provider + model **selection** authority — its own module (`src/modules/model-router`), the layer beneath the gateway. Owns the **provider registry** (every provider the platform knows), their **credentials** (a server-pool key, plus an optional **bring-your-own override** that takes precedence), and the runtime-mutable **active selection** (which provider + model is live, switchable for testing the flow). The gateway asks it to `resolve(primitive)` → a `LanguageModel`; it knows nothing about accounting or capability kinds. The **model console** (UI) drives its mutators. Pure *selection* mechanism, the way the gateway is pure *metering* mechanism. Selection + bring-your-own keys are process-local in v1; secrets never leave through its snapshot (presence is a boolean), never logged.
+The platform's *single* provider + model **selection** authority — its own module (`src/modules/model-router`), the layer beneath the gateway. Owns the provider registry, credentials (server-pool key + optional **bring-your-own override**), and the runtime-mutable active selection; resolves a `LanguageModel` per primitive. Pure *selection* mechanism, as the gateway is pure *metering* mechanism.
 _Avoid_: gateway (that's the metered entry, not the selector), provider (the raw `LanguageModel`), config (selection is runtime, not just env)
 
 **Gateway primitive**:
-A single intent-level model operation on the gateway. Three in v1:
-- **`classify({ prompt, choices })`** → `Result<{ choice: string | null, rationale: string }>`. One structured single-shot pick. `choice` is the winning label or `null` (nothing fit). `rationale` is the model's *own* one-line reason, captured — not an invented confidence number (a chat model can't honestly give one). Triggering eval composes "would this skill fire, vs. the distractors?" from it (candidate + distractors are the `choices`; `null` = stayed silent).
-- **`runAgent({ system, messages, tools })`** → `Result<{ transcript }>`. One metered agent turn. The **gateway runs the loop**; each `tool` carries a caller-supplied `handler(input) → output`, so on a tool call the gateway invokes the caller's handler — loop is mechanism, tool *behaviour* is the caller's method. Test run passes handlers backed by its mock-tool registry. The gateway **records token usage internally** against the accounting tag (via the usage dep); the transcript comes back, tokens do not — the evaluator never touches them.
-- **`generate({ system, prompt, schema })`** → `Result<T>`. One metered free-form structured-output call (schema-validated). Distinct from `classify` (which picks from a fixed choice set): `generate` produces arbitrary structured data. An evaluator uses it to turn its *raw* result into a plain-language **Insight** after the run. Token usage recorded internally against the tag, like the others.
-
-Fine, not capability-shaped: keeping primitives fine is what keeps **method** in the caller and the gateway fixed-size as callers multiply.
+A single intent-level model operation on the gateway — three in v1: **`classify`** (one structured pick from a fixed choice set; returns the winning label or `null`, plus the model's own one-line rationale), **`runAgent`** (one metered agent turn — the gateway runs the loop, the caller supplies each tool's `handler`), **`generate`** (one metered free-form structured-output call, schema-validated). Fine, not capability-shaped — keeping primitives fine keeps **method** in the caller and the gateway fixed-size as callers multiply.
 _Avoid_: tool, op, command, wouldSelect/runScenario (those are caller methods, not gateway primitives)
 
 **Insight**:
-The structured, plain-language interpretation of an Evaluation result — `{ verdict: "good" | "needs-attention" | "failing", summary, findings[], watch[] }`. The evaluator produces it via `gateway.generate` *after* its raw run and stores it **on the Evaluation result**; the **Insights** renderer (pure) shapes it for display. `verdict` drives the headline tone, `summary` is 1–2 plain sentences, `findings` is what's working, `watch` is the act-on-it part ("also fired on 'draft a reply'"). This is where "Insights is *more than* structured copy" comes from — it's real model interpretation, captured as data, not prose baked into a renderer.
+The structured, plain-language interpretation of an Evaluation result — `{ verdict, summary, findings[], watch[] }`. The evaluator produces it via `gateway.generate` after its run and stores it on the result; the **Insights** renderer shapes it for display. Real model interpretation captured as data, not prose baked into a renderer.
 _Avoid_: summary, analysis, explanation (those name parts of it), verdict (that's one field)
 
 **Insight agent** (deferred, §9):
-The richer future of insight-generation — a tool-using agent (`runAgent` + tools) that *investigates* an Evaluation result (re-runs cases, inspects the skill) before explaining it. Cross-cutting: it would explain *any* evaluation kind, reusing the seam. v1 ships the bounded `generate`-based Insight instead; the agent replaces that call later without changing the `Insight` shape or the renderer.
+The richer future of insight-generation — a tool-using agent (`runAgent` + tools) that *investigates* a result before explaining it, replacing the bounded `generate` call without changing the `Insight` shape or the renderer. Reuses the seam across evaluation kinds.
 _Avoid_: insight service, explainer (premature naming)
 
 **Accounting tag**:
-A label the *caller* declares on every gateway call — **`account`** (user-attributable work, subject to tier policy) or **`platform`** (the platform's own cost to enable a feature, never charged to a user's allowance). An `account` tag also names the **capability** it is spending on (`test-run`, `triggering-eval`, …), because the cap it must clear is capability-specific (free allows `test-run` but not `triggering-eval`, ARCHITECTURE §8) and only the caller knows which. The caller declares it because only the caller knows *why* it is spending. The gateway carries the tag to the **usage** module, which applies the matching accounting stream — it never names a capability itself.
+A label the *caller* declares on every gateway call — **`account`** (user-attributable, subject to tier policy) or **`platform`** (the platform's own cost to enable a feature, never charged to a user's allowance). An `account` tag also names the **capability** it spends on, because the cap is capability-specific. The gateway carries it to the **usage** module.
 _Avoid_: billing flag, cost type, owner
 
 **Usage** (accounting authority):
-The module that decides "may this happen, and who pays" — tier caps (`checkCap`), and recording by **accounting tag**. Three streams: **free + account** = structural caps (one session, turn cap, capability allowlist) + a *catch* of the provider-side aggregate cap (no per-token counting — provider is source of truth, ARCHITECTURE §4/§8); **paid + account** = a token-spend stream (deferred, §9 PAYG); **platform** = our own cost ledger (deferred), separate from any user's allowance. Policy lives here; the gateway is mechanism.
+The module that decides "may this happen, and who pays" — tier caps (`checkCap`) and recording by **accounting tag**. Policy lives here; the gateway is mechanism.
 _Avoid_: meter (too narrow — free tier isn't token-metered), billing, quota
 
-**v1 accounting behaviour** (thin slice): the tag is carried day-one so adding streams later is no reshape, but only the live path is built. `account` calls run `checkCap` (structural caps — the existing logic); `paid`-token-stream and the `platform` ledger are **deferred** — those tags are carried and otherwise no-op. A model call denied by a cap fails with **`cap_reached`** (distinct from `model_unavailable`): `model_unavailable` = no model configured (offline / no key); `cap_reached` = there *is* a model but the user has hit a tier limit (the §8 graceful-degradation catch — "out of free usage today, back tomorrow"). Both are members of the closed `DomainError` union.
-_Avoid_: (n/a — internal thin-slice note)
+**`cap_reached` vs `model_unavailable`**:
+Two distinct members of the closed `DomainError` union. `model_unavailable` = no model configured (offline / no key). `cap_reached` = a model exists but the user hit a tier limit (the §8 graceful-degradation catch — "out of free usage today, back tomorrow"). Don't conflate them.
+_Avoid_: (n/a)
 
 **Evaluation record**:
-The *persisted* row for an evaluation (`test_runs` / `eval_runs`, ARCHITECTURE §6) — append-only, has identity and lifetime. Distinct from the ephemeral Evaluation result: the result is what we render *now*; the record is what we store and can re-render later. Analysis artifacts (Mermaid, Rendered doc) are *not* persisted — they recompute on demand. This asymmetry (evaluations persist, analyses recompute) is real and load-bearing.
+The *persisted* row for an evaluation (`test_runs` / `eval_runs`, ARCHITECTURE §6) — append-only, has identity and lifetime. Distinct from the ephemeral Evaluation result (see *Distinctions*).
 _Avoid_: run row, history entry (in user copy: "past run")
 
 **Source-span**:
@@ -105,11 +105,11 @@ The mechanism behind a test run — when the skill calls a tool, the registry re
 _Avoid_: stub, fake (in user copy); harness, interceptor (jargon)
 
 **Triggering eval**:
-The v1 validation — does the skill *fire* on the right prompts and *stay silent* on the wrong ones? Run against a distractor library + a positive/negative prompt battery.
+The v1 validation — does the skill *fire* on the right prompts and *stay silent* on the wrong ones? Run against a **distractor library** + a positive/negative **prompt battery**.
 _Avoid_: trigger test, firing test, selection eval
 
 **Scenario**:
-The situation a test run is run against — `{ prompt, seedData }`, one per run in v1 (ARCHITECTURE §4). Built by the test-run evaluator itself (generated to stress the skill, so generation calls the **model gateway** — tagged `platform`, since stressing *the* skill is feature enablement, not the user's allowance), not handed in.
+The situation a test run runs against — `{ prompt, seedData }`, one per run in v1. Built by the test-run evaluator itself (generated to stress the skill), not handed in.
 _Avoid_: case, situation, fixture, environment
 
 **Distractor library**:
@@ -159,11 +159,15 @@ _Avoid_: preview/raw, doc/code, formatted/plain
 > **Dev:** "So when I add trigger-overlap detection later?"
 > **Domain expert:** "Ask which shape first. It runs the skill against the user's other skills — that's evaluation. New `ArtifactKind`, evaluation shape, owns its method, handed the **gateway**, renders to Insights. It composes its method from `classify` — same primitive the triggering eval uses, different question. The gateway doesn't grow; your evaluator does."
 
-## Flagged ambiguities
+## Distinctions to keep straight
 
-- **"seam" used flat** — the code's `ArtifactKind` union mixes static views (`hero`, `skill-ir`, `export`) with dynamic executions (`test-run`, `triggering-eval`). Resolved: one seam, two capability shapes — **Analysis** (static) and **Evaluation** (dynamic). Naming the shapes tells a future author which one a new capability is before they pick analyzer + renderer.
-- **"the run results" used to mean two things** — the raw run-record vs. what the user sees. Resolved: **Evaluation result** is the raw record (internal, never shown raw); **Insights** is the interpreted user-facing surface. An Evaluation result is *always* rendered into meaning — never a data wall. Audience bridge (§1) lives in the renderer, not the artifact.
-- **rendered artifact vs. persisted row** — resolved: **Evaluation result** (ephemeral, on the seam) is distinct from **Evaluation record** (persisted, §6). Don't render straight from the DB row or persist the render.
-- **what does the Evaluator own?** — resolved with the **method vs. resources** line. It owns its method (builds its own Scenario / distractor field / battery, runs the input). It does not own resources (model access — handed in via the **model gateway**). Building its own conditions is intrinsic to *being* that evaluator (a triggering eval without a distractor field isn't one); extracting that would remove the evaluator's brain. The gateway extraction stays because the resource is shared + sensitive; the method stays in because it *is* the capability. The seam now has a generic `Input` type for future equipment primitives, but each evaluator still owns how its input is exercised.
-- **"harness = model + meter" was two things** — resolved during (b). The old **Evaluation harness** conflated *model mechanism* with *accounting policy*. Split: the **model gateway** (own module, mechanism — owns the key, exposes `classify`/`runAgent`, knows no evaluation kinds) *depends on* the **usage** module (policy — caps + recording by accounting tag). "Harness" is retired (also banned jargon). The gateway is a **platform** concern, not an evaluation one — evaluation is just its first consumer (portability transform, mock-data generation, the build loop follow). Fine primitives (not coarse `wouldSelect`/`runScenario`) keep the method/resources line honest and the gateway fixed-size as callers multiply.
-- **can all model spend be attributed to a user?** — no. Resolved with the **accounting tag**: `account` (user-attributable, tier policy) vs `platform` (the platform's own cost to enable a feature — e.g. generating mock data to stress a skill — never charged to a user's allowance). Three accounting streams: free+account = structural caps + provider cap-catch (no token counting, §4); paid+account = token-spend stream (deferred); platform = our cost ledger (deferred). The *caller* declares the tag because only it knows why it's spending.
+The easy confusions, stated as rules. Each names a pair people collapse and the line that keeps them apart.
+
+- **One seam, two shapes.** The `ArtifactKind` union mixes static views (`hero`, `skill-ir`, `export`) with dynamic executions (`test-run`, `triggering-eval`). They are one seam with two capability shapes — **Analysis** (static) and **Evaluation** (dynamic). Name the shape before picking analyzer + renderer.
+- **Evaluation result ≠ Insights.** The raw run-record is the **Evaluation result** (internal, never shown raw); the interpreted, user-facing surface is **Insights**. A result is *always* rendered into meaning — never a data wall. The audience bridge (§1) lives in the renderer, not the artifact.
+- **Evaluation result ≠ Evaluation record.** The result is ephemeral on the seam; the record is the persisted row (§6). Don't render straight from the DB row, and don't persist the render.
+- **An Evaluator owns its method, not its resources.** It builds its own Scenario / distractor field / battery and runs the input (its method); model access is handed in via the **model gateway** (its resource). Building its own conditions is intrinsic to *being* that evaluator; the gateway stays out because the resource is shared + sensitive.
+- **No "harness."** Model *mechanism* and accounting *policy* are two things: the **model gateway** (mechanism — owns the key, exposes `classify`/`runAgent`, knows no evaluation kinds) depends on the **usage** module (policy — caps + recording by tag). "Harness" is banned (also jargon). The gateway is a **platform** concern; evaluation is just its first consumer (portability transform, mock-data generation, the build loop follow).
+- **Not all model spend is user-attributable.** The **accounting tag** splits it: `account` (user-attributable, tier policy) vs `platform` (the platform's own cost — e.g. generating mock data to stress a skill — never charged to a user's allowance). The caller declares the tag because only it knows *why* it's spending.
+</content>
+</invoke>
