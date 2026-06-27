@@ -3,8 +3,8 @@
 Agent-facing map of the codebase: the layers, the module boundaries, the
 dependency rules, and where each thing lives. Read this with
 [`ARCHITECTURE.md`](./ARCHITECTURE.md) (what we build & why) and
-[`DESIGN.md`](./DESIGN.md) (visual system). A visual companion is
-[`architecture.html`](./architecture.html) — open it in a browser.
+[`DESIGN.md`](./DESIGN.md) (visual system). The diagrams below are Mermaid —
+they render inline on GitHub and in most editors.
 
 > **Why this file exists:** to make the architecture *reviewable* and to keep
 > future changes on-pattern. If a change doesn't fit one of the two rules in
@@ -24,12 +24,21 @@ env flags. **Presentation** (`src/app`, `src/components`) renders. A shared
 nothing of ours. The **skill-analysis seam** is the spine: most features are a
 capability on it, not a new pipeline.
 
-```
-Presentation  (src/app, src/components)         depends ↓ on server + module barrels
-Server        (src/server: container/config)    wires ports ↔ adapters
-Domain        (src/modules/*)  ── ports ─┐       pure; no infra imports
-Infra         (src/infra/*)    ── adapters┘      implements ports (Prisma/Clerk/AI/memory)
-Kernel        (src/shared)                       depended on by all; depends on none
+```mermaid
+flowchart TD
+    P["Presentation<br/>src/app · src/components"]
+    S["Server · composition root<br/>src/server (container / config)"]
+    D["Domain · pure modules<br/>src/modules/* — declares ports"]
+    I["Infra · adapters<br/>src/infra/* — Prisma · Clerk · AI · memory"]
+    K["Kernel<br/>src/shared — depends on nothing of ours"]
+
+    P -->|depends on server + module barrels| S
+    S -->|wires ports ↔ adapters| D
+    I -.->|implements ports · control flows inward| D
+    P --> K
+    S --> K
+    D --> K
+    I --> K
 ```
 
 ---
@@ -63,15 +72,22 @@ domain. The composition root is the only outer-to-inner wiring point.
 `src/modules/skill-analysis` — built once, the spine of the product
 (ARCHITECTURE §3.1).
 
-```
-analysis  Input ─▶ Analyzer<Input,A>.analyze() ──▶ Artifact ──▶ Renderer<A,S>.render() ─▶ Surface
-                                       (carries SourceSpans)
-          └──────────────── runCapability(capability, surface, input) ─────────────────┘
-
-evaluation Input ─▶ Evaluator<Input,A>.evaluate(input, gateway) ─▶ Artifact ─▶ Renderer<A,S> ─▶ Surface
-                          (owns method, model handed in)   (+ Insight)
-          └────────── runEvaluation(capability, surface, input, gateway) ──────────────┘
-                          (guards model_unavailable once, here)
+```mermaid
+flowchart LR
+    subgraph A["analysis — static · runs offline · runCapability()"]
+        direction LR
+        a1["Input<br/>(Skill)"] --> a2["Analyzer<br/>.analyze(input)"]
+        a2 --> a3["Artifact<br/>+ SourceSpans"]
+        a3 --> a4["Renderer<br/>.render()"]
+        a4 --> a5["Surface<br/>view · diagram · zip"]
+    end
+    subgraph E["evaluation — via model gateway · runEvaluation()<br/>(guards model_unavailable once, here)"]
+        direction LR
+        e1["Input<br/>(Skill)"] --> e2["Evaluator<br/>.evaluate(input, gateway)"]
+        e2 --> e3["Artifact<br/>+ Insight"]
+        e3 --> e4["Renderer<br/>.render()"]
+        e4 --> e5["Surface<br/>insights (default) · breakdown"]
+    end
 ```
 
 The seam carries **two capability shapes** (CONTEXT.md → Analysis / Evaluation):
