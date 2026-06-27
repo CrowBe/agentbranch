@@ -1,4 +1,4 @@
-# SkillSmith — agent guide
+# agent.branch — agent guide
 
 Tool for building + testing agent skills (the Agent Skills open standard): author a skill in a chat-driven loop, see it live, validate it, export it. Claude-first runtime, standard-native artifact.
 

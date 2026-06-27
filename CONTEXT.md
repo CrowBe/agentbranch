@@ -1,6 +1,6 @@
-# SkillSmith — Domain Language
+# agent.branch — Domain Language
 
-The ubiquitous-language contract for SkillSmith. One term per concept, opinionated, with the aliases to avoid. This is the *language* layer; `docs/ARCHITECTURE.md` §2 is the product-decision glossary and stays the source of truth for *why* each decision was made. When they overlap, this file sharpens the word and ARCHITECTURE carries the rationale.
+The ubiquitous-language contract for agent.branch. One term per concept, opinionated, with the aliases to avoid. This is the *language* layer; `docs/ARCHITECTURE.md` §2 is the product-decision glossary and stays the source of truth for *why* each decision was made. When they overlap, this file sharpens the word and ARCHITECTURE carries the rationale.
 
 ## Language
 

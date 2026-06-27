@@ -1,13 +1,9 @@
 <!-- Human-facing and present-tense. Purpose, then how to run it locally and
      prove it end-to-end. Deeper rationale lives in docs/ — link, don't restate. -->
 
-# SkillSmith
+# agent.branch
 
 **Craft agent skills you can trust** — author a skill in a chat-driven loop, watch it take shape live, then prove it works before you ship.
-
-> Working name. A rename to **agent.branch** plus a broadening of the agent
-> primitives beyond Skill are scoped in [`docs/AGENT_BRANCH_RENAME.md`](docs/AGENT_BRANCH_RENAME.md);
-> SkillSmith remains the current product shape until that lands.
 
 ---
 
@@ -15,7 +11,7 @@
 
 An [agent skill](https://agentskills.io) is a reusable instruction set that tells an AI agent how to do a job — a `SKILL.md` file with a description and a workflow. It's an open standard: the same skill installs in Claude, Codex, Gemini CLI, Copilot and a growing list of tools. Writing one is easy; knowing whether it actually *works* is not. Will the agent reach for it at the right moment? Does the workflow hold up?
 
-SkillSmith closes that gap. Most tools stop at editing — here a skill leaves the bench **proven, not just written**. Describe what you want in plain language; SkillSmith writes the skill live in front of you, and lets you:
+agent.branch closes that gap. Most tools stop at editing — here a skill leaves the bench **proven, not just written**. Describe what you want in plain language; agent.branch writes the skill live in front of you, and lets you:
 
 - **See it as a document** — a friendly, readable view by default; the raw `SKILL.md` source one click away.
 - **Visualise its logic** — a diagram of what the skill actually does.
@@ -36,7 +32,7 @@ The design goal is **approachable without dumbing it down** — technical depth 
 
 You build with Claude — the tool runs the model on its own key and meters usage, so there's nothing to configure. What you export is yours: a standard skill folder, not something locked to this tool or any one platform.
 
-Because the format already travels, portability is about *behaviour*: **honest validation** — *"will your skill survive over there?"* — checking how the skill triggers and behaves on other tools' models, not a false "works identically everywhere" promise. SkillSmith is straight with you about what carries over.
+Because the format already travels, portability is about *behaviour*: **honest validation** — *"will your skill survive over there?"* — checking how the skill triggers and behaves on other tools' models, not a false "works identically everywhere" promise. agent.branch is straight with you about what carries over.
 
 ## Running it locally
 
@@ -95,7 +91,7 @@ Alternatively, use the OpenAI-compatible [Nous Portal](https://portal.nousresear
 Any Postgres works; [Neon](https://neon.tech) and [Supabase](https://supabase.com) both have a free tier. Copy the connection string into:
 
 ```bash
-DATABASE_URL="postgresql://user:password@host:5432/skillsmith?schema=public"
+DATABASE_URL="postgresql://user:password@host:5432/agent_branch?schema=public"
 ```
 
 Then push the schema (creates the tables) once:
@@ -136,7 +132,6 @@ That last download is the end-to-end proof: a standard skill folder, authored an
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | What we build and why — product, system, data, app layout. The source of truth, with a domain glossary. |
 | [`docs/MODULE_DESIGN.md`](docs/MODULE_DESIGN.md) | The module map, dependency rules, seam shape, and extension rules. |
 | [`docs/DESIGN.md`](docs/DESIGN.md) | The visual design system — themes, type, color, spacing, components. |
-| [`docs/AGENT_BRANCH_RENAME.md`](docs/AGENT_BRANCH_RENAME.md) | Scope for the agent.branch rename and the branching-iteration direction. |
 
 ---
 

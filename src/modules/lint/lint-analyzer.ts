@@ -100,7 +100,7 @@ export function createLintReportForSource(
     addFinding(findings, raw, `${key}:`, {
       rule: "frontmatter.unknown-key",
       severity: "info",
-      message: `Extra frontmatter key \`${key}\` will be preserved, but SkillSmith does not use it yet.`,
+      message: `Extra frontmatter key \`${key}\` will be preserved, but agent.branch does not use it yet.`,
     });
   }
 
