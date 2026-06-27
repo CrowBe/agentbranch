@@ -6,9 +6,8 @@
 > branching, so the name describes a mechanic rather than decorating one.
 > The brand rename is well-scoped below; the branching model is **decided in
 > shape** (safe-space iteration with opt-in merge) and awaits a build spec
-> (§ Branching iteration). Broadening the domain
-> language beyond a single primitive remains tracked in
-> [`AGENTEQUIP_PROPOSAL.md`](AGENTEQUIP_PROPOSAL.md).
+> (§ Branching iteration). Broadening beyond a single primitive is tracked in
+> [`ARCHITECTURE.md` §9.2](ARCHITECTURE.md).
 
 ## Thesis
 
@@ -42,15 +41,15 @@ Two different populations of the word "skill" live in the repo:
 
 | Population | Scale | What it is | In scope? |
 |---|---|---|---|
-| **`SkillSmith`** (the brand) | 37 hits / 18 files | The product name | **Yes — this is the rename** |
+| **`SkillSmith`** (the brand) | 35 hits / 17 files | The product name | **Yes — this is the rename** |
 | **`Skill` / `SKILL.md` / `write_skill` / `skill-analysis` …** | ~1,800 hits / 119 files | The *primitive* — the [Agent Skills open standard](https://agentskills.io) | **No — stays correct** |
 
 "Skill" remains the standard's word for the artifact. Renaming the
-`skill-analysis seam` and friends is the **product-broadening** work the
-AgentEquip proposal gates behind a second primitive — **do not touch it in the
-brand rename.**
+`skill-analysis seam` and friends is the **product-broadening** work
+(ARCHITECTURE §9.2), gated behind a second primitive shipping — **do not touch
+it in the brand rename.**
 
-## In scope — the brand surface (37 hits / 18 files)
+## In scope — the brand surface (35 hits / 17 files)
 
 ### 1. User-facing copy (where the branching story lands)
 
@@ -65,7 +64,7 @@ and the natural home for the "iterate like you branch" framing.
 | `src/modules/build-loop/system-prompt.ts:7,19` | 2× "Do not mention SkillSmith…" | rename the product reference |
 | `src/modules/lint/lint-analyzer.ts:103` | lint message "…SkillSmith does not use it yet." | rename the product reference |
 
-### 2. Docs (24 hits)
+### 2. Docs (22 hits)
 
 | File | Hits | Notes |
 |---|---|---|
@@ -73,7 +72,6 @@ and the natural home for the "iterate like you branch" framing.
 | `README.md` | 6 | Title, intro, the "working name" note (lines 8–9). |
 | `AGENTS.md` (← `CLAUDE.md` symlink) | 3 | Agent guide header + body. |
 | `CONTEXT.md` | 2 | Domain-language doc title/intro — brand only; the *terms* stay. |
-| `docs/AGENTEQUIP_PROPOSAL.md` | 2 | Framing prose. |
 | `docs/DESIGN.md` | 1 | Title. |
 | `docs/MODULE_DESIGN.md` | 1 | Title. |
 | `docs/architecture.html` | 3 | **Generated artifact** — regenerate from source, don't hand-edit. |
@@ -119,8 +117,7 @@ latest 10, and *restore-a-version lands as a new head* — a straight line, neve
 fork. The build loop advances that line one revision at a time, and **eval
 feedback** (CONTEXT.md) injects an evaluation/lint result back so Claude revises
 toward the next linear head. Regression comparison — *"did this revision make the
-agent better or worse?"* — is **deferred** (ARCHITECTURE §9; AgentEquip proposal
-gap #2).
+agent better or worse?"* — is **deferred** (ARCHITECTURE §9, §9.2).
 
 **What "reflect git branching" adds.** The git mapping is already latent in the
 architecture:
@@ -136,8 +133,8 @@ architecture:
 This gives the deferred regression-comparison feature a real home, and
 generalises the current *linear* model (restore = new head) into a **tree**,
 which is how people actually iterate: try a direction, fall back, try another.
-It also composes with AgentEquip — eventually you branch a *bundle* of
-primitives, not just a skill.
+It also composes with the equipment-primitive broadening (ARCHITECTURE §9.2) —
+eventually you branch a *bundle* of primitives, not just a skill.
 
 **The tension to resolve.** The bridge audience (ARCHITECTURE §1) is half
 non-technical SMB owners; branch/merge/diff is developer furniture. The
@@ -181,7 +178,7 @@ When this becomes a build spec, the data-model + UI decisions land in
 - Renaming the `Skill` primitive, `SKILL.md`, `write_skill`/`edit_skill`,
   `skill-analysis seam`, `skill_versions`, or any `skill`-named module/type/table
   — the standard primitive and code identifiers stay.
-- Shipping a second equipment primitive (the AgentEquip gate).
+- Shipping a second equipment primitive (the broadening gate; ARCHITECTURE §9.2).
 - Trademark clearance for "Branch" as a mark (lower risk than Q, but note
   existing "Branch" companies — Branch.io, Branch Insurance — in adjacent spaces;
   a search is still warranted before the name is externally load-bearing).
