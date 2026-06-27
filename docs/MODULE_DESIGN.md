@@ -288,10 +288,10 @@ Almost every change is one of these. If a task fits neither, surface it.
 ## 7. Commands & runtime facts
 
 ```bash
-pnpm dev        # run the app           pnpm typecheck   # tsc --noEmit
-pnpm build      # production build      pnpm lint        # eslint
-pnpm test       # vitest (run once)     pnpm test:watch
-pnpm db:generate / db:push / db:migrate # Prisma (needs DATABASE_URL)
+npm run dev        # run the app           npm run typecheck   # tsc --noEmit
+npm run build      # production build      npm run lint        # eslint
+npm test           # vitest (run once)     npm run test:watch
+npm run db:generate / db:push / db:migrate # Prisma (needs DATABASE_URL)
 ```
 
 - **Boots with no secrets.** Missing `DATABASE_URL` / Clerk keys / selected
@@ -300,7 +300,7 @@ pnpm db:generate / db:push / db:migrate # Prisma (needs DATABASE_URL)
 - Stack: Next 16 (App Router) · React 19 · Prisma 7 (pg driver adapter,
   `prisma.config.ts`) · Clerk 7 · Vercel AI SDK 6 (`@ai-sdk/anthropic`,
   `@ai-sdk/openai-compatible`, Claude default with optional Nous Portal) ·
-  Tailwind 4 · Vitest 4 · pnpm.
+  Tailwind 4 · Vitest 4 · npm.
 - Data model lives in `prisma/schema.prisma` (ARCHITECTURE §6): `users`,
   `skills`, `skill_versions` (append-only), `usage`, `test_runs`, `eval_runs`.
 

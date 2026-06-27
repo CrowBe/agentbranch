@@ -10,25 +10,24 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # prisma generate / typecheck want the datasource URL present (no DB connection is made).
-      DATABASE_URL: postgresql://user:pass@localhost:5432/agentbranch
+      DATABASE_URL: postgresql://user:pass@localhost:5432/agent_branch
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm db:generate
-      - run: pnpm typecheck
-      - run: pnpm lint
-      - run: pnpm test
-      # Deterministic doc-drift guard (also runs inside `pnpm test`; kept as a
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      # Deterministic doc-drift guard (also runs inside `npm test`; kept as a
       # named step for a clear CI signal). See scripts/check-doc-drift.mjs.
       - name: Doc drift (deterministic)
-        run: pnpm check:docs
+        run: npm run check:docs
       # Dead/unused code & exports. Advisory until baselined to green, then drop
       # `continue-on-error` to make it blocking.
       - name: Dead code (knip)
-        run: pnpm dlx knip
+        run: npx knip
         continue-on-error: true

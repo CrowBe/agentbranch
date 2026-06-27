@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 
 /**
  * Wraps the deterministic doc-drift guard (scripts/check-doc-drift.mjs) so it
- * also runs under `pnpm test`, not only in the dedicated CI step. Runs the
+ * also runs under `npm test`, not only in the dedicated CI step. Runs the
  * checker as a subprocess so this test stays decoupled from the .mjs module's
  * types/resolution. The checker fails (non-zero) on any drift between
  * docs/MODULE_DESIGN.md §4 and src/modules.
