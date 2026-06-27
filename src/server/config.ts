@@ -60,23 +60,23 @@ export function readConfig(): AppConfig {
   const anthropicApiKey = nonEmpty(process.env.ANTHROPIC_API_KEY);
   const nousApiKey = nonEmpty(process.env.NOUS_API_KEY);
   const modelProvider = readModelProvider({
-    explicit: nonEmpty(process.env.SKILLBUILDER_MODEL_PROVIDER),
+    explicit: nonEmpty(process.env.AGENTBRANCH_MODEL_PROVIDER),
     anthropicApiKey,
     nousApiKey,
   });
   const modelId =
-    nonEmpty(process.env.SKILLBUILDER_MODEL) ??
+    nonEmpty(process.env.AGENTBRANCH_MODEL) ??
     (modelProvider === "nous" ? DEFAULT_NOUS_MODEL : DEFAULT_ANTHROPIC_MODEL);
   const modelIds = {
     default: modelId,
     classify:
-      nonEmpty(process.env.SKILLBUILDER_CLASSIFY_MODEL) ??
+      nonEmpty(process.env.AGENTBRANCH_CLASSIFY_MODEL) ??
       (modelProvider === "nous" ? modelId : DEFAULT_ANTHROPIC_CLASSIFY_MODEL),
     generate:
-      nonEmpty(process.env.SKILLBUILDER_GENERATE_MODEL) ??
+      nonEmpty(process.env.AGENTBRANCH_GENERATE_MODEL) ??
       (modelProvider === "nous" ? modelId : DEFAULT_ANTHROPIC_GENERATE_MODEL),
-    runAgent: nonEmpty(process.env.SKILLBUILDER_RUN_AGENT_MODEL) ?? modelId,
-    streamAgent: nonEmpty(process.env.SKILLBUILDER_STREAM_AGENT_MODEL) ?? modelId,
+    runAgent: nonEmpty(process.env.AGENTBRANCH_RUN_AGENT_MODEL) ?? modelId,
+    streamAgent: nonEmpty(process.env.AGENTBRANCH_STREAM_AGENT_MODEL) ?? modelId,
   };
   const clerkConfigured =
     nonEmpty(process.env.CLERK_SECRET_KEY) !== undefined &&
@@ -87,13 +87,13 @@ export function readConfig(): AppConfig {
   // other provider takes its own sensible defaults so it is ready to switch to.
   const anthropicModelIds: PrimitiveModelIds = {
     default: modelProvider === "anthropic" ? modelId : DEFAULT_ANTHROPIC_MODEL,
-    classify: nonEmpty(process.env.SKILLBUILDER_CLASSIFY_MODEL) ?? DEFAULT_ANTHROPIC_CLASSIFY_MODEL,
-    generate: nonEmpty(process.env.SKILLBUILDER_GENERATE_MODEL) ?? DEFAULT_ANTHROPIC_GENERATE_MODEL,
+    classify: nonEmpty(process.env.AGENTBRANCH_CLASSIFY_MODEL) ?? DEFAULT_ANTHROPIC_CLASSIFY_MODEL,
+    generate: nonEmpty(process.env.AGENTBRANCH_GENERATE_MODEL) ?? DEFAULT_ANTHROPIC_GENERATE_MODEL,
     runAgent:
-      nonEmpty(process.env.SKILLBUILDER_RUN_AGENT_MODEL) ??
+      nonEmpty(process.env.AGENTBRANCH_RUN_AGENT_MODEL) ??
       (modelProvider === "anthropic" ? modelId : DEFAULT_ANTHROPIC_MODEL),
     streamAgent:
-      nonEmpty(process.env.SKILLBUILDER_STREAM_AGENT_MODEL) ??
+      nonEmpty(process.env.AGENTBRANCH_STREAM_AGENT_MODEL) ??
       (modelProvider === "anthropic" ? modelId : DEFAULT_ANTHROPIC_MODEL),
   };
   const nousModel = modelProvider === "nous" ? modelId : DEFAULT_NOUS_MODEL;
@@ -131,11 +131,11 @@ export function readConfig(): AppConfig {
     serverKeys,
     defaultSelection: { providerId: modelProvider },
     admin: {
-      userIds: parseList(process.env.SKILLBUILDER_ADMIN_USER_IDS),
-      emails: parseList(process.env.SKILLBUILDER_ADMIN_EMAILS).map((email) => email.toLowerCase()),
+      userIds: parseList(process.env.AGENTBRANCH_ADMIN_USER_IDS),
+      emails: parseList(process.env.AGENTBRANCH_ADMIN_EMAILS).map((email) => email.toLowerCase()),
     },
     clerkConfigured,
-    clerkProPlanSlug: nonEmpty(process.env.SKILLBUILDER_PRO_PLAN_SLUG) ?? "pro",
+    clerkProPlanSlug: nonEmpty(process.env.AGENTBRANCH_PRO_PLAN_SLUG) ?? "pro",
     flags: {
       hasDatabase: databaseUrl !== undefined,
       hasModel:
@@ -157,7 +157,7 @@ function readModelProvider(params: {
     return params.explicit;
   }
   throw new Error(
-    `Unsupported SKILLBUILDER_MODEL_PROVIDER "${params.explicit}". Use "anthropic" or "nous".`,
+    `Unsupported AGENTBRANCH_MODEL_PROVIDER "${params.explicit}". Use "anthropic" or "nous".`,
   );
 }
 
