@@ -4,8 +4,9 @@
 > (1) rename the **product/brand** from *SkillSmith* to **agent.branch**, and
 > (2) a **product direction** — reshape the iteration model to mirror git
 > branching, so the name describes a mechanic rather than decorating one.
-> The brand rename is well-scoped below; the branching direction is an **open
-> proposal** pending one decision (§ Branching iteration). Broadening the domain
+> The brand rename is well-scoped below; the branching model is **decided in
+> shape** (safe-space iteration with opt-in merge) and awaits a build spec
+> (§ Branching iteration). Broadening the domain
 > language beyond a single primitive remains tracked in
 > [`AGENTEQUIP_PROPOSAL.md`](AGENTEQUIP_PROPOSAL.md).
 
@@ -144,21 +145,36 @@ commitment is *approachable without dumbing down* — so the git model should sh
 the **architecture and data model** without forcing git vocabulary onto the
 SMB-facing UI.
 
-**The decision that gates a design (see chat).** How literal should the git
-model be?
+**Decided model — safe-space iteration with opt-in merge.** The chosen value is
+*safety*: the blessed version never changes until the user chooses. Each
+iteration runs on a **branch** off the chosen version; the build loop and its
+evals operate there, touching nothing live; when the evidence is good the user
+**opts in to a merge** that promotes the branch into the chosen version.
 
-1. **Lightweight tree** — named alternative iterations off a shared parent +
-   first-class behavioural compare (promotes deferred regression comparison). No
-   merge. Smallest data-model change; keeps the SMB audience approachable.
-2. **Full git model** — branch / merge / diff as real first-class operations,
-   git vocabulary surfaced. Most on-brand; heaviest build; highest SMB-intimidation
-   risk.
-3. **Metaphor only** — iteration stays linear; "branch" is brand language with
-   git-flavoured copy, no new mechanic.
+Consequences for the architecture:
 
-Until this is chosen, the branching work stays a direction, not a spec. Once
-chosen, the resulting data-model + UI decisions belong in `ARCHITECTURE.md`
-(§6 data model, §3 the seam), not here.
+- **A chosen-version pointer ("main"), separate from branch heads** — the one
+  genuinely new concept vs. today, where "current" is simply the latest
+  append-only head (so every edit mutates what the user sees; there is no safe
+  space). The pointer creates the safe space.
+- **The build loop operates on the active branch**, not the chosen version.
+  Eval feedback runs against the branch head. Nothing blessed moves until merge.
+- **Merge = adopt, not reconcile.** Load-bearing simplification: as long as the
+  chosen version only advances *through* a merge (never edited concurrently),
+  every merge is a fast-forward — point main at the branch head. No three-way
+  merge, no conflict resolution. This is what keeps real branch/merge out of
+  full-git-model cost. **Invariant to hold explicit: the chosen version is
+  immutable between merges** (true for one user iterating one skill).
+- **Merge-when-green.** The opt-in gate is where the existing eval loop pays off:
+  branch → iterate + evaluate safely → merge only when the triggering eval /
+  test run says it is good. Validation becomes the gate on the core mechanic
+  rather than a side surface.
+
+Open sub-decisions (smaller, resolved at spec time): branch retention vs. the
+latest-10 version cap; whether branches are named or ephemeral; UI vocabulary for
+the bridge audience ("branch / merge" taught lightly vs. "draft / keep changes").
+When this becomes a build spec, the data-model + UI decisions land in
+`ARCHITECTURE.md` (§6 data model, §3 the seam), not here.
 
 ## Out of scope
 
