@@ -36,13 +36,13 @@ Because the format already travels, portability is about *behaviour*: **honest v
 
 ## Running it locally
 
-**Prerequisites:** [Node.js](https://nodejs.org) 22+ and [pnpm](https://pnpm.io) 10 (`corepack enable` picks up the version pinned in `package.json`).
+**Prerequisites:** [Node.js](https://nodejs.org) 22+ and npm.
 
 ```bash
-pnpm install        # install dependencies (lockfile-pinned)
-pnpm db:generate    # generate the Prisma client — needed before typecheck/build
+npm ci              # install dependencies (lockfile-pinned)
+npm run db:generate # generate the Prisma client — needed before typecheck/build
 cp .env.example .env # optional: only to wire in real services (see below)
-pnpm dev            # start the app at http://localhost:3000
+npm run dev         # start the app at http://localhost:3000
 ```
 
 **The app boots with no configuration.** Missing secrets aren't an error — each one flips the app to a stub/in-memory adapter so the whole shell runs offline (`src/server/container.ts`):
@@ -62,12 +62,12 @@ There is no automated browser-driven E2E suite yet (no Playwright/Cypress). "End
 These run with zero third-party setup and should all pass on a fresh clone:
 
 ```bash
-pnpm db:generate    # Prisma client (skip if already generated)
-pnpm lint           # eslint
-pnpm typecheck      # tsc --noEmit
-pnpm test           # vitest — unit + integration suite
-pnpm build          # production build
-pnpm start          # serves http://localhost:3000 (curl / → 200)
+npm run db:generate # Prisma client (skip if already generated)
+npm run lint        # eslint
+npm run typecheck   # tsc --noEmit
+npm test            # vitest — unit + integration suite
+npm run build       # production build
+npm start           # serves http://localhost:3000 (curl / → 200)
 ```
 
 If those are green, the shell is ready; the only thing standing between you and a full end-to-end run is third-party setup.
@@ -97,7 +97,7 @@ DATABASE_URL="postgresql://user:password@host:5432/agent_branch?schema=public"
 Then push the schema (creates the tables) once:
 
 ```bash
-pnpm db:push
+npm run db:push
 ```
 
 Without `DATABASE_URL`, skills live in memory and reset when the server restarts — fine for a quick run, but you can't prove persistence end-to-end.
@@ -115,7 +115,7 @@ Both must be present for auth to switch on; with only one set, the app stays on 
 
 ### Step 3 — walk the flow
 
-With (at minimum) a model key set, `pnpm dev` and walk a skill end-to-end:
+With (at minimum) a model key set, `npm run dev` and walk a skill end-to-end:
 
 1. **Author** — describe a skill in the chat; watch it stream into the live preview, and toggle Rendered ↔ Source.
 2. **Visualise** — open the diagram of the skill's logic.
