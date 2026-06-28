@@ -1,10 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { createMemoryEvalRunRepository } from "./eval.memory-repository";
-import { createMemorySkillRepository } from "./skill.memory-repository";
+import {
+  createMemorySkillRepository,
+  createMemorySkillRetentionRepository,
+  createMemorySkillStore,
+} from "./skill.memory-repository";
 import { createMemoryTestRunRepository } from "./test-run.memory-repository";
 import { createMemoryUsageRepository } from "./usage.memory-repository";
 import { parseSkillMd } from "@/modules/skill";
-import { SKILL_VERSION_MAX, unwrap, UserId } from "@/shared";
+import { OPEN_DRAFTS_MAX, SKILL_VERSION_MAX, unwrap, UserId } from "@/shared";
 
 describe("in-memory adapters", () => {
   it("skill repository creates, revises and lists by user", async () => {
@@ -114,8 +118,12 @@ describe("in-memory adapters", () => {
     });
   });
 
-  it("retains only the latest skill versions", async () => {
-    const repo = createMemorySkillRepository();
+  it("never prunes the main lineage — retention is off the write path", async () => {
+    // Pruning moved to the daily job (ARCHITECTURE §9.3); saving never prunes,
+    // and the main lineage is sacred, so the full linear history survives a pass.
+    const store = createMemorySkillStore();
+    const repo = createMemorySkillRepository(store);
+    const retention = createMemorySkillRetentionRepository(store);
     const source = unwrap(parseSkillMd(`---\nname: t\ndescription: d1\n---\nbody 1`));
     const created = unwrap(await repo.create({ userId: UserId("u1"), source }));
 
@@ -124,13 +132,15 @@ describe("in-memory adapters", () => {
       unwrap(await repo.save({ id: created.id, userId: created.userId, source: next }));
     }
 
-    const versions = unwrap(await repo.listVersions(created.id, created.userId));
+    const report = unwrap(await retention.prune({ keepPerBranch: SKILL_VERSION_MAX, maxOpenDrafts: OPEN_DRAFTS_MAX }));
+    expect(report.prunedVersions).toBe(0);
 
-    expect(versions).toHaveLength(SKILL_VERSION_MAX);
+    const versions = unwrap(await repo.listVersions(created.id, created.userId));
+    expect(versions).toHaveLength(SKILL_VERSION_MAX + 2);
     expect(versions[0]?.revision).toBe(SKILL_VERSION_MAX + 2);
-    expect(versions.at(-1)?.revision).toBe(3);
-    await expect(repo.restore({ id: created.id, userId: created.userId, revision: 1 }))
-      .resolves.toMatchObject({ ok: false, error: { tag: "not_found" } });
+    // Oldest revision survives — restore-from-the-bottom still works.
+    expect(versions.at(-1)?.revision).toBe(1);
+    unwrap(await repo.restore({ id: created.id, userId: created.userId, revision: 1 }));
   });
 
   it("usage repository accumulates across increments", async () => {

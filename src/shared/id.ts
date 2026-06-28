@@ -8,12 +8,15 @@ export type Brand<T, B> = T & { readonly [brand]: B };
 
 export type UserId = Brand<string, "UserId">;
 export type SkillId = Brand<string, "SkillId">;
+export type SkillBranchId = Brand<string, "SkillBranchId">;
 export type SkillVersionId = Brand<string, "SkillVersionId">;
 export type TestRunId = Brand<string, "TestRunId">;
 export type EvalRunId = Brand<string, "EvalRunId">;
 
 export const UserId = (value: string): UserId => value as UserId;
 export const SkillId = (value: string): SkillId => value as SkillId;
+export const SkillBranchId = (value: string): SkillBranchId =>
+  value as SkillBranchId;
 export const SkillVersionId = (value: string): SkillVersionId =>
   value as SkillVersionId;
 export const TestRunId = (value: string): TestRunId => value as TestRunId;
