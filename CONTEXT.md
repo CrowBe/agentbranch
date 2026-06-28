@@ -20,6 +20,18 @@ _Avoid_: spec, config, manifest
 A persisted skill in our DB — `SKILL.md` source plus identity and timestamps. Everything else is derived from it.
 _Avoid_: skill row, skill entity, document
 
+**Draft** (branching iteration, §9.3):
+*User-facing term* for a working lineage of skill revisions that accumulates without moving the **main version** — the safe space to iterate and evaluate before committing. A skill may have several open at once. The internal/code term is `branch`.
+_Avoid_: branch (code-only — never user copy), working copy, fork, sandbox
+
+**Main version** (branching iteration, §9.3):
+*User-facing term* for a skill's blessed, pinned version — what export, install, and the hero default to. One per skill; **promote** moves it. "Main" is *semantic* (the main one), not git's branch name.
+_Avoid_: head, blessed (code-only), master, trunk, current (collides with the draft you're editing)
+
+**Promote** (branching iteration, §9.3):
+Internal/code term for moving the main pointer to a draft's head — a new head event (append-only), *replace-not-merge*, last-promote-wins. User copy is the button **"Set as main version"**.
+_Avoid_: merge, rebase (no such operation exists — see §9.3), publish (reserved for the tap, §9.1), commit
+
 **Build loop**:
 The core agentic loop — Claude writes/edits the `SKILL.md` through `write_skill`/`edit_skill`, streaming to the preview. Closeable with **eval feedback**.
 _Avoid_: chat, conversation, agent loop, generation

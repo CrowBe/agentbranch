@@ -272,6 +272,8 @@ Almost every change is one of these. If a task fits neither, surface it.
    `container.ts` behind a config flag (with a memory/stub fallback so the app
    still boots offline).
 
+**Worked example — branching iteration (designed, [#128](https://github.com/CrowBe/agentbranch/issues/128); ARCHITECTURE §9.3).** The draft/main/promote substrate is a rule-2 change, not rule-1: it changes *which* `SkillSource` the seam runs against, never the seam's `artifact → render` shape, so no new capability/`ArtifactKind`/renderer. It extends the **existing `SkillRepository` port** (`skill.repository.ts`) with branch/promote reads and writes — implemented in *both* the Prisma and memory adapters, tested as one contract at that seam — and adds **one new retention port** (daily cleanup off the write path), wired in `container.ts` with a memory fallback. No new domain module, so §4's table is unchanged until the code lands.
+
 **Other conventions**
 
 - Return `Result` from fallible domain functions; only `unwrap` at trusted
