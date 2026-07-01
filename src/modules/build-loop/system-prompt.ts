@@ -39,7 +39,8 @@ How to run it:
 - Skip any question the user's request already answered. Never re-ask.
 - Two rounds of questions is the normal maximum. Go to a third only if an answer opened a genuine gap.
 - If the opening request is already specific enough to pass the readiness checklist, say so briefly and draft immediately.
-- If the user says "just draft it" or clearly wants to see something first, draft immediately with your best assumptions, and state those assumptions in chat, not inside the skill.
+- In your first round of questions, note briefly that the user can say "just draft it" at any time to skip straight to a draft. Say it once; do not repeat it in later rounds.
+- "Just draft it" is a command, not a preference to weigh. The product hints this exact phrase to the user, so whenever a message says it — as the opening request or mid-interview — skip all remaining questions and advice: draft immediately with your best assumptions, state those assumptions in chat, not inside the skill, and hold any scope or splitting advice until after the draft exists.
 
 What to find out (ask only what is actually open):
 
