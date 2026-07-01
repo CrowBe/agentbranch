@@ -79,6 +79,39 @@ export function buildLoopResponse(
           }
 
           if (event.event === "done" && latestSource) {
+            // Draft build (ARCHITECTURE §9.3): append the completed turn to the
+            // draft's head. The blessed main pointer never moves — only promote
+            // changes it — so the version the user trusts is untouched here.
+            if (input.branchId && input.currentSkillId) {
+              const saved = await skills.saveToBranch({
+                id: input.currentSkillId,
+                userId,
+                branchId: input.branchId,
+                source: latestSource,
+              });
+              if (!saved.ok) {
+                controller.enqueue(
+                  encoder.encode(
+                    encodeSse({ event: "error", data: { message: saved.error.message } }),
+                  ),
+                );
+                continue;
+              }
+              controller.enqueue(
+                encoder.encode(
+                  encodeSse({
+                    event: "done",
+                    data: {
+                      ...event.data,
+                      skillId: input.currentSkillId,
+                      revision: saved.value.revision,
+                    },
+                  } satisfies BuildLoopEvent),
+                ),
+              );
+              continue;
+            }
+
             if (draftSkillId) {
               const existing = await skills.findById(draftSkillId, userId);
               if (!existing.ok) {
@@ -150,6 +183,11 @@ export function buildLoopResponse(
 
       async function checkpointDraft(source: typeof latestSource): Promise<void> {
         if (!source || checkpointingDisabled) return;
+        // A draft build persists only on `done` (via saveToBranch). Interim
+        // checkpoints write the skill aggregate's working source, which belongs
+        // to the main lineage — skipping them keeps the blessed version legibly
+        // unchanged mid-draft (ARCHITECTURE §9.3).
+        if (input.branchId) return;
 
         if (!draftSkillId && !input.currentSkillId) {
           const tier = await tierFor(userId);

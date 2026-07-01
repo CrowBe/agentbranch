@@ -7,17 +7,14 @@ import {
   err,
   isErr,
   ok,
-  SkillId,
   type DomainError,
   type Result,
-  type SkillVersionId,
-  type UserId,
 } from "@/shared";
 import {
   parseSkillRequest,
   skillFromRequest,
   domainErrorResponse,
-  sameSkillSource,
+  resolvePinnedVersionId,
   type ParsedSkillRequest,
 } from "../_shared/skill-request";
 import { invalidRequestResponse, parseJsonRequest } from "../_shared/request-body";
@@ -89,7 +86,7 @@ async function runTestRun(
   if (isErr(result)) return err(result.error);
 
   emit?.({ event: "eval-progress", data: { message: "Recording test run." } });
-  const skillVersionId = await resolvedSkillVersionId(request, identity.userId);
+  const skillVersionId = await resolvePinnedVersionId(container.skills, request, identity.userId);
   if (isErr(skillVersionId)) return err(skillVersionId.error);
 
   const recorded = await container.testRuns.record({
@@ -106,21 +103,4 @@ async function runTestRun(
     body: testRunCapability.renderers[surface].render(result.value),
     result: result.value,
   });
-}
-
-async function resolvedSkillVersionId(
-  request: ParsedSkillRequest,
-  userId: UserId,
-): Promise<Result<SkillVersionId | null, DomainError>> {
-  const container = getContainer();
-  const id = request.skillId ?? request.currentSkillId;
-  if (!id) return ok(null);
-
-  const persisted = await container.skills.findById(SkillId(id), userId);
-  if (!persisted.ok) return err(persisted.error);
-  if (!persisted.value) return ok(null);
-  if (!persisted.value.latestVersionId || !sameSkillSource(persisted.value.source, request.source)) {
-    return ok(null);
-  }
-  return ok(persisted.value.latestVersionId);
 }

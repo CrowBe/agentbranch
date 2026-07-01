@@ -35,9 +35,9 @@ export function useBuildStream({
   const [entries, setEntries] = useState<InteractionEntry[]>([]);
   const [busy, setBusy] = useState(false);
 
-  async function send(message: string) {
+  async function send(message: string, branchId?: string) {
     if (busy) return;
-    await sendBuild(message, messages, current, currentSkillId, true);
+    await sendBuild(message, messages, current, currentSkillId, true, branchId);
   }
 
   async function sendBuild(
@@ -46,6 +46,7 @@ export function useBuildStream({
     startingSource: SkillSource | null,
     startingSkillId: string | null,
     allowLintAutoFeedback: boolean,
+    branchId?: string,
   ) {
     onBuildStart();
     const nextMessages: BuildMessage[] = [...priorMessages, { role: "user", content: message }];
@@ -69,6 +70,7 @@ export function useBuildStream({
           messages: nextMessages,
           current: latestSource ?? undefined,
           currentSkillId: latestSkillId ?? undefined,
+          branchId: branchId ?? undefined,
         }),
       });
       if (!res.ok) {
@@ -143,7 +145,7 @@ export function useBuildStream({
       allowLintAutoFeedback &&
       !isLintFeedbackMessage(message)
     ) {
-      await sendBuild(pendingLintFeedback, completedMessages, latestSource, latestSkillId, false);
+      await sendBuild(pendingLintFeedback, completedMessages, latestSource, latestSkillId, false, branchId);
     }
   }
 

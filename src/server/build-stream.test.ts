@@ -190,6 +190,52 @@ describe("buildLoopResponse", () => {
     expect(unwrap(await repo.listVersions(created.id, userId))).toHaveLength(2);
   });
 
+  it("saves a completed draft turn to the branch head without moving the main pointer", async () => {
+    const repo = createMemorySkillRepository();
+    const source = unwrap(parseSkillMd(`---\nname: greeter\ndescription: Greets people warmly\n---\nSay hello.`));
+    const created = unwrap(await repo.create({ userId, source }));
+    const branch = unwrap(await repo.createBranch({ id: created.id, userId }));
+    const mainVersionBefore = created.latestVersionId;
+
+    const response = buildLoopResponse(
+      {
+        messages: [{ role: "user", content: "Make it warmer" }],
+        current: source,
+        currentSkillId: created.id,
+        branchId: branch.id,
+      },
+      fakeGateway([
+        {
+          kind: "tool-result",
+          tool: "edit_skill",
+          output: { oldStr: "Say hello.", newStr: "Say hello warmly." },
+        },
+        { kind: "finish", finishReason: "stop" },
+      ]),
+      repo,
+      userId,
+    );
+
+    const events = await readEvents(response);
+    const done = events.find((e) => e.event === "done");
+
+    // The draft turn is a new revision on the branch (seeded head was revision 1).
+    expect(done?.data.skillId).toBe(created.id);
+    expect(done?.data.revision).toBe(2);
+    // No interim checkpoint touches the skill aggregate during a draft build.
+    expect(events.find((e) => e.event === "skill-checkpoint")).toBeUndefined();
+
+    // The blessed main version is untouched until promote.
+    const persisted = unwrap(await repo.findById(created.id, userId));
+    expect(persisted?.latestVersionId).toBe(mainVersionBefore);
+    expect(persisted?.source.body).toBe("Say hello.");
+
+    // The draft head advanced.
+    const draftVersions = unwrap(await repo.listBranchVersions(created.id, userId, branch.id));
+    expect(draftVersions).toHaveLength(2);
+    expect(draftVersions[0]?.source.body).toBe("Say hello warmly.");
+  });
+
   it("streams an error and does not persist when an edit cannot be applied", async () => {
     const repo = createMemorySkillRepository();
     const source = unwrap(parseSkillMd(`---\nname: greeter\ndescription: Greets people warmly\n---\nSay hello.`));

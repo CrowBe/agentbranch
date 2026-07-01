@@ -1,5 +1,5 @@
 import type { SkillSource } from "@/modules/skill";
-import type { SkillId, SseEvent } from "@/shared";
+import type { SkillBranchId, SkillId, SseEvent } from "@/shared";
 
 /** A chat turn driving the build loop. */
 export type BuildMessage = {
@@ -12,6 +12,9 @@ export type BuildLoopInput = {
   /** The skill being revised, if any (absent on first draft). */
   readonly current?: SkillSource;
   readonly currentSkillId?: SkillId;
+  /** The draft being iterated on (ARCHITECTURE §9.3). When present, a completed
+   * turn appends to this branch's head — the blessed main pointer never moves. */
+  readonly branchId?: SkillBranchId;
 };
 
 export type BuildLoopDone = {
