@@ -327,11 +327,12 @@ export function createPrismaSkillRepository(prisma: PrismaClient): SkillReposito
 
     async saveToBranch({ id, userId, branchId, source }) {
       const saved = await prisma.$transaction(async (tx) => {
-        const skill = await tx.skill.findFirst({ where: { id, userId }, select: { id: true } });
+        const skill = await tx.skill.findFirst({ where: { id, userId }, select: { id: true, mainVersionId: true } });
         if (!skill) return { error: "not_found" as const };
         const branch = await tx.skillBranch.findFirst({ where: { id: branchId, skillId: id } });
         if (!branch) return { error: "not_found" as const };
         if (branch.status === "discarded") return { error: "discarded" as const };
+        if (branchId === (await mainBranchId(tx, skill))) return { error: "is_main" as const };
 
         const { revision: prevRevision, headId } = await branchTip(tx, branchId);
         const version = await tx.skillVersion.create({
@@ -341,9 +342,13 @@ export function createPrismaSkillRepository(prisma: PrismaClient): SkillReposito
         return { version };
       });
       if ("error" in saved) {
-        return saved.error === "discarded"
-          ? err(domainError("invalid_operation", "This draft has been discarded."))
-          : err(domainError("not_found", `No draft ${branchId}.`));
+        if (saved.error === "discarded") {
+          return err(domainError("invalid_operation", "This draft has been discarded."));
+        }
+        if (saved.error === "is_main") {
+          return err(domainError("invalid_operation", "The main version must be edited through the main save path."));
+        }
+        return err(domainError("not_found", `No draft ${branchId}.`));
       }
       return ok(toSkillVersion(saved.version as SkillVersionRow));
     },

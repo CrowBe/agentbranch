@@ -270,6 +270,9 @@ export function createMemorySkillRepository(
       if (branch.status === "discarded") {
         return err(domainError("invalid_operation", "This draft has been discarded."));
       }
+      if (branch.id === branchIdOfVersion(store, id, skill.latestVersionId)) {
+        return err(domainError("invalid_operation", "The main version must be edited through the main save path."));
+      }
       const now = new Date();
       const parentId = branchVersions(store, id, branchId)[0]?.id;
       const version = appendVersion(store, id, SkillBranchId(branchId), source, parentId, now);
