@@ -36,6 +36,10 @@ _Avoid_: merge, rebase (no such operation exists — see §9.3), publish (reserv
 The core agentic loop — Claude writes/edits the `SKILL.md` through `write_skill`/`edit_skill`, streaming to the preview. Closeable with **eval feedback**.
 _Avoid_: chat, conversation, agent loop, generation
 
+**Requirements interview**:
+The build loop's initial flow — on a new skill, bounded plain-language questioning (the job, the moment, the walkthrough, boundaries, materials, failures) that gates the first `write_skill` behind a readiness checklist. Presses on scope: bundled jobs split into companion building-block skills. Happens once; revisions and eval feedback never restart it.
+_Avoid_: intake form, questionnaire, onboarding, wizard (it's a conversation, not a form)
+
 **Eval feedback**:
 A formatted summary of an Evaluation result (or Lint artifact) injected as a user message into the build loop, so Claude revises from observed evidence rather than guessing. Produced by a **feedback formatter** — a pure function in the `build-loop` module.
 _Avoid_: feedback loop (the pattern, not the artifact), revision prompt (doesn't name the source), eval summary (that's Insights — the user-facing surface)
