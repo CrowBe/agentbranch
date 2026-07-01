@@ -1,5 +1,5 @@
 import "server-only";
-import type { SkillRepository } from "@/modules/skill";
+import type { SkillRepository, SkillRetentionRepository } from "@/modules/skill";
 import type { RequestRateLimiter, Tier, UsageRepository } from "@/modules/usage";
 import type { TestRunRepository } from "@/modules/test-run";
 import type { EvalRunRepository } from "@/modules/triggering-eval";
@@ -9,13 +9,20 @@ import type { ModelRouter } from "@/modules/model-router";
 import type { SkillImportFetcher } from "@/modules/skill-import";
 
 import { readConfig, type AppConfig } from "./config";
-import { createMemorySkillRepository } from "@/infra/memory/skill.memory-repository";
+import {
+  createMemorySkillRepository,
+  createMemorySkillRetentionRepository,
+  createMemorySkillStore,
+} from "@/infra/memory/skill.memory-repository";
 import { createMemoryUsageRepository } from "@/infra/memory/usage.memory-repository";
 import { createMemoryRequestRateLimiter } from "@/infra/memory/rate-limit.memory-repository";
 import { createMemoryTestRunRepository } from "@/infra/memory/test-run.memory-repository";
 import { createMemoryEvalRunRepository } from "@/infra/memory/eval.memory-repository";
 import { createPrismaClient } from "@/infra/prisma/client";
-import { createPrismaSkillRepository } from "@/infra/prisma/skill.prisma-repository";
+import {
+  createPrismaSkillRepository,
+  createPrismaSkillRetentionRepository,
+} from "@/infra/prisma/skill.prisma-repository";
 import { createPrismaUsageRepository } from "@/infra/prisma/usage.prisma-repository";
 import { createPrismaRequestRateLimiter } from "@/infra/prisma/rate-limit.prisma-repository";
 import { createPrismaTestRunRepository } from "@/infra/prisma/test-run.prisma-repository";
@@ -43,6 +50,9 @@ export type AppContainer = {
   readonly modelGateway: ModelGateway;
   readonly modelRouter: ModelRouter;
   readonly skills: SkillRepository;
+  // Daily version/draft cleanup, off the write path — driven by the cron route,
+  // never during a live session (ARCHITECTURE §9.3).
+  readonly skillRetention: SkillRetentionRepository;
   readonly usage: UsageRepository;
   readonly requestRateLimiter: RequestRateLimiter;
   readonly tierFor: (userId: import("@/shared").UserId) => Promise<Tier>;
@@ -89,12 +99,21 @@ export function getContainer(): AppContainer {
 
   const auth = config.flags.hasAuth ? createClerkAuth() : createStubAuth();
 
+  // The skill repo and its retention job share one in-memory store offline, so
+  // the daily prune sees the same branches/versions the write path produced.
+  const memorySkillStore = prisma ? null : createMemorySkillStore();
+
   cached = {
     config,
     auth: prisma && config.flags.hasAuth ? createUserProvisioningAuth(auth, prisma) : auth,
     modelGateway,
     modelRouter,
-    skills: prisma ? createPrismaSkillRepository(prisma) : createMemorySkillRepository(),
+    skills: prisma
+      ? createPrismaSkillRepository(prisma)
+      : createMemorySkillRepository(memorySkillStore!),
+    skillRetention: prisma
+      ? createPrismaSkillRetentionRepository(prisma)
+      : createMemorySkillRetentionRepository(memorySkillStore!),
     usage,
     requestRateLimiter,
     tierFor: tierFor ?? (async () => "free" as Tier),

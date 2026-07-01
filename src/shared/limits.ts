@@ -2,6 +2,9 @@ export const SKILL_NAME_MAX = 100;
 export const SKILL_DESCRIPTION_MAX = 1024;
 export const SKILL_BODY_MAX = 50_000;
 export const SKILL_VERSION_MAX = 10;
+/** Open drafts per skill the daily retention job tidies down to (ARCHITECTURE
+ * §9.3) — the bounded-by-construction shape of the free-tier skill-count cap. */
+export const OPEN_DRAFTS_MAX = 10;
 export const MESSAGE_CONTENT_MAX = 16_000;
 export const MESSAGES_MAX = 100;
 export const REQUEST_BYTES_MAX = 256_000;

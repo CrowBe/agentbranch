@@ -9,6 +9,9 @@ export type {
   Skill,
   SkillVersion,
   SkillVersionLintSummary,
+  SkillBranch,
+  SkillBranchStatus,
+  RetentionReport,
   SkillSource,
   Frontmatter,
   SkillError,
@@ -21,4 +24,4 @@ export {
   skillDescription,
 } from "./skill";
 export { checkSkillCreateCap } from "./skill-cap";
-export type { SkillRepository } from "./skill.repository";
+export type { SkillRepository, SkillRetentionRepository } from "./skill.repository";

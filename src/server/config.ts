@@ -40,6 +40,12 @@ export type AppConfig = {
   readonly admin: { readonly userIds: readonly string[]; readonly emails: readonly string[] };
   readonly clerkConfigured: boolean;
   readonly clerkProPlanSlug: string;
+  /**
+   * Shared secret the scheduled retention job presents (Vercel Cron sends it as
+   * `Authorization: Bearer …`). Unset ⇒ the cron route is locked (fail-safe),
+   * the same posture as the admin allowlist.
+   */
+  readonly cronSecret: string | undefined;
   readonly flags: {
     readonly hasDatabase: boolean;
     readonly hasModel: boolean;
@@ -136,6 +142,7 @@ export function readConfig(): AppConfig {
     },
     clerkConfigured,
     clerkProPlanSlug: nonEmpty(process.env.AGENTBRANCH_PRO_PLAN_SLUG) ?? "pro",
+    cronSecret: nonEmpty(process.env.CRON_SECRET),
     flags: {
       hasDatabase: databaseUrl !== undefined,
       hasModel:

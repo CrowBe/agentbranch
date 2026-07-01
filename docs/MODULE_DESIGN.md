@@ -150,7 +150,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 
 | Module | Public surface (`index.ts`) | Port(s) it declares | Status |
 |---|---|---|---|
-| **skill** | `parseSkillMd`, `serializeSkillMd`, `makeSkill`, `reviseSkill`, `skillName/Description`, types | `SkillRepository` | real |
+| **skill** | `parseSkillMd`, `serializeSkillMd`, `makeSkill`, `reviseSkill`, `skillName/Description`, `SkillBranch`/`RetentionReport` + types | `SkillRepository`, `SkillRetentionRepository` | real |
 | **skill-analysis** | `defineCapability`, `runCapability`, `Analyzer/Renderer/Capability/SourceSpan/Artifact` | — | real |
 | **hero** | `heroCapability`, `HeroView`, doc types | — | real |
 | **visualise** | `visualiseCapability`, IR + Mermaid types | — | extraction model-backed · deterministic offline fallback · render real |
@@ -184,9 +184,9 @@ concern (ARCHITECTURE §2 *Eval feedback*, §4 *Eval → build feedback*).
 
 | Adapter | Implements | Notes |
 |---|---|---|
-| `memory/{skill,usage,test-run,eval}.memory-repository.ts` | the four repos | **offline default**, tested |
+| `memory/{skill,usage,test-run,eval}.memory-repository.ts` | the four repos + `SkillRetentionRepository` | **offline default**, tested; skill repo + retention share one store |
 | `prisma/client.ts` | — | PrismaClient + `@prisma/adapter-pg` (Prisma 7 driver adapter) |
-| `prisma/{skill,usage,test-run,eval}.prisma-repository.ts` | `SkillRepository`, `UsageRepository`, `TestRunRepository`, `EvalRunRepository` | real |
+| `prisma/{skill,usage,test-run,eval}.prisma-repository.ts` | `SkillRepository` (+ `SkillRetentionRepository`), `UsageRepository`, `TestRunRepository`, `EvalRunRepository` | real |
 | `prisma/user-provisioning-auth.ts` | `AuthPort` | wraps Clerk auth, provisions the `users` row on first sight |
 | `ai/model-gateway.ts` | `ModelGateway` | the metered gateway; resolves a `LanguageModel` per call from a `ModelRouter` (or a static `ModelProvider` in tests); routes accounting through `usage` |
 | `ai/model-router.ts` | `ModelRouter` | the provider/model selection authority: builds providers from the registry + server-pool keys, holds the runtime active selection + bring-your-own overrides (process-local), and resolves per primitive. Secret-free snapshot |
@@ -251,6 +251,8 @@ concern (ARCHITECTURE §2 *Eval feedback*, §4 *Eval → build feedback*).
 | `auth_failed` | identity could not be resolved |
 | `model_unavailable` | no model configured (offline / no key) |
 | `cap_reached` | a model exists, but an `account` call hit a tier cap (the §8 graceful-degradation catch) |
+| `input_too_large` | a request payload exceeded a size/depth/count bound ([ARCHITECTURE §6](./ARCHITECTURE.md#6-data-model-sketch)) |
+| `invalid_operation` | a structurally invalid request (e.g. discarding the main lineage, promoting an empty draft) → 409 |
 | `seam_analyze_failed` | analyzer threw during seam execution |
 
 Add a new tag to the union in `errors.ts` only when none of the above fits. Free-string tags are a compile error.
@@ -272,7 +274,7 @@ Almost every change is one of these. If a task fits neither, surface it.
    `container.ts` behind a config flag (with a memory/stub fallback so the app
    still boots offline).
 
-**Worked example — branching iteration (designed, [#128](https://github.com/CrowBe/agentbranch/issues/128); ARCHITECTURE §9.3).** The draft/main/promote substrate is a rule-2 change, not rule-1: it changes *which* `SkillSource` the seam runs against, never the seam's `artifact → render` shape, so no new capability/`ArtifactKind`/renderer. It extends the **existing `SkillRepository` port** (`skill.repository.ts`) with branch/promote reads and writes — implemented in *both* the Prisma and memory adapters, tested as one contract at that seam — and adds **one new retention port** (daily cleanup off the write path), wired in `container.ts` with a memory fallback. No new domain module, so §4's table is unchanged until the code lands.
+**Worked example — branching iteration (landed, [#128](https://github.com/CrowBe/agentbranch/issues/128); ARCHITECTURE §9.3).** The draft/main/promote substrate is a rule-2 change, not rule-1: it changes *which* `SkillSource` the seam runs against, never the seam's `artifact → render` shape, so no new capability/`ArtifactKind`/renderer. It extends the **existing `SkillRepository` port** (`skill.repository.ts`) with branch/promote reads and writes (`createBranch`/`saveToBranch`/`listBranches`/`listBranchVersions`/`promoteBranch`/`discardBranch`) — implemented in *both* the Prisma and memory adapters, tested as one contract at that seam — and adds **one new retention port** (`SkillRetentionRepository`, daily cleanup off the write path), wired in `container.ts` with a memory fallback and driven by a Vercel Cron route (`app/api/cron/retention`). No new domain module, so §4's table keeps the same rows (only the skill row's port list grew).
 
 **Other conventions**
 
@@ -304,7 +306,8 @@ npm run db:generate / db:push / db:migrate # Prisma (needs DATABASE_URL)
   `@ai-sdk/openai-compatible`, Claude default with optional Nous Portal) ·
   Tailwind 4 · Vitest 4 · npm.
 - Data model lives in `prisma/schema.prisma` (ARCHITECTURE §6): `users`,
-  `skills`, `skill_versions` (append-only), `usage`, `test_runs`, `eval_runs`.
+  `skills`, `skill_branches`, `skill_versions` (append-only), `usage`,
+  `test_runs`, `eval_runs`. Migrations under `prisma/migrations/`.
 
 ---
 

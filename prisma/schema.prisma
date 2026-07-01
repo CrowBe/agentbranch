@@ -26,6 +26,13 @@ model User {
 }
 
 /// The persisted skill. Exports are rendered from this record.
+///
+/// `mainVersionId` is the **explicit blessed pointer** (ARCHITECTURE §6, §9.3):
+/// the version everything defaults to (export, install, the hero's first paint).
+/// In the linear-history path it tracks the newest revision; branching makes the
+/// blessed version explicit and independent of newest, so a draft can append
+/// higher revisions without becoming main. *Main is just the branch that owns
+/// this version* — promote re-points it.
 model Skill {
   id              String   @id @default(cuid())
   userId          String   @map("user_id")
@@ -33,24 +40,53 @@ model Skill {
   description     String
   body            String   @db.Text // the markdown body of SKILL.md
   frontmatterJson Json     @map("frontmatter_json")
+  mainVersionId   String?  @unique @map("main_version_id")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  versions SkillVersion[]
-  testRuns TestRun[]
-  evalRuns EvalRun[]
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mainVersion SkillVersion? @relation("SkillMainVersion", fields: [mainVersionId], references: [id], onDelete: SetNull)
+  versions    SkillVersion[]
+  branches    SkillBranch[]
+  testRuns    TestRun[]
+  evalRuns    EvalRun[]
 
   @@index([userId])
   @@map("skills")
 }
 
-/// Append-only revisions of a skill. An export is a pure function of a
-/// version; this also enables future regression evals.
+/// A line of iteration — a **draft** in user copy (ARCHITECTURE §9.3). *Main is
+/// just a branch*: every version belongs to one, and the branch that owns the
+/// skill's `mainVersionId` is the blessed lineage. A skill may carry several
+/// open drafts at once; `status` flips to `discarded` when a draft is dropped or
+/// the daily retention job tidies an over-cap draft. `ordinal` is the per-skill
+/// display order ("Draft 1, 2…").
+model SkillBranch {
+  id        String   @id @default(cuid())
+  skillId   String   @map("skill_id")
+  status    String   @default("open") // open | discarded
+  ordinal   Int // per-skill display order
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  skill    Skill          @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  versions SkillVersion[]
+
+  @@index([skillId])
+  @@map("skill_branches")
+}
+
+/// Append-only revisions of a skill. An export is a pure function of a version;
+/// this also enables future regression evals. Versions chain as a **DAG** via
+/// `parentId` and belong to a branch; `revision` is a **per-branch display
+/// ordinal** (ARCHITECTURE §6) — two drafts advancing independently never
+/// collide, so the old per-skill monotonic uniqueness is now per-branch.
 model SkillVersion {
   id              String   @id @default(cuid())
   skillId         String   @map("skill_id")
-  revision        Int // monotonically increasing per skill
+  branchId        String   @map("branch_id")
+  parentId        String?  @map("parent_id")
+  revision        Int // per-branch display ordinal
   name            String
   description     String
   body            String   @db.Text
@@ -58,11 +94,17 @@ model SkillVersion {
   lintSummaryJson Json?    @map("lint_summary_json")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
-  testRuns TestRun[]
-  evalRuns  EvalRun[]
+  skill       Skill          @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  branch      SkillBranch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  parent      SkillVersion?  @relation("SkillVersionParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children    SkillVersion[] @relation("SkillVersionParent")
+  mainOfSkill Skill?         @relation("SkillMainVersion")
+  testRuns    TestRun[]
+  evalRuns    EvalRun[]
 
-  @@unique([skillId, revision])
+  @@unique([branchId, revision])
+  @@index([skillId])
+  @@index([branchId])
   @@map("skill_versions")
 }
 

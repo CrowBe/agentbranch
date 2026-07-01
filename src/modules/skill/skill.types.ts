@@ -1,4 +1,4 @@
-import type { SkillId, SkillVersionId, UserId } from "@/shared";
+import type { SkillBranchId, SkillId, SkillVersionId, UserId } from "@/shared";
 
 /**
  * The YAML frontmatter of a SKILL.md. `name` and `description` are the two
@@ -25,6 +25,11 @@ export type SkillSource = {
  * A persisted skill — `SkillSource` plus identity and timestamps. This is the
  * aggregate the rest of the app passes around; everything else (IR, render,
  * export, eval) is derived from it via the skill-analysis seam.
+ *
+ * `latestVersionId` is the skill's **main version** — the explicit blessed
+ * pointer (ARCHITECTURE §6, §9.3). On the linear path it equals the newest
+ * revision; promote re-points it to a draft's head. `latestRevision` is that
+ * main version's per-branch display ordinal.
  */
 export type Skill = {
   readonly id: SkillId;
@@ -45,10 +50,40 @@ export type SkillVersionLintSummary = {
 export type SkillVersion = {
   readonly id: SkillVersionId;
   readonly skillId: SkillId;
+  readonly branchId: SkillBranchId;
+  /** Parent in the version DAG; absent for a branch's first version. */
+  readonly parentId?: SkillVersionId;
+  /** Per-branch display ordinal (ARCHITECTURE §6), not a global revision. */
   readonly revision: number;
   readonly source: SkillSource;
   readonly lintSummary?: SkillVersionLintSummary;
   readonly createdAt: Date;
+};
+
+/** A draft is open until promoted-away or discarded; the retention job may
+ * discard an over-cap draft (ARCHITECTURE §9.3). */
+export type SkillBranchStatus = "open" | "discarded";
+
+/**
+ * A line of iteration — a **draft** in user copy (ARCHITECTURE §9.3). *Main is
+ * just a branch*: `isMain` is derived (this branch owns the skill's main
+ * version), never stored, so promote needs only to move the skill's pointer.
+ */
+export type SkillBranch = {
+  readonly id: SkillBranchId;
+  readonly skillId: SkillId;
+  readonly status: SkillBranchStatus;
+  readonly ordinal: number;
+  readonly isMain: boolean;
+  readonly headVersionId?: SkillVersionId;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+};
+
+/** What a daily retention pass removed — surfaced by the cron route for logging. */
+export type RetentionReport = {
+  readonly prunedVersions: number;
+  readonly discardedBranches: number;
 };
 
 /** Failure modes when reading or validating a SKILL.md. */

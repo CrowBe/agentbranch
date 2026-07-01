@@ -76,7 +76,9 @@ export function domainErrorResponse(error: DomainError): Response {
           ? 404
           : error.tag === "auth_failed"
             ? 401
-            : 500;
+            : error.tag === "invalid_operation"
+              ? 409
+              : 500;
 
   return Response.json({ error: error.message, code: error.tag }, { status });
 }
