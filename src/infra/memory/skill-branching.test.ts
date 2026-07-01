@@ -112,6 +112,20 @@ describe("branching iteration — draft / main / promote (memory adapter)", () =
     ).resolves.toMatchObject({ ok: false, error: { tag: "invalid_operation" } });
   });
 
+  it("refuses to append draft revisions directly to the main lineage", async () => {
+    const { repo } = setup();
+    const id = await seedSkill(repo);
+    const main = unwrap(await repo.listBranches(id, USER)).find((branch) => branch.isMain);
+
+    await expect(
+      repo.saveToBranch({ id, userId: USER, branchId: main!.id, source: md("main via branch") }),
+    ).resolves.toMatchObject({ ok: false, error: { tag: "invalid_operation" } });
+
+    const skill = unwrap(await repo.findById(id, USER));
+    expect(skill?.source).toEqual(md("main v1"));
+    expect(unwrap(await repo.listVersions(id, USER))).toHaveLength(1);
+  });
+
   it("scopes branch operations to the owner", async () => {
     const { repo } = setup();
     const id = await seedSkill(repo);
