@@ -155,7 +155,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **hero** | `heroCapability`, `HeroView`, doc types | — | real |
 | **visualise** | `visualiseCapability`, IR + Mermaid types | — | extraction model-backed · deterministic offline fallback · render real |
 | **test-run** | `testRunCapability`, `executeSkill`, `createMockToolRegistry`, `defaultMockToolRegistry`, `emailMockTool` | `TestRunRepository` | evaluation capability · run + world generation real · email mock = offline fallback |
-| **triggering-eval** | `triggeringEvalCapability`, `runTriggeringEval`, `generatePromptBattery`, `distractorLibrary` | `EvalRunRepository` | evaluation capability · run + battery generation real · distractor library static v1 seed |
+| **triggering-eval** | `triggeringEvalCapability`, `runTriggeringEval`, `generatePromptBattery`, `distractorLibrary` | `EvalRunRepository` | evaluation capability · run + battery generation real · adversarial negative battery · distractor library static v1 seed |
 | **export** | `exportCapability`, manifest types | — | real |
 | **lint** | `lintCapability`, `LintReport`, `LintFinding` | — | real (quality + pure policy rules) |
 | **skill-import** | `SkillImportFetcher`, `SkillImportFetchError` | `SkillImportFetcher` | port |

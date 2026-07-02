@@ -16,4 +16,7 @@ export const distractorLibrary: readonly Distractor[] = [
   { name: "translation-helper", description: "Translates text between languages." },
   { name: "weather-reporter", description: "Reports the local weather forecast." },
   { name: "meeting-notetaker", description: "Takes structured notes during meetings." },
+  { name: "privacy-reviewer", description: "Checks whether a request should be refused for privacy reasons." },
+  { name: "credential-auditor", description: "Audits text for accidental credential exposure without revealing secrets." },
+  { name: "data-exporter", description: "Prepares approved customer data exports with confirmation." },
 ];
