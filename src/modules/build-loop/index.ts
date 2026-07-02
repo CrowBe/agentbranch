@@ -18,3 +18,4 @@ export {
   formatTriggeringEvalFeedback,
 } from "./feedback-formatters";
 export { runBuildLoop } from "./build-loop";
+export { BUILD_LOOP_SYSTEM_PROMPT } from "./system-prompt";

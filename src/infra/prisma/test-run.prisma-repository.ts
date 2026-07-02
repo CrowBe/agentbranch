@@ -9,6 +9,7 @@ import type {
 import {
   domainError,
   err,
+  HarnessVersionId,
   ok,
   SkillId,
   SkillVersionId,
@@ -20,6 +21,7 @@ type TestRunRow = {
   id: string;
   skillId: string;
   skillVersionId: string | null;
+  harnessVersionId: string | null;
   userId: string;
   status: string;
   scenarioJson: unknown;
@@ -32,6 +34,7 @@ function toTestRun(row: TestRunRow): TestRun {
     id: TestRunId(row.id),
     skillId: SkillId(row.skillId),
     skillVersionId: row.skillVersionId ? SkillVersionId(row.skillVersionId) : null,
+    harnessVersionId: row.harnessVersionId ? HarnessVersionId(row.harnessVersionId) : null,
     userId: UserId(row.userId),
     status: row.status as TestRunStatus,
     scenario: row.scenarioJson as Scenario,
@@ -49,6 +52,7 @@ export function createPrismaTestRunRepository(prisma: PrismaClient): TestRunRepo
           data: {
             skillId: run.skillId,
             skillVersionId: run.skillVersionId,
+            harnessVersionId: run.harnessVersionId,
             userId: run.userId,
             status: run.status,
             scenarioJson: run.scenario as unknown as Prisma.InputJsonValue,

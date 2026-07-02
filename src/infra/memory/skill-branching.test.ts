@@ -201,6 +201,7 @@ describe("retention is a daily tidy, off the write path (memory adapter)", () =>
         userId: USER,
         skillId: id,
         skillVersionId: interior!.id,
+        harnessVersionId: null,
         status: "passed",
         result: {
           kind: "triggering-eval",

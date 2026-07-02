@@ -9,6 +9,7 @@ import {
   domainError,
   err,
   EvalRunId,
+  HarnessVersionId,
   ok,
   SkillId,
   SkillVersionId,
@@ -19,6 +20,7 @@ type EvalRunRow = {
   id: string;
   skillId: string;
   skillVersionId: string | null;
+  harnessVersionId: string | null;
   userId: string;
   status: string;
   resultJson: unknown;
@@ -30,6 +32,7 @@ function toEvalRun(row: EvalRunRow): EvalRun {
     id: EvalRunId(row.id),
     skillId: SkillId(row.skillId),
     skillVersionId: row.skillVersionId ? SkillVersionId(row.skillVersionId) : null,
+    harnessVersionId: row.harnessVersionId ? HarnessVersionId(row.harnessVersionId) : null,
     userId: UserId(row.userId),
     status: row.status as EvalStatus,
     result: row.resultJson as TriggeringResult,
@@ -46,6 +49,7 @@ export function createPrismaEvalRunRepository(prisma: PrismaClient): EvalRunRepo
           data: {
             skillId: run.skillId,
             skillVersionId: run.skillVersionId,
+            harnessVersionId: run.harnessVersionId,
             userId: run.userId,
             status: run.status,
             resultJson: run.result as unknown as Prisma.InputJsonValue,

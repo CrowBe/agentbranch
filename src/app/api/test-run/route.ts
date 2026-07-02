@@ -88,11 +88,14 @@ async function runTestRun(
   emit?.({ event: "eval-progress", data: { message: "Recording test run." } });
   const skillVersionId = await resolvePinnedVersionId(container.skills, request, identity.userId);
   if (isErr(skillVersionId)) return err(skillVersionId.error);
+  const harnessVersion = await container.currentHarnessVersion();
+  if (isErr(harnessVersion)) return err(harnessVersion.error);
 
   const recorded = await container.testRuns.record({
     userId: skill.userId,
     skillId: skill.id,
     skillVersionId: skillVersionId.value,
+    harnessVersionId: harnessVersion.value.id,
     status: "completed",
     scenario: result.value.scenario,
     transcript: result.value.transcript,

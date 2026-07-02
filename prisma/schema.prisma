@@ -25,6 +25,26 @@ model User {
   @@map("users")
 }
 
+/// Append-only identity for the validation harness itself. The source artifacts
+/// stay in git; this row records their hash identity so evaluation records are
+/// attributable to the harness version that produced them (ARCHITECTURE §6).
+model HarnessVersion {
+  id                             String   @id @default(cuid())
+  manifestHash                   String   @unique @map("manifest_hash")
+  buildLoopSystemPromptHash      String   @map("build_loop_system_prompt_hash")
+  lintRulesetHash                String   @map("lint_ruleset_hash")
+  promptBatteryGeneratorHash     String   @map("prompt_battery_generator_hash")
+  testRunWorldGeneratorHash      String   @map("test_run_world_generator_hash")
+  distractorLibraryHash          String   @map("distractor_library_hash")
+  gitSha                         String?  @map("git_sha")
+  createdAt                      DateTime @default(now()) @map("created_at")
+
+  testRuns TestRun[]
+  evalRuns EvalRun[]
+
+  @@map("harness_versions")
+}
+
 /// The persisted skill. Exports are rendered from this record.
 ///
 /// `mainVersionId` is the **explicit blessed pointer** (ARCHITECTURE §6, §9.3):
@@ -144,6 +164,7 @@ model EvalRun {
   id             String   @id @default(cuid())
   skillId        String   @map("skill_id")
   skillVersionId String?  @map("skill_version_id")
+  harnessVersionId String? @map("harness_version_id")
   userId         String   @map("user_id")
   status         String // queued | running | passed | failed
   resultJson     Json     @map("result_json")
@@ -151,10 +172,12 @@ model EvalRun {
 
   skill        Skill         @relation(fields: [skillId], references: [id], onDelete: Cascade)
   skillVersion SkillVersion? @relation(fields: [skillVersionId], references: [id], onDelete: SetNull)
+  harnessVersion HarnessVersion? @relation(fields: [harnessVersionId], references: [id], onDelete: SetNull)
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([skillId])
   @@index([skillVersionId])
+  @@index([harnessVersionId])
   @@map("eval_runs")
 }
 
@@ -163,6 +186,7 @@ model TestRun {
   id             String   @id @default(cuid())
   skillId        String   @map("skill_id")
   skillVersionId String?  @map("skill_version_id")
+  harnessVersionId String? @map("harness_version_id")
   userId         String   @map("user_id")
   status         String // queued | running | completed | failed
   scenarioJson   Json     @map("scenario_json")
@@ -171,9 +195,11 @@ model TestRun {
 
   skill        Skill         @relation(fields: [skillId], references: [id], onDelete: Cascade)
   skillVersion SkillVersion? @relation(fields: [skillVersionId], references: [id], onDelete: SetNull)
+  harnessVersion HarnessVersion? @relation(fields: [harnessVersionId], references: [id], onDelete: SetNull)
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([skillId])
   @@index([skillVersionId])
+  @@index([harnessVersionId])
   @@map("test_runs")
 }

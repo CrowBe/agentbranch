@@ -62,6 +62,7 @@ describe("in-memory adapters", () => {
         userId: created.userId,
         skillId: created.id,
         skillVersionId: created.latestVersionId ?? null,
+        harnessVersionId: null,
         status: "completed",
         scenario: { prompt: "Run it.", seedData: {} },
         transcript: [{ kind: "model", text: "done" }],
@@ -72,6 +73,7 @@ describe("in-memory adapters", () => {
         userId: created.userId,
         skillId: created.id,
         skillVersionId: created.latestVersionId ?? null,
+        harnessVersionId: null,
         status: "passed",
         result: {
           kind: "triggering-eval",

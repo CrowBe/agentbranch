@@ -10,6 +10,7 @@ export type UserId = Brand<string, "UserId">;
 export type SkillId = Brand<string, "SkillId">;
 export type SkillBranchId = Brand<string, "SkillBranchId">;
 export type SkillVersionId = Brand<string, "SkillVersionId">;
+export type HarnessVersionId = Brand<string, "HarnessVersionId">;
 export type TestRunId = Brand<string, "TestRunId">;
 export type EvalRunId = Brand<string, "EvalRunId">;
 
@@ -19,5 +20,7 @@ export const SkillBranchId = (value: string): SkillBranchId =>
   value as SkillBranchId;
 export const SkillVersionId = (value: string): SkillVersionId =>
   value as SkillVersionId;
+export const HarnessVersionId = (value: string): HarnessVersionId =>
+  value as HarnessVersionId;
 export const TestRunId = (value: string): TestRunId => value as TestRunId;
 export const EvalRunId = (value: string): EvalRunId => value as EvalRunId;
