@@ -57,7 +57,10 @@ export function InteractionPanel({
 
       <div className="flex flex-1 flex-col gap-3 overflow-auto px-4 py-4 text-doc-rendered">
         {entries.length === 0 ? (
-          <p className="text-on-surface-variant">{copy.empty}</p>
+          <div className="flex flex-col gap-2">
+            <p className="text-on-surface-variant">{copy.empty}</p>
+            {copy.hint && <p className="text-label text-on-surface-variant">{copy.hint}</p>}
+          </div>
         ) : (
           entries.map((entry) => <InteractionEntryView key={entry.id} entry={entry} />)
         )}
@@ -106,7 +109,14 @@ function InteractionEntryView({ entry }: { entry: InteractionEntry }) {
   return <p className={className}>{entry.label}</p>;
 }
 
-function copyForMode(mode: "build" | "import" | "skills" | "history") {
+function copyForMode(mode: "build" | "import" | "skills" | "history"): {
+  title: string;
+  empty: string;
+  placeholder: string;
+  button: string;
+  busy: string;
+  hint?: string;
+} {
   if (mode === "import") {
     return {
       title: "Import a skill",
@@ -138,6 +148,7 @@ function copyForMode(mode: "build" | "import" | "skills" | "history") {
     title: "Describe your skill",
     empty:
       "Tell agent.branch what you want the skill to do — it writes it live in the document beside you.",
+    hint: 'Say "just draft it" if you don\'t want any questions or advice before the first draft.',
     placeholder: "e.g. Sort my inbox into respond, archive, escalate",
     button: "Build skill",
     busy: "Building...",
