@@ -12,6 +12,8 @@ export type Distractor = {
 export type PromptCase = {
   readonly prompt: string;
   readonly expected: "fire" | "silent";
+  /** Flags fixed moderation probes without changing the existing case scoring shape. */
+  readonly risk?: "trigger-hijack";
 };
 
 /** Result of a single case after running selection. */
