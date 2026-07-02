@@ -1,6 +1,6 @@
 import type { Skill } from "@/modules/skill";
 import type { Artifact, Insight } from "@/modules/skill-analysis";
-import type { SkillVersionId, TestRunId, UserId } from "@/shared";
+import type { HarnessVersionId, SkillVersionId, TestRunId, UserId } from "@/shared";
 
 /**
  * A mock tool the skill can "call" during a test run. The registry returns
@@ -52,6 +52,7 @@ export type TestRun = {
   readonly userId: UserId;
   readonly skillId: Skill["id"];
   readonly skillVersionId: SkillVersionId | null;
+  readonly harnessVersionId: HarnessVersionId | null;
   readonly status: TestRunStatus;
   readonly scenario: Scenario;
   readonly transcript: readonly TranscriptStep[];

@@ -7,6 +7,9 @@ import type { AuthPort } from "@/modules/auth";
 import type { ModelGateway } from "@/modules/model-gateway";
 import type { ModelRouter } from "@/modules/model-router";
 import type { SkillImportFetcher } from "@/modules/skill-import";
+import type { HarnessVersion, HarnessVersionRepository } from "@/modules/harness-version";
+import { currentHarnessManifest } from "@/modules/harness-version";
+import type { DomainError, Result } from "@/shared";
 
 import { readConfig, type AppConfig } from "./config";
 import {
@@ -18,6 +21,7 @@ import { createMemoryUsageRepository } from "@/infra/memory/usage.memory-reposit
 import { createMemoryRequestRateLimiter } from "@/infra/memory/rate-limit.memory-repository";
 import { createMemoryTestRunRepository } from "@/infra/memory/test-run.memory-repository";
 import { createMemoryEvalRunRepository } from "@/infra/memory/eval.memory-repository";
+import { createMemoryHarnessVersionRepository } from "@/infra/memory/harness-version.memory-repository";
 import { createPrismaClient } from "@/infra/prisma/client";
 import {
   createPrismaSkillRepository,
@@ -27,6 +31,7 @@ import { createPrismaUsageRepository } from "@/infra/prisma/usage.prisma-reposit
 import { createPrismaRequestRateLimiter } from "@/infra/prisma/rate-limit.prisma-repository";
 import { createPrismaTestRunRepository } from "@/infra/prisma/test-run.prisma-repository";
 import { createPrismaEvalRunRepository } from "@/infra/prisma/eval.prisma-repository";
+import { createPrismaHarnessVersionRepository } from "@/infra/prisma/harness-version.prisma-repository";
 import { createUserProvisioningAuth } from "@/infra/prisma/user-provisioning-auth";
 import { createModelRouter } from "@/infra/ai/model-router";
 import { createModelGateway } from "@/infra/ai/model-gateway";
@@ -58,6 +63,8 @@ export type AppContainer = {
   readonly tierFor: (userId: import("@/shared").UserId) => Promise<Tier>;
   readonly testRuns: TestRunRepository;
   readonly evalRuns: EvalRunRepository;
+  readonly harnessVersions: HarnessVersionRepository;
+  readonly currentHarnessVersion: () => Promise<Result<HarnessVersion, DomainError>>;
   readonly skillImportFetcher: SkillImportFetcher;
 };
 
@@ -102,6 +109,10 @@ export function getContainer(): AppContainer {
   // The skill repo and its retention job share one in-memory store offline, so
   // the daily prune sees the same branches/versions the write path produced.
   const memorySkillStore = prisma ? null : createMemorySkillStore();
+  const harnessVersions = prisma
+    ? createPrismaHarnessVersionRepository(prisma)
+    : createMemoryHarnessVersionRepository();
+  const harnessVersionPromise = harnessVersions.current(currentHarnessManifest());
 
   cached = {
     config,
@@ -119,6 +130,8 @@ export function getContainer(): AppContainer {
     tierFor: tierFor ?? (async () => "free" as Tier),
     testRuns: prisma ? createPrismaTestRunRepository(prisma) : createMemoryTestRunRepository(),
     evalRuns: prisma ? createPrismaEvalRunRepository(prisma) : createMemoryEvalRunRepository(),
+    harnessVersions,
+    currentHarnessVersion: () => harnessVersionPromise,
     skillImportFetcher: createGithubSkillImportFetcher(),
   };
   return cached;

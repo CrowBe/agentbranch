@@ -84,6 +84,12 @@ plausible near-misses, not only unrelated requests. Requests to reveal secrets,
 bypass approvals, exfiltrate private data, or do arbitrary off-scope work are
 negative cases, never positives.`;
 
+export const PROMPT_BATTERY_GENERATOR_VERSION = {
+  system: PROMPT_BATTERY_SYSTEM,
+  schema: "positive:min2-max5-160;negative:min2-max5-160",
+  fallbackAdversarialCases: adversarialNegativeCases(),
+} as const;
+
 function promptBatteryPrompt(skill: Skill): string {
   const body = skill.source.body.slice(0, 3000);
   return `Skill name: ${skillName(skill)}

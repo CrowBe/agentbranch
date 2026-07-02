@@ -164,6 +164,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **model-gateway** | `ModelGateway` (`classify`/`runAgent`/`streamAgent`/`generate`), `AccountingTag`, `GatewayTool`, `ModelProvider` | `ModelProvider` | real |
 | **model-router** | `ModelRouter` (`resolve`/`snapshot`/`setActive`/`setCredential`/`clearCredential`), `ProviderProfile`, `ModelSelection`, `RouterSnapshot`, selection helpers | `ModelRouter` | real |
 | **usage** | `checkCap`, `applyTurn`, `TIER_LIMITS`, types | `UsageRepository` | real |
+| **harness-version** | `currentHarnessManifest`, `hashHarnessManifest`, manifest/version types | `HarnessVersionRepository` | real |
 | **auth** | `AuthPort`, `AuthIdentity` | `AuthPort` | port |
 
 **Stub boundaries (where the real interface is set but behaviour is a
@@ -184,9 +185,9 @@ concern (ARCHITECTURE §2 *Eval feedback*, §4 *Eval → build feedback*).
 
 | Adapter | Implements | Notes |
 |---|---|---|
-| `memory/{skill,usage,test-run,eval}.memory-repository.ts` | the four repos + `SkillRetentionRepository` | **offline default**, tested; skill repo + retention share one store |
+| `memory/{skill,usage,test-run,eval,harness-version}.memory-repository.ts` | the five repos + `SkillRetentionRepository` | **offline default**, tested; skill repo + retention share one store |
 | `prisma/client.ts` | — | PrismaClient + `@prisma/adapter-pg` (Prisma 7 driver adapter) |
-| `prisma/{skill,usage,test-run,eval}.prisma-repository.ts` | `SkillRepository` (+ `SkillRetentionRepository`), `UsageRepository`, `TestRunRepository`, `EvalRunRepository` | real |
+| `prisma/{skill,usage,test-run,eval,harness-version}.prisma-repository.ts` | `SkillRepository` (+ `SkillRetentionRepository`), `UsageRepository`, `TestRunRepository`, `EvalRunRepository`, `HarnessVersionRepository` | real |
 | `prisma/user-provisioning-auth.ts` | `AuthPort` | wraps Clerk auth, provisions the `users` row on first sight |
 | `ai/model-gateway.ts` | `ModelGateway` | the metered gateway; resolves a `LanguageModel` per call from a `ModelRouter` (or a static `ModelProvider` in tests); routes accounting through `usage` |
 | `ai/model-router.ts` | `ModelRouter` | the provider/model selection authority: builds providers from the registry + server-pool keys, holds the runtime active selection + bring-your-own overrides (process-local), and resolves per primitive. Secret-free snapshot |
@@ -307,7 +308,8 @@ npm run db:generate / db:push / db:migrate # Prisma (needs DATABASE_URL)
   Tailwind 4 · Vitest 4 · npm.
 - Data model lives in `prisma/schema.prisma` (ARCHITECTURE §6): `users`,
   `skills`, `skill_branches`, `skill_versions` (append-only), `usage`,
-  `test_runs`, `eval_runs`. Migrations under `prisma/migrations/`.
+  `harness_versions`, `test_runs`, `eval_runs`. Migrations under
+  `prisma/migrations/`.
 
 ---
 

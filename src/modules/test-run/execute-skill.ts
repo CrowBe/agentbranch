@@ -89,6 +89,11 @@ Infer the mock tools the skill would need, create realistic mock responses that
 stress the skill, and write one user request that exercises the skill. Return
 only data that is safe to use in a mock environment.`;
 
+export const TEST_RUN_WORLD_GENERATOR_VERSION = {
+  system: WORLD_SYSTEM,
+  schema: "scenario.prompt:max500;scenario.seedData:record;mockTools:min1-max4",
+} as const;
+
 function insightPrompt(
   name: string,
   prompt: string,

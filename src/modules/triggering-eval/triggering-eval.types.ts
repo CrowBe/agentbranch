@@ -1,6 +1,6 @@
 import type { Skill } from "@/modules/skill";
 import type { Artifact, Insight } from "@/modules/skill-analysis";
-import type { EvalRunId, SkillVersionId, UserId } from "@/shared";
+import type { EvalRunId, HarnessVersionId, SkillVersionId, UserId } from "@/shared";
 
 /** A skill the user's skill competes against for selection (ARCHITECTURE §4). */
 export type Distractor = {
@@ -43,6 +43,7 @@ export type EvalRun = {
   readonly userId: UserId;
   readonly skillId: Skill["id"];
   readonly skillVersionId: SkillVersionId | null;
+  readonly harnessVersionId: HarnessVersionId | null;
   readonly status: EvalStatus;
   readonly result: TriggeringResult;
   readonly createdAt: Date;

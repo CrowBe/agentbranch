@@ -37,7 +37,7 @@ export {
   defaultMockToolRegistry,
   emailMockTool,
 } from "./mock-tool-registry";
-export { executeSkill } from "./execute-skill";
+export { executeSkill, TEST_RUN_WORLD_GENERATOR_VERSION } from "./execute-skill";
 export type { TestRunRepository } from "./test-run.repository";
 
 const testRunEvaluator: Evaluator<Skill, TestRunResult> = {

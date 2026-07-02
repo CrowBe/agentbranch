@@ -114,6 +114,21 @@ const POLICY_RULES = [
   readonly patterns: readonly RegExp[];
 }[];
 
+export const LINT_RULESET_VERSION = {
+  skillNamePattern: SKILL_NAME_PATTERN.source,
+  descriptionMin: DESCRIPTION_MIN,
+  descriptionSoftMax: DESCRIPTION_SOFT_MAX,
+  bodyTokenWarn: BODY_TOKEN_WARN,
+  descriptionFillerOpenings: DESCRIPTION_FILLER_OPENINGS,
+  descriptionTriggerWords: [...DESCRIPTION_TRIGGER_WORDS].sort(),
+  policyRules: POLICY_RULES.map((rule) => ({
+    rule: rule.rule,
+    severity: rule.severity,
+    message: rule.message,
+    patterns: rule.patterns.map((pattern) => pattern.source),
+  })),
+} as const;
+
 export const lintAnalyzer: Analyzer<Skill, LintReport> = {
   kind: "lint",
   async analyze(skill: Skill, context?: AnalysisContext) {

@@ -107,11 +107,14 @@ async function runTriggering(
   emit?.({ event: "eval-progress", data: { message: "Recording triggering eval." } });
   const skillVersionId = await resolvePinnedVersionId(container.skills, request, identity.userId);
   if (isErr(skillVersionId)) return err(skillVersionId.error);
+  const harnessVersion = await container.currentHarnessVersion();
+  if (isErr(harnessVersion)) return err(harnessVersion.error);
 
   const recorded = await container.evalRuns.record({
     userId: skill.userId,
     skillId: skill.id,
     skillVersionId: skillVersionId.value,
+    harnessVersionId: harnessVersion.value.id,
     status: result.value.passed ? "passed" : "failed",
     result: result.value,
   });

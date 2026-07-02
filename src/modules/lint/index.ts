@@ -19,6 +19,7 @@ export {
   createLintReport,
   createLintReportForSource,
   createLintSummary,
+  LINT_RULESET_VERSION,
   lintAnalyzer,
 } from "./lint-analyzer";
 export { lintBreakdownRenderer, lintInsightsRenderer } from "./renderers";
