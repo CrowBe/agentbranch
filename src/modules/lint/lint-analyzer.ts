@@ -1,5 +1,5 @@
 import { serializeSkillMd, type Skill, type SkillSource } from "@/modules/skill";
-import type { AnalysisContext, Analyzer } from "@/modules/skill-analysis";
+import type { AnalysisContext, AnalysisReferenceFile, Analyzer } from "@/modules/skill-analysis";
 import { ok, SKILL_BODY_MAX, SKILL_DESCRIPTION_MAX, SKILL_NAME_MAX } from "@/shared";
 import type { LintFinding, LintReport, LintSeverity, LintSummary } from "./lint.types";
 
@@ -65,6 +65,54 @@ const EXAMPLE_PATTERN = /\bexamples?\b|```/i;
 const VAGUE_STEP_PATTERN =
   /^\s*(?:[-*]|\d+\.)\s+(?:understand|ensure|consider|think about|help(?:\s+with)?|improve|handle|manage|support)\b/im;
 const LONG_PARAGRAPH_LENGTH = 700;
+const POLICY_RULES = [
+  {
+    rule: "policy.fetch-and-follow",
+    severity: "error",
+    message:
+      "The skill tells an agent to fetch remote content and follow it as instructions. Published skills must keep instructions inspectable in the skill folder.",
+    patterns: [
+      /\b(?:fetch|download|load|retrieve|curl|wget)\b[\s\S]{0,160}\bhttps?:\/\/\S+[\s\S]{0,160}\b(?:follow|obey|execute|run|use|treat|apply)\b[\s\S]{0,80}\b(?:instructions?|prompt|commands?|steps?|directions?)\b/i,
+      /\b(?:follow|obey|execute|run|use|treat|apply)\b[\s\S]{0,80}\b(?:instructions?|prompt|commands?|steps?|directions?)\b[\s\S]{0,160}\b(?:from|at)\b[\s\S]{0,80}\bhttps?:\/\/\S+/i,
+    ],
+  },
+  {
+    rule: "policy.shell-exec",
+    severity: "warn",
+    message:
+      "The skill asks the host agent to run shell or terminal commands. Keep published skills instruction-only unless the user explicitly supplies the command context.",
+    patterns: [
+      /\b(?:run|execute|launch|open|start)\b[\s\S]{0,80}\b(?:shell|terminal|bash|zsh|sh|powershell|cmd\.exe|command line)\b/i,
+      /\b(?:run|execute)\b[\s\S]{0,80}`(?:sudo\s+|bash\b|sh\b|zsh\b|powershell\b|cmd\b|curl\b|wget\b|npm\b|python\b|node\b)[^`]*`/i,
+      /`(?:curl|wget)\b[^`|]*(?:\|\s*(?:bash|sh|zsh))[^`]*`/i,
+    ],
+  },
+  {
+    rule: "policy.credential-path",
+    severity: "warn",
+    message:
+      "The skill references credential or secret file locations. Avoid teaching agents to inspect keys, tokens, or local secret stores.",
+    patterns: [
+      /(?:^|[\s`"'])~?\/?(?:\.ssh\/(?:id_rsa|id_ed25519|config)|\.aws\/credentials|\.config\/gh\/hosts\.yml|\.npmrc|\.netrc|\.env(?:\.[\w-]+)?)(?=$|[\s`"',.:;)\]])/im,
+      /\b(?:api[_-]?key|access[_-]?token|secret|credential|private key|bearer token)\b[\s\S]{0,100}\b(?:file|path|location|store|env file|\.env)\b/i,
+    ],
+  },
+  {
+    rule: "policy.obfuscation",
+    severity: "warn",
+    message:
+      "The skill appears to rely on encoded or obfuscated payloads. Keep skill instructions readable so reviewers and users can inspect them.",
+    patterns: [
+      /\b(?:base64|rot13|hex encoded|hex-encoded|encoded payload|obfuscated payload|atob|eval)\b[\s\S]{0,120}\b(?:decode|payload|instructions?|commands?|script)\b/i,
+      /\b(?:decode|deobfuscate)\b[\s\S]{0,80}\b(?:and|then)\b[\s\S]{0,80}\b(?:follow|obey|execute|run|apply)\b/i,
+    ],
+  },
+] as const satisfies readonly {
+  readonly rule: string;
+  readonly severity: LintSeverity;
+  readonly message: string;
+  readonly patterns: readonly RegExp[];
+}[];
 
 export const lintAnalyzer: Analyzer<Skill, LintReport> = {
   kind: "lint",
@@ -73,7 +121,10 @@ export const lintAnalyzer: Analyzer<Skill, LintReport> = {
   },
 };
 
-export function createLintReport(skill: Skill, referenceFiles: readonly string[] = []): LintReport {
+export function createLintReport(
+  skill: Skill,
+  referenceFiles: readonly (string | AnalysisReferenceFile)[] = [],
+): LintReport {
   return createLintReportForSource(skill.source, referenceFiles);
 }
 
@@ -83,14 +134,15 @@ export function createLintSummary(source: SkillSource): LintSummary {
 
 export function createLintReportForSource(
   source: SkillSource,
-  referenceFiles: readonly string[] = [],
+  referenceFiles: readonly (string | AnalysisReferenceFile)[] = [],
 ): LintReport {
   const raw = serializeSkillMd(source);
   const findings: LintFinding[] = [];
   const name = source.frontmatter.name;
   const description = source.frontmatter.description;
   const body = source.body;
-  const knownReferenceFiles = new Set(referenceFiles.map(normalizeReferencePath));
+  const folderDocuments = folderDocumentsFor(raw, referenceFiles);
+  const knownReferenceFiles = new Set(folderDocuments.map((document) => document.path));
 
   addFinding(findings, raw, "name:", validateName(name));
   addFinding(findings, raw, "description:", validateDescription(description));
@@ -107,6 +159,7 @@ export function createLintReportForSource(
   addFinding(findings, raw, body.trimStart().slice(0, 40), validateBody(body));
   findings.push(...validateBodyQuality(raw, body));
   findings.push(...validateReferenceLinks(raw, body, knownReferenceFiles));
+  findings.push(...validatePolicyRules(folderDocuments));
 
   const tokenEstimate = estimateTokens(body);
   if (tokenEstimate > BODY_TOKEN_WARN) {
@@ -119,6 +172,69 @@ export function createLintReportForSource(
   }
 
   return { kind: "lint", summary: summarize(findings), findings };
+}
+
+function folderDocumentsFor(
+  raw: string,
+  referenceFiles: readonly (string | AnalysisReferenceFile)[],
+): readonly FolderDocument[] {
+  return [
+    { path: "SKILL.md", content: raw, source: "skill" },
+    ...referenceFiles.map((file) =>
+      typeof file === "string"
+        ? { path: normalizeReferencePath(file), content: "", source: "reference" as const }
+        : {
+            path: normalizeReferencePath(file.path),
+            content: file.content,
+            source: "reference" as const,
+          },
+    ),
+  ];
+}
+
+type FolderDocument = {
+  readonly path: string;
+  readonly content: string;
+  readonly source: "skill" | "reference";
+};
+
+function validatePolicyRules(documents: readonly FolderDocument[]): LintFinding[] {
+  const findings: LintFinding[] = [];
+
+  for (const policyRule of POLICY_RULES) {
+    const match = firstPolicyMatch(documents, policyRule.patterns);
+    if (match === null) continue;
+
+    findings.push({
+      rule: policyRule.rule,
+      severity: policyRule.severity,
+      message:
+        match.document.path === "SKILL.md"
+          ? policyRule.message
+          : `${policyRule.message} Found in \`${match.document.path}\`.`,
+      sourceSpan:
+        match.document.source === "skill"
+          ? { start: match.index, end: match.index + match.text.length }
+          : undefined,
+    });
+  }
+
+  return findings;
+}
+
+function firstPolicyMatch(
+  documents: readonly FolderDocument[],
+  patterns: readonly RegExp[],
+): { readonly document: FolderDocument; readonly index: number; readonly text: string } | null {
+  for (const document of documents) {
+    if (document.content.trim().length === 0) continue;
+    for (const pattern of patterns) {
+      const match = document.content.match(pattern);
+      if (match?.[0] === undefined || match.index === undefined) continue;
+      return { document, index: match.index, text: match[0] };
+    }
+  }
+  return null;
 }
 
 function validateReferenceLinks(

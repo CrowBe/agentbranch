@@ -127,7 +127,7 @@ today; the generic `Input` slot lets future equipment primitives reuse the seam.
 | Hero | analysis | `hero` | hero (sections + spans) | `rendered`, `source` | real |
 | Visualise | analysis | `visualise` | IR extraction | `mermaid` | extraction model-backed (deterministic offline fallback); render real |
 | Export | analysis | `export` | instruction intent | `claude` (manifest) | real |
-| Lint | analysis | `lint` | frontmatter + body + refs quality rules | `insights`, `breakdown` | real |
+| Lint | analysis | `lint` | frontmatter + body + refs quality rules + static policy rules | `insights`, `breakdown` | real |
 | Test run | evaluation | `test-run` | composes `gateway.runAgent` + mock-tool registry | `insights`, `breakdown` | run + world generation real (scenario + mock tools generated, cached); email mock = offline fallback |
 | Triggering eval | evaluation | `triggering-eval` | composes `gateway.classify` over the field | `insights`, `breakdown` | run + battery generation real (cached); distractor library a static v1 seed |
 
@@ -157,7 +157,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **test-run** | `testRunCapability`, `executeSkill`, `createMockToolRegistry`, `defaultMockToolRegistry`, `emailMockTool` | `TestRunRepository` | evaluation capability · run + world generation real · email mock = offline fallback |
 | **triggering-eval** | `triggeringEvalCapability`, `runTriggeringEval`, `generatePromptBattery`, `distractorLibrary` | `EvalRunRepository` | evaluation capability · run + battery generation real · distractor library static v1 seed |
 | **export** | `exportCapability`, manifest types | — | real |
-| **lint** | `lintCapability`, `LintReport`, `LintFinding` | — | real |
+| **lint** | `lintCapability`, `LintReport`, `LintFinding` | — | real (quality + pure policy rules) |
 | **skill-import** | `SkillImportFetcher`, `SkillImportFetchError` | `SkillImportFetcher` | port |
 | **portability** | `transformSkill`, types | — | stub (deferred engine) |
 | **build-loop** | `runBuildLoop`, `buildTools`, `BuildToolName`, `BuildLoopEvent`, `formatTestRunFeedback`, `formatTriggeringEvalFeedback` | — (consumes `ModelGateway`) | real |
