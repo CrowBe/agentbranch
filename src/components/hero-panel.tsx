@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { RenderedDoc, SourceDoc, HeroView } from "@/modules/hero";
 import type { SkillVersionLintSummary } from "@/modules/skill";
 import type { TestRunResult } from "@/modules/test-run";
@@ -118,6 +119,7 @@ export function HeroPanel({
   toolBusy,
   lintSummary,
   lintBusy,
+  banner,
   onToolSelect,
   onLintSelect,
   onEvaluationSurfaceChange,
@@ -134,6 +136,8 @@ export function HeroPanel({
   toolBusy: boolean;
   lintSummary?: SkillVersionLintSummary | null;
   lintBusy: boolean;
+  /** Draft state legibility + promote/discard controls (ARCHITECTURE §9.3). */
+  banner?: ReactNode;
   onToolSelect: (action: ToolAction) => void;
   onLintSelect: () => void;
   onEvaluationSurfaceChange: (surface: "insights" | "breakdown") => void;
@@ -143,6 +147,7 @@ export function HeroPanel({
 }) {
   return (
     <section className="mx-auto flex h-full w-full max-w-3xl flex-col gap-4 px-6 py-8">
+      {banner}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <ToolChips active={activeTool} busy={toolBusy} onSelect={onToolSelect} />
         <ViewToggle value={view} onChange={onViewChange} />

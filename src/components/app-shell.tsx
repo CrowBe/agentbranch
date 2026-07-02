@@ -24,6 +24,7 @@ import {
   type LintInsightPanel,
 } from "./hero-panel";
 import { InteractionPanel } from "./interaction-panel";
+import { DraftControls, type DraftSummary } from "./draft-controls";
 import type { ToolAction } from "./tool-chips";
 import { entry, friendlyError, renderHeroDocs, toolLabel, useBuildStream } from "./use-build-stream";
 
@@ -55,6 +56,12 @@ export function AppShell({
   const [currentLintSummary, setCurrentLintSummary] = useState<SkillVersionLintSummary | null>(
     initialLintSummary,
   );
+  // Branching iteration (ARCHITECTURE §9.3). `branchId` non-null means the hero
+  // is showing an in-progress draft, not the blessed main version; `openDrafts`
+  // is the current skill's resumable drafts so none are ever stranded.
+  const [branchId, setBranchId] = useState<string | null>(null);
+  const [openDrafts, setOpenDrafts] = useState<readonly DraftSummary[]>([]);
+  const [draftBusy, setDraftBusy] = useState(false);
   const {
     status,
     setStatus,
@@ -97,6 +104,8 @@ export function AppShell({
             setInteractionMode("import");
             setEntries([]);
             setStatus(null);
+            setBranchId(null);
+            setOpenDrafts([]);
           }}
           onModels={() => setConsoleOpen(true)}
           onSkills={handleSkills}
@@ -113,6 +122,20 @@ export function AppShell({
             toolBusy={toolBusy}
             lintSummary={currentLintSummary}
             lintBusy={lintBusy}
+            banner={
+              interactionMode === "build" && current ? (
+                <DraftControls
+                  onDraft={branchId !== null}
+                  canStartDraft={currentSkillId !== null}
+                  openDrafts={openDrafts}
+                  busy={busy || toolBusy || lintBusy || draftBusy}
+                  onStartDraft={handleStartDraft}
+                  onOpenDraft={handleOpenDraft}
+                  onPromote={handlePromote}
+                  onDiscard={handleDiscardDraft}
+                />
+              ) : undefined
+            }
             onToolSelect={handleToolSelect}
             onLintSelect={() => void handleLintSurfaceSelect("insights")}
             onEvaluationSurfaceChange={handleEvaluationSurfaceSelect}
@@ -130,7 +153,7 @@ export function AppShell({
           entries={entries}
           busy={busy}
           mode={interactionMode}
-          onSend={handleSend}
+          onSend={(message) => void handleSend(message, branchId ?? undefined)}
           onImport={handleImport}
         />
       </div>
@@ -143,6 +166,8 @@ export function AppShell({
     setBusy(true);
     setCapability(null);
     setActiveTool(null);
+    setBranchId(null);
+    setOpenDrafts([]);
     setStatus("Importing...");
     const isUrlImport = isGithubUrl(raw);
     setEntries([entry(isUrlImport ? "Importing GitHub SKILL.md." : "Importing pasted SKILL.md.", "muted")]);
@@ -236,9 +261,11 @@ export function AppShell({
       setHeroDocs(renderHeroDocs(loaded.skill.source));
       setView("rendered");
       setCapability(null);
+      setBranchId(null);
       setStatus("Skill opened.");
       setInteractionMode("build");
       setEntries([entry(`Opened ${loaded.skill.source.frontmatter.name}.`, "muted")]);
+      void refreshDrafts(loaded.skill.id);
     } catch (cause) {
       const error = friendlyError(String(cause));
       setStatus(error);
@@ -332,6 +359,7 @@ export function AppShell({
       setHeroDocs(renderHeroDocs(restored.skill.source));
       setView("rendered");
       setCapability(null);
+      setBranchId(null);
       setStatus("Version restored.");
       setEntries([entry(`Restored revision ${revision} as revision ${restored.skill.latestRevision}.`, "muted")]);
       setInteractionMode("build");
@@ -353,7 +381,177 @@ export function AppShell({
       result.kind === "test-run"
         ? formatTestRunFeedback(result)
         : formatTriggeringEvalFeedback(result);
-    void handleSend(feedback);
+    void handleSend(feedback, branchId ?? undefined);
+  }
+
+  async function refreshDrafts(skillId: string) {
+    try {
+      const res = await fetch(`/api/skills/${encodeURIComponent(skillId)}/branches`);
+      const body = (await res.json().catch(() => null)) as unknown;
+      if (!res.ok) return;
+      setOpenDrafts(toDraftList(body));
+    } catch {
+      // Non-fatal — the resume affordance just stays empty.
+    }
+  }
+
+  async function handleStartDraft() {
+    if (!currentSkillId || busy || draftBusy) return;
+    setDraftBusy(true);
+    setCapability(null);
+    setActiveTool(null);
+    setStatus("Starting a draft...");
+    try {
+      const res = await fetch(`/api/skills/${encodeURIComponent(currentSkillId)}/branches`, {
+        method: "POST",
+      });
+      const body = (await res.json().catch(() => null)) as unknown;
+      if (!res.ok) {
+        const error = parseGenericError(body, res.status);
+        setStatus(error);
+        setEntries((prev) => [...prev, entry(error, "error")]);
+        return;
+      }
+      const draft = toBranchDetail(body);
+      applyDraft(draft);
+      setStatus("Draft started. Your main version is unchanged.");
+      setEntries([
+        entry("Draft started from the main version — iterate and test here, your main version stays put.", "muted"),
+      ]);
+      await refreshDrafts(currentSkillId);
+    } catch (cause) {
+      const error = friendlyError(String(cause));
+      setStatus(error);
+      setEntries((prev) => [...prev, entry(error, "error")]);
+    } finally {
+      setDraftBusy(false);
+    }
+  }
+
+  async function handleOpenDraft(draftToOpen: string) {
+    if (!currentSkillId || busy || draftBusy) return;
+    setDraftBusy(true);
+    setCapability(null);
+    setActiveTool(null);
+    setStatus("Opening draft...");
+    try {
+      const res = await fetch(
+        `/api/skills/${encodeURIComponent(currentSkillId)}/branches/${encodeURIComponent(draftToOpen)}`,
+      );
+      const body = (await res.json().catch(() => null)) as unknown;
+      if (!res.ok) {
+        const error = parseGenericError(body, res.status);
+        setStatus(error);
+        setEntries((prev) => [...prev, entry(error, "error")]);
+        return;
+      }
+      applyDraft(toBranchDetail(body));
+      setStatus("Draft opened. Your main version is unchanged.");
+      setEntries([entry("Opened a draft — your main version is unchanged.", "muted")]);
+    } catch (cause) {
+      const error = friendlyError(String(cause));
+      setStatus(error);
+      setEntries((prev) => [...prev, entry(error, "error")]);
+    } finally {
+      setDraftBusy(false);
+    }
+  }
+
+  async function handlePromote() {
+    if (!currentSkillId || !branchId || busy || draftBusy) return;
+    const confirmed = window.confirm(
+      "Set this draft as your main version? It replaces the current main version.",
+    );
+    if (!confirmed) return;
+
+    setDraftBusy(true);
+    setCapability(null);
+    setActiveTool(null);
+    setStatus("Setting as main version...");
+    try {
+      const res = await fetch(
+        `/api/skills/${encodeURIComponent(currentSkillId)}/branches/${encodeURIComponent(branchId)}/promote`,
+        { method: "POST" },
+      );
+      const body = (await res.json().catch(() => null)) as unknown;
+      if (!res.ok) {
+        const error = parseGenericError(body, res.status);
+        setStatus(error);
+        setEntries((prev) => [...prev, entry(error, "error")]);
+        return;
+      }
+      const promoted = toPromotedSkill(body);
+      setBranchId(null);
+      setCurrent(promoted.source);
+      setCurrentLintSummary(promoted.lintSummary);
+      setHeroDocs(renderHeroDocs(promoted.source));
+      setView("rendered");
+      setStatus("This draft is now your main version.");
+      setEntries([entry("This draft is now your main version.", "muted")]);
+      await refreshDrafts(currentSkillId);
+    } catch (cause) {
+      const error = friendlyError(String(cause));
+      setStatus(error);
+      setEntries((prev) => [...prev, entry(error, "error")]);
+    } finally {
+      setDraftBusy(false);
+    }
+  }
+
+  async function handleDiscardDraft() {
+    if (!currentSkillId || !branchId || busy || draftBusy) return;
+    const confirmed = window.confirm("Discard this draft? Your main version is unchanged.");
+    if (!confirmed) return;
+
+    setDraftBusy(true);
+    setCapability(null);
+    setActiveTool(null);
+    setStatus("Discarding draft...");
+    try {
+      const res = await fetch(
+        `/api/skills/${encodeURIComponent(currentSkillId)}/branches/${encodeURIComponent(branchId)}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as unknown;
+        const error = parseGenericError(body, res.status);
+        setStatus(error);
+        setEntries((prev) => [...prev, entry(error, "error")]);
+        return;
+      }
+      setBranchId(null);
+      await reloadMainVersion(currentSkillId);
+      await refreshDrafts(currentSkillId);
+      setStatus("Draft discarded. Back to your main version.");
+      setEntries([entry("Draft discarded — back to your main version.", "muted")]);
+    } catch (cause) {
+      const error = friendlyError(String(cause));
+      setStatus(error);
+      setEntries((prev) => [...prev, entry(error, "error")]);
+    } finally {
+      setDraftBusy(false);
+    }
+  }
+
+  function applyDraft(draft: { id: string; source: SkillSource; lintSummary: SkillVersionLintSummary | null }) {
+    setBranchId(draft.id);
+    setCurrent(draft.source);
+    setCurrentLintSummary(draft.lintSummary);
+    setHeroDocs(renderHeroDocs(draft.source));
+    setView("rendered");
+    setInteractionMode("build");
+  }
+
+  async function reloadMainVersion(skillId: string) {
+    const res = await fetch(`/api/skills/${encodeURIComponent(skillId)}`);
+    const body = (await res.json().catch(() => null)) as unknown;
+    if (!res.ok) return;
+    const detail = toSkillDetail(body);
+    setCurrent(detail.skill.source);
+    setCurrentLintSummary(detail.skill.lintSummary ?? latestLintSummary(detail));
+    setHeroDocs(renderHeroDocs(detail.skill.source));
+    setView("rendered");
+    setCapability(null);
   }
 
   async function handleEvaluationSurfaceSelect(surface: "insights" | "breakdown") {
@@ -376,6 +574,7 @@ export function AppShell({
         body: JSON.stringify({
           skill,
           currentSkillId: currentSkillId ?? undefined,
+          branchId: branchId ?? undefined,
           surface,
         }),
       });
@@ -418,6 +617,7 @@ export function AppShell({
         body: JSON.stringify({
           skill,
           currentSkillId: currentSkillId ?? undefined,
+          branchId: branchId ?? undefined,
           surface,
         }),
       });
@@ -800,6 +1000,52 @@ function latestLintSummary(
     detail.versions.find((version) => version.revision === detail.skill.latestRevision)
       ?.lintSummary ?? null
   );
+}
+
+function toDraftList(value: unknown): DraftSummary[] {
+  if (!isRecord(value) || !Array.isArray(value.branches)) return [];
+  return value.branches
+    .filter((branch): branch is Record<string, unknown> =>
+      isRecord(branch) && branch.isMain === false && branch.status === "open",
+    )
+    .map((branch) => ({
+      id: String(branch.id),
+      revision: typeof branch.revision === "number" ? branch.revision : null,
+      name: typeof branch.name === "string" ? branch.name : null,
+      description: typeof branch.description === "string" ? branch.description : null,
+    }));
+}
+
+function toBranchDetail(value: unknown): {
+  readonly id: string;
+  readonly source: SkillSource;
+  readonly lintSummary: SkillVersionLintSummary | null;
+} {
+  if (!isRecord(value) || !isRecord(value.branch)) {
+    throw new Error("Draft returned an unexpected response.");
+  }
+  const branch = value.branch;
+  if (typeof branch.id !== "string" || !isSkillSource(branch.source)) {
+    throw new Error("Draft returned an unexpected response.");
+  }
+  return {
+    id: branch.id,
+    source: branch.source,
+    lintSummary: isLintSummary(branch.lintSummary) ? branch.lintSummary : null,
+  };
+}
+
+function toPromotedSkill(value: unknown): {
+  readonly source: SkillSource;
+  readonly lintSummary: SkillVersionLintSummary | null;
+} {
+  if (!isRecord(value) || !isRecord(value.skill) || !isSkillSource(value.skill.source)) {
+    throw new Error("Setting the main version returned an unexpected response.");
+  }
+  return {
+    source: value.skill.source,
+    lintSummary: isLintSummary(value.skill.lintSummary) ? value.skill.lintSummary : null,
+  };
 }
 
 function toLintPanel(surface: "insights" | "breakdown", body: unknown): CapabilityPanel {

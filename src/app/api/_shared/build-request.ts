@@ -14,6 +14,7 @@ export const buildRequestSchema = z.object({
     .max(MESSAGES_MAX, LIMIT_MESSAGES.messages),
   current: skillSourceSchema.optional(),
   currentSkillId: z.string().optional(),
+  branchId: z.string().optional(),
 });
 
 export type BuildRequest = z.infer<typeof buildRequestSchema>;

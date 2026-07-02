@@ -1,6 +1,6 @@
 import { getContainer } from "@/server/container";
 import { buildLoopResponse } from "@/server/build-stream";
-import { SkillId } from "@/shared";
+import { SkillBranchId, SkillId } from "@/shared";
 import { parseBuildRequest } from "../_shared/build-request";
 import { invalidRequestResponse, parseJsonRequest } from "../_shared/request-body";
 
@@ -32,6 +32,7 @@ export async function POST(request: Request): Promise<Response> {
     {
       ...parsed.value,
       currentSkillId: parsed.value.currentSkillId ? SkillId(parsed.value.currentSkillId) : undefined,
+      branchId: parsed.value.branchId ? SkillBranchId(parsed.value.branchId) : undefined,
     },
     container.modelGateway,
     container.skills,
