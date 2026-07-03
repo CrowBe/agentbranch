@@ -20,7 +20,8 @@ export type ArtifactKind =
   | "export"
   | "lint"
   | "test-run"
-  | "triggering-eval";
+  | "triggering-eval"
+  | "cross-runtime-validation";
 
 /**
  * The plain-language interpretation of an Evaluation result (CONTEXT.md →

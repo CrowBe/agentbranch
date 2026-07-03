@@ -74,7 +74,7 @@ _Avoid_: report, results, test output, eval data
 
 **Model gateway**:
 The platform's *single, controlled, metered* entry to the model — its own module (`src/modules/model-gateway`). Exposes fine intent-level **primitives** (`classify`/`runAgent`/`generate`); every model call passes through it. Pure mechanism — it does not pick the provider/model or hold the key (that's the **model router**), and knows no capability kinds.
-_Avoid_: harness (evaluation-narrow + banned jargon), engine (that's the portability transform), runner, the SDK, model provider (that's the raw `LanguageModel` port the gateway resolves through the router)
+_Avoid_: harness (evaluation-narrow + banned jargon), engine (feature-specific), runner, the SDK, model provider (that's the raw `LanguageModel` port the gateway resolves through the router)
 
 **Model router**:
 The platform's *single* provider + model **selection** authority — its own module (`src/modules/model-router`), the layer beneath the gateway. Owns the provider registry, credentials (server-pool key + optional **bring-your-own override**), and the runtime-mutable active selection; resolves a `LanguageModel` per primitive. Pure *selection* mechanism, as the gateway is pure *metering* mechanism.
@@ -136,9 +136,9 @@ _Avoid_: decoys, noise, negatives
 The positive + negative prompts a triggering eval fires at the skill — positives should trigger it, negatives should not.
 _Avoid_: test set, prompts, dataset
 
-**Portability transform**:
-The one engine that strips Claude-specific scaffolding and re-expresses a skill's intent for another target. Two surfaces, one engine: cross-provider validation and cross-primitive export.
-_Avoid_: converter, adapter, exporter (export is one surface, not the engine)
+**Cross-runtime validation**:
+The portability surface — run a skill's triggering battery against selected runtime targets through the model gateway and report a per-target grid. Behaviour check, not format conversion.
+_Avoid_: converter, adapter, exporter, runs-everywhere claim
 
 **Rendered view** / **Source view**:
 The hero's two views of the same skill. **Rendered** (default) = friendly sans-serif document. **Source** = raw monospace `SKILL.md`. Both are renderers on the seam.
@@ -158,7 +158,7 @@ _Avoid_: preview/raw, doc/code, formatted/plain
 - An **Evaluation capability** emits an **Evaluation result** (the run-record Artifact), which renders to **Insights** (default, plain-language) and a detailed breakdown (depth on demand) — two renderers, one result.
 - **Eval feedback** connects the seam's evaluation output back to the build loop's input: a feedback formatter (pure function in `build-loop`) translates an Evaluation result or Lint artifact into a user message. **Insights** is what the *user* reads; eval feedback is what *Claude* reads to author the revision. The same result serves both surfaces.
 - An **Evaluation result** is ephemeral on the seam; it is persisted as an **Evaluation record** (§6). Analysis artifacts are never persisted — they recompute. The result is rendered *now*; the record is re-rendered *later*.
-- The **Portability transform** is one engine feeding two surfaces (cross-provider validation, cross-primitive export) — both deferred in v1.
+- **Cross-runtime validation** checks behaviour across selected runtime targets through the model gateway. It is a validation surface, not a conversion or packaging step.
 
 ## Example dialogue
 

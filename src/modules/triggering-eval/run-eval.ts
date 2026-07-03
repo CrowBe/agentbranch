@@ -1,6 +1,7 @@
 import type { Skill } from "@/modules/skill";
 import { skillName, skillDescription } from "@/modules/skill";
 import type { ModelGateway, AccountingTag } from "@/modules/model-gateway";
+import type { ModelSelection } from "@/modules/model-router";
 import { insightSchema } from "@/modules/skill-analysis";
 import { ok, isErr, type Result, type DomainError } from "@/shared";
 import { generatePromptBattery } from "./prompt-battery";
@@ -29,9 +30,10 @@ export async function runTriggeringEval(
       readonly total: number;
       readonly result: CaseResult;
     }) => void | Promise<void>;
+    readonly target?: ModelSelection;
   } = {},
 ): Promise<Result<TriggeringResult, DomainError>> {
-  const battery = await generatePromptBattery(skill, gateway, tag);
+  const battery = await generatePromptBattery(skill, gateway, tag, options.target);
   if (isErr(battery)) return battery;
 
   const candidate = candidateLabel(skill);
@@ -39,7 +41,12 @@ export async function runTriggeringEval(
 
   const cases: CaseResult[] = [];
   for (const [index, c] of battery.value.entries()) {
-    const selected = await gateway.classify({ prompt: c.prompt, choices, tag });
+    const selected = await gateway.classify({
+      prompt: c.prompt,
+      choices,
+      tag,
+      target: options.target,
+    });
     if (isErr(selected)) return selected;
     const actual: CaseResult["actual"] =
       selected.value.choice === candidate ? "fire" : "silent";
@@ -60,6 +67,7 @@ export async function runTriggeringEval(
     prompt: insightPrompt(skillName(skill), cases, passed),
     schema: insightSchema,
     tag,
+    target: options.target,
   });
   if (isErr(insight)) return insight;
 

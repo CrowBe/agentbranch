@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { ModelSelection } from "@/modules/model-router";
 import type { GatedCapability } from "@/modules/usage";
 import type { Result, DomainError, UserId } from "@/shared";
 
@@ -70,6 +71,8 @@ export type ClassifyInput = {
   readonly prompt: string;
   readonly choices: readonly string[];
   readonly tag: AccountingTag;
+  /** Optional provider/model override for cross-runtime validation. */
+  readonly target?: ModelSelection;
 };
 
 export type RunAgentInput = {
@@ -77,6 +80,8 @@ export type RunAgentInput = {
   readonly messages: readonly GatewayMessage[];
   readonly tools: readonly GatewayTool[];
   readonly tag: AccountingTag;
+  /** Optional provider/model override for cross-runtime validation. */
+  readonly target?: ModelSelection;
 };
 
 /** Input to `streamAgent` — same shape as a one-shot agent turn, streamed. */
@@ -106,6 +111,8 @@ export type GenerateInput<T> = {
   /** Zod schema the structured output is validated against; infers `T`. */
   readonly schema: z.ZodType<T>;
   readonly tag: AccountingTag;
+  /** Optional provider/model override for cross-runtime validation. */
+  readonly target?: ModelSelection;
 };
 
 /**

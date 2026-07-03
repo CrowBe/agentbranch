@@ -1,10 +1,14 @@
 /**
- * portability — the one engine behind cross-provider validation and
- * cross-primitive export (ARCHITECTURE §9). Both surfaces deferred; the engine
- * is designed and stubbed so its two callers share one contract.
+ * portability — cross-runtime validation for skills (ARCHITECTURE §9).
+ * The engine checks triggering behaviour on selected runtime targets through
+ * the model gateway; it does not claim format conversion or full runtime
+ * fidelity.
  */
 export type {
-  PortabilityProvider,
-  TransformedSkill,
+  RuntimeTarget,
+  RuntimeTargetResult,
+  CrossRuntimeValidationInput,
+  CrossRuntimeValidationResult,
+  CrossRuntimeValidationBreakdown,
 } from "./portability.types";
-export { transformSkill } from "./portability-transform";
+export { portabilityCapability, runCrossRuntimeValidation } from "./portability-transform";

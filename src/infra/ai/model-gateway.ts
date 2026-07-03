@@ -29,6 +29,7 @@ import type {
   AgentStreamPart,
 } from "@/modules/model-gateway";
 import type { ModelRouter } from "@/modules/model-router";
+import type { ModelSelection } from "@/modules/model-router";
 import {
   ok,
   err,
@@ -105,9 +106,10 @@ export function createModelGateway(deps: {
    */
   function resolveModel(
     primitive: ModelGatewayPrimitive,
+    target?: ModelSelection,
   ): Result<{ model: LanguageModel; isAnthropic: boolean; modelId: string | undefined }, DomainError> {
     if (router) {
-      const resolved = router.resolve(primitive);
+      const resolved = router.resolve(primitive, target);
       if (isErr(resolved)) return resolved;
       return ok({
         model: resolved.value.model,
@@ -131,8 +133,9 @@ export function createModelGateway(deps: {
     tag: AccountingTag,
     primitive: ModelGatewayPrimitive,
     inputBytes: number,
+    target?: ModelSelection,
   ): Promise<Result<Admitted, DomainError>> {
-    const resolved = resolveModel(primitive);
+    const resolved = resolveModel(primitive, target);
     if (isErr(resolved)) return resolved;
     const { model } = resolved.value;
     if (inputBytes > REQUEST_BYTES_MAX) {
@@ -179,7 +182,7 @@ export function createModelGateway(deps: {
     },
 
     async classify(input: ClassifyInput): Promise<Result<Classification, DomainError>> {
-      const admitted = await admit(input.tag, "classify", modelInputBytes([input.prompt]));
+      const admitted = await admit(input.tag, "classify", modelInputBytes([input.prompt]), input.target);
       if (isErr(admitted)) return admitted;
 
       try {
@@ -214,6 +217,7 @@ export function createModelGateway(deps: {
           systemPromptContent(input.system),
           ...input.messages.map((m) => m.content),
         ]),
+        input.target,
       );
       if (isErr(admitted)) return admitted;
 
@@ -246,6 +250,7 @@ export function createModelGateway(deps: {
           systemPromptContent(input.system),
           ...input.messages.map((m) => m.content),
         ]),
+        input.target,
       );
       if (isErr(admitted)) return admitted;
       const model = admitted.value.model;
@@ -327,6 +332,7 @@ export function createModelGateway(deps: {
         input.tag,
         "generate",
         modelInputBytes([input.system, input.prompt]),
+        input.target,
       );
       if (isErr(admitted)) return admitted;
 

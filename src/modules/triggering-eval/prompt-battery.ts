@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Skill } from "@/modules/skill";
 import { skillDescription, skillName } from "@/modules/skill";
 import type { AccountingTag, ModelGateway } from "@/modules/model-gateway";
+import type { ModelSelection } from "@/modules/model-router";
 import { isErr, ok, type DomainError, type Result } from "@/shared";
 import type { PromptCase } from "./triggering-eval.types";
 
@@ -33,8 +34,9 @@ export async function generatePromptBattery(
   skill: Skill,
   gateway: ModelGateway,
   tag: AccountingTag,
+  target?: ModelSelection,
 ): Promise<Result<readonly PromptCase[], DomainError>> {
-  const key = promptBatteryCacheKey(skill);
+  const key = promptBatteryCacheKey(skill, target);
   const cached = promptBatteryCache.get(key);
   if (cached) return ok(cached);
 
@@ -43,6 +45,7 @@ export async function generatePromptBattery(
     prompt: promptBatteryPrompt(skill),
     schema: promptBatterySchema,
     tag,
+    target,
   });
   if (isErr(generated)) return generated;
 
@@ -122,8 +125,9 @@ function uniquePrompts(prompts: readonly string[]): readonly string[] {
   return unique;
 }
 
-function promptBatteryCacheKey(skill: Skill): string {
+function promptBatteryCacheKey(skill: Skill, target: ModelSelection | undefined): string {
   return [
+    target ? JSON.stringify(target) : "default",
     skill.id,
     skill.updatedAt.getTime(),
     skillName(skill),

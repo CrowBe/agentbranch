@@ -159,7 +159,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **export** | `exportCapability`, manifest types | — | real |
 | **lint** | `lintCapability`, `LintReport`, `LintFinding` | — | real (quality + pure policy rules) |
 | **skill-import** | `SkillImportFetcher`, `SkillImportFetchError` | `SkillImportFetcher` | port |
-| **portability** | `transformSkill`, types | — | stub (deferred engine) |
+| **portability** | `portabilityCapability`, `runCrossRuntimeValidation`, runtime-target/result types | — | real cross-runtime validation engine |
 | **build-loop** | `runBuildLoop`, `buildTools`, `BuildToolName`, `BuildLoopEvent`, `formatTestRunFeedback`, `formatTriggeringEvalFeedback` | — (consumes `ModelGateway`) | real |
 | **model-gateway** | `ModelGateway` (`classify`/`runAgent`/`streamAgent`/`generate`), `AccountingTag`, `GatewayTool`, `ModelProvider` | `ModelProvider` | real |
 | **model-router** | `ModelRouter` (`resolve`/`snapshot`/`setActive`/`setCredential`/`clearCredential`), `ProviderProfile`, `ModelSelection`, `RouterSnapshot`, selection helpers | `ModelRouter` | real |
@@ -181,10 +181,7 @@ gated through `isAdmin` before any route or surface can call it. The default rea
 model returns outcomes/features rather than raw skill or prompt content.
 
 **Stub boundaries (where the real interface is set but behaviour is a
-placeholder):**
-
-- `portability/portability-transform.ts` — returns `not_configured`; one engine,
-  two surfaces, both deferred (ARCHITECTURE §9).
+placeholder):** none.
 
 **Eval feedback (build loop — closeable with eval results).** `formatTestRunFeedback`
 and `formatTriggeringEvalFeedback` are pure functions in `build-loop` that translate

@@ -6,7 +6,7 @@ import { createMemoryRequestRateLimiter } from "@/infra/memory/rate-limit.memory
 import { createMemoryUsageRepository } from "@/infra/memory/usage.memory-repository";
 import { TIER_LIMITS } from "@/modules/usage";
 import type { ModelProvider, AccountingTag } from "@/modules/model-gateway";
-import { isErr, REQUEST_BYTES_MAX, UserId } from "@/shared";
+import { isErr, ok, REQUEST_BYTES_MAX, UserId } from "@/shared";
 import type { TokenUsageBreakdown } from "@/modules/usage";
 
 const aiMocks = vi.hoisted(() => ({
@@ -225,6 +225,54 @@ describe("model gateway — primitive routing", () => {
     );
     expect(aiMocks.streamText).toHaveBeenCalledWith(
       expect.objectContaining({ model: routedProvider.models.streamAgent }),
+    );
+  });
+
+  it("routes a call to an explicit target selection without changing the active provider", async () => {
+    aiMocks.generateObject.mockResolvedValue({
+      object: { choice: "a", rationale: "fits" },
+      usage: { totalTokens: 1 },
+    } as never);
+    const activeModel = model("active-classify") as NonNullable<ModelProvider["model"]>;
+    const targetModel = model("target-classify") as NonNullable<ModelProvider["model"]>;
+    const router = {
+      hasModel: () => true,
+      snapshot: () => ({ providers: [], active: { providerId: "active" } }),
+      setActive: vi.fn(),
+      setCredential: vi.fn(),
+      clearCredential: vi.fn(),
+      resolve: vi.fn((primitive, selection) =>
+        ok({
+          model: selection?.providerId === "target" ? targetModel : activeModel,
+          providerId: selection?.providerId ?? "active",
+          kind: "anthropic" as const,
+          modelId: "claude-sonnet-4-6",
+          viaOverride: false,
+        }),
+      ),
+    };
+    const gateway = createModelGateway({
+      router,
+      usage: createMemoryUsageRepository(),
+    });
+
+    await gateway.classify({
+      prompt: "x",
+      choices: ["a"],
+      tag: platform,
+      target: { providerId: "target" },
+    });
+    await gateway.classify({ prompt: "x", choices: ["a"], tag: platform });
+
+    expect(router.resolve).toHaveBeenNthCalledWith(1, "classify", { providerId: "target" });
+    expect(router.resolve).toHaveBeenNthCalledWith(2, "classify", undefined);
+    expect(aiMocks.generateObject).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ model: targetModel }),
+    );
+    expect(aiMocks.generateObject).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ model: activeModel }),
     );
   });
 });
