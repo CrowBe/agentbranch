@@ -114,5 +114,8 @@ export interface ModelRouter {
    * one is stored for the active provider, else the server pool. Fails
    * `model_unavailable` when no key is present, `not_found` for an unknown id.
    */
-  resolve(primitive: ModelGatewayPrimitive): Result<ResolvedModel, DomainError>;
+  resolve(
+    primitive: ModelGatewayPrimitive,
+    selection?: ModelSelection,
+  ): Result<ResolvedModel, DomainError>;
 }

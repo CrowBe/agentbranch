@@ -149,10 +149,15 @@ export function createModelRouter(deps: {
       return ok(snapshot());
     },
 
-    resolve(primitive: ModelGatewayPrimitive): Result<ResolvedModel, DomainError> {
-      const profile = findProfile(profiles, active.providerId);
+    resolve(
+      primitive: ModelGatewayPrimitive,
+      selection?: ModelSelection,
+    ): Result<ResolvedModel, DomainError> {
+      const requested = selection ? validateSelection(selection, profiles) : ok(active);
+      if (isErr(requested)) return requested;
+      const profile = findProfile(profiles, requested.value.providerId);
       if (!profile) {
-        return err(domainError("not_found", `Unknown model provider: "${active.providerId}".`));
+        return err(domainError("not_found", `Unknown model provider: "${requested.value.providerId}".`));
       }
       const override = overrides.get(profile.id);
       const apiKey = override?.apiKey ?? serverKeyFor(profile.id).apiKey;
@@ -164,7 +169,7 @@ export function createModelRouter(deps: {
           ),
         );
       }
-      const modelIds = effectiveModelIds(profile, active, override);
+      const modelIds = effectiveModelIds(profile, requested.value, override);
       const provider = providerFor(profile, override, modelIds);
       const model = provider.models?.[primitive] ?? provider.model;
       if (!model) {
