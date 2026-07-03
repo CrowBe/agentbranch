@@ -166,6 +166,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **usage** | `checkCap`, `applyTurn`, `TIER_LIMITS`, types | `UsageRepository` | real |
 | **harness-version** | `currentHarnessManifest`, `hashHarnessManifest`, manifest/version types | `HarnessVersionRepository` | real |
 | **auth** | `AuthPort`, `AuthIdentity` | `AuthPort` | port |
+| **baseline-corpus** | `baselineSkillCorpus`, `baselineDistractors`, `BaselineSkillCorpusEntry` + types | — | real |
 
 **Designed next — harness improvement loop (admin).** ARCHITECTURE §9 defines the
 admin loop that reads a cohort of stored evaluation records and emits a
