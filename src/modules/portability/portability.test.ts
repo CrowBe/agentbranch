@@ -3,7 +3,7 @@ import type { GenerateInput, ModelGateway } from "@/modules/model-gateway";
 import { makeSkill, parseSkillMd, type Skill } from "@/modules/skill";
 import { domainError, err, ok, SkillId, UserId, unwrap } from "@/shared";
 import { runCrossRuntimeValidation } from "./portability-transform";
-import type { RuntimeTarget } from "./portability.types";
+import type { RuntimeTarget, RuntimeTargetResult } from "./portability.types";
 
 function skillFor(description: string): Skill {
   const source = unwrap(parseSkillMd(`---\nname: calendar\ndescription: ${description}\n---\nbody`));
@@ -87,6 +87,14 @@ describe("cross-runtime validation", () => {
       "OpenAI / Codex-class",
     ]);
     expect(result.targets.every((target) => target.status === "passed")).toBe(true);
+    expect(
+      generateCalls.filter((call) =>
+        call.prompt.includes("Return 3 positive prompts and 3 negative prompts."),
+      ),
+    ).toHaveLength(1);
+    const passedTargets = result.targets.filter(hasCases);
+    const prompts = passedTargets[0]?.cases.map((c) => c.prompt).join("\0");
+    expect(passedTargets.every((target) => target.cases.map((c) => c.prompt).join("\0") === prompts)).toBe(true);
     expect(JSON.stringify(result.targets)).not.toContain("claude-opus");
     expect(JSON.stringify(result.targets)).not.toContain("Hermes");
     expect(generateCalls.some((call) => call.target?.providerId === "nous")).toBe(true);
@@ -107,3 +115,9 @@ describe("cross-runtime validation", () => {
     expect(result.insight.summary).toBe("Runtime targets behave consistently.");
   });
 });
+
+function hasCases(
+  target: RuntimeTargetResult,
+): target is Extract<RuntimeTargetResult, { readonly status: "passed" | "failed" }> {
+  return target.status === "passed" || target.status === "failed";
+}

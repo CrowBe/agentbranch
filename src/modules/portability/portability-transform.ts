@@ -1,8 +1,12 @@
-import type { ModelGateway } from "@/modules/model-gateway";
+import type { AccountingTag, ModelGateway } from "@/modules/model-gateway";
 import type { Evaluator, Insight, Renderer } from "@/modules/skill-analysis";
 import { defineEvaluation, insightSchema } from "@/modules/skill-analysis";
 import { skillName } from "@/modules/skill";
-import { runTriggeringEval } from "@/modules/triggering-eval";
+import {
+  generatePromptBattery,
+  runTriggeringEval,
+  type PromptCase,
+} from "@/modules/triggering-eval";
 import { err, isErr, ok, type DomainError, type Result } from "@/shared";
 import type {
   CrossRuntimeValidationBreakdown,
@@ -26,10 +30,14 @@ export async function runCrossRuntimeValidation(
   input: CrossRuntimeValidationInput,
   gateway: ModelGateway,
 ): Promise<Result<CrossRuntimeValidationResult, DomainError>> {
+  const tag = triggeringEvalTag(input);
+  const battery = await generateSharedBattery(input, gateway, tag);
+  if (isErr(battery)) return battery;
+
   const targets: RuntimeTargetResult[] = [];
 
   for (const target of input.targets) {
-    const result = await runTarget(input, gateway, target);
+    const result = await runTarget(input, gateway, target, tag, battery.value);
     if (isErr(result)) return result;
     targets.push(result.value);
   }
@@ -52,12 +60,28 @@ export async function runCrossRuntimeValidation(
     system: INSIGHT_SYSTEM,
     prompt: insightPrompt(skillName(input.skill), targets),
     schema: insightSchema,
-    tag: { kind: "account", userId: input.skill.userId, capability: "triggering-eval" },
+    tag,
     target: insightTarget?.modelSelection,
   });
   if (isErr(insight)) return insight;
 
   return ok({ kind: "cross-runtime-validation", targets, insight: insight.value });
+}
+
+async function generateSharedBattery(
+  input: CrossRuntimeValidationInput,
+  gateway: ModelGateway,
+  tag: AccountingTag,
+): Promise<Result<readonly PromptCase[], DomainError>> {
+  for (const target of input.targets) {
+    const generated = await generatePromptBattery(input.skill, gateway, tag, target.modelSelection);
+    if (!isErr(generated)) return generated;
+    if (generated.error.tag === "model_unavailable" || generated.error.tag === "not_configured") {
+      continue;
+    }
+    return err(generated.error);
+  }
+  return ok([]);
 }
 
 function firstConfiguredTarget(
@@ -74,12 +98,14 @@ async function runTarget(
   input: CrossRuntimeValidationInput,
   gateway: ModelGateway,
   target: RuntimeTarget,
+  tag: AccountingTag,
+  battery: readonly PromptCase[],
 ): Promise<Result<RuntimeTargetResult, DomainError>> {
   const result = await runTriggeringEval(
     input.skill,
     gateway,
-    { kind: "account", userId: input.skill.userId, capability: "triggering-eval" },
-    { target: target.modelSelection },
+    tag,
+    { target: target.modelSelection, battery },
   );
 
   if (isErr(result)) {
@@ -100,6 +126,10 @@ async function runTarget(
     status: result.value.passed ? "passed" : "failed",
     cases: result.value.cases,
   });
+}
+
+function triggeringEvalTag(input: CrossRuntimeValidationInput): AccountingTag {
+  return { kind: "account", userId: input.skill.userId, capability: "triggering-eval" };
 }
 
 function insightPrompt(name: string, targets: readonly RuntimeTargetResult[]): string {

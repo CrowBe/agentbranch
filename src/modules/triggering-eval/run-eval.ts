@@ -6,7 +6,7 @@ import { insightSchema } from "@/modules/skill-analysis";
 import { ok, isErr, type Result, type DomainError } from "@/shared";
 import { generatePromptBattery } from "./prompt-battery";
 import { distractorLibrary } from "./distractor-library";
-import type { CaseResult, TriggeringResult } from "./triggering-eval.types";
+import type { CaseResult, PromptCase, TriggeringResult } from "./triggering-eval.types";
 
 const INSIGHT_CASE_TEXT_MAX = 240;
 
@@ -31,9 +31,12 @@ export async function runTriggeringEval(
       readonly result: CaseResult;
     }) => void | Promise<void>;
     readonly target?: ModelSelection;
+    readonly battery?: readonly PromptCase[];
   } = {},
 ): Promise<Result<TriggeringResult, DomainError>> {
-  const battery = await generatePromptBattery(skill, gateway, tag, options.target);
+  const battery = options.battery
+    ? ok(options.battery)
+    : await generatePromptBattery(skill, gateway, tag, options.target);
   if (isErr(battery)) return battery;
 
   const candidate = candidateLabel(skill);
