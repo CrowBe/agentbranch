@@ -167,6 +167,18 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **harness-version** | `currentHarnessManifest`, `hashHarnessManifest`, manifest/version types | `HarnessVersionRepository` | real |
 | **auth** | `AuthPort`, `AuthIdentity` | `AuthPort` | port |
 
+**Designed next — harness improvement loop (admin).** ARCHITECTURE §9 defines the
+admin loop that reads a cohort of stored evaluation records and emits a
+harness-recommendation report. It is a future seam capability whose `Input` is
+not a `Skill`: the input is an aggregate cohort of `eval_runs` / `test_runs`
+pinned by skill version and harness version. If the recommendation method is
+model-written, it is an evaluation capability (`defineEvaluation`) and spends
+with a `platform` accounting tag; if it is static correlation, it is an analysis
+capability. The one new persistence boundary is an admin-only aggregate-read
+port over evaluation records, implemented in both Prisma and memory adapters and
+gated through `isAdmin` before any route or surface can call it. The default read
+model returns outcomes/features rather than raw skill or prompt content.
+
 **Stub boundaries (where the real interface is set but behaviour is a
 placeholder):**
 
