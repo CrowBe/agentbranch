@@ -3,6 +3,7 @@ import { runTriggeringEval, generatePromptBattery } from "./index";
 import { buildPromptBattery } from "./prompt-battery";
 import { makeSkill, parseSkillMd, type Skill } from "@/modules/skill";
 import type { GenerateInput, ModelGateway } from "@/modules/model-gateway";
+import type { EvaluationRunEvent } from "@/modules/skill-analysis";
 import { domainError, err, ok, unwrap, SkillId, UserId } from "@/shared";
 
 function skillFor(description: string): Skill {
@@ -120,27 +121,29 @@ describe("triggering eval", () => {
     expect(typeof result.insight.summary).toBe("string");
   });
 
-  it("emits per-case progress while evaluating the battery", async () => {
-    const progress: { index: number; total: number; prompt: string; pass: boolean }[] = [];
+  it("reports its method through the observer: battery progress, then per-case events", async () => {
+    const events: EvaluationRunEvent[] = [];
     const result = unwrap(
       await runTriggeringEval(
         skillFor("Schedule meetings on the calendar."),
         fakeGateway(),
         TAG,
-        {
-          onCase: ({ index, total, result: item }) => {
-            progress.push({ index, total, prompt: item.prompt, pass: item.pass });
-          },
-        },
+        { observer: (event) => events.push(event) },
       ),
     );
 
-    expect(progress).toHaveLength(result.cases.length);
-    expect(progress[0]).toEqual({
+    expect(events[0]).toEqual({ kind: "progress", message: "Building prompt battery." });
+    const cases = events.filter((e) => e.kind === "case");
+    expect(cases).toHaveLength(result.cases.length);
+    expect(cases[0]).toEqual({
+      kind: "case",
       index: 1,
       total: result.cases.length,
       prompt: result.cases[0]?.prompt,
+      expected: result.cases[0]?.expected,
+      actual: result.cases[0]?.actual,
       pass: result.cases[0]?.pass,
+      rationale: result.cases[0]?.rationale,
     });
   });
 

@@ -103,9 +103,12 @@ today; the generic `Input` slot lets future equipment primitives reuse the seam.
   `Result` (some analyzers call the model).
 - **`Evaluator<Input, A>`** — run the input through the model and emit a result
   artifact. Owns its *method* (builds its own scenario / battery / distractors);
-  the **model gateway** is handed in (`evaluate(input, gateway)`). Composes the
-  gateway's `classify` / `runAgent` / `generate` primitives; never touches the
-  key or token accounting.
+  the **model gateway** is handed in (`evaluate(input, gateway, observer?)`).
+  Composes the gateway's `classify` / `runAgent` / `generate` primitives; never
+  touches the key or token accounting. The optional **observer** receives
+  `EvaluationRunEvent`s (`progress` | `case`) as the method unfolds — a domain
+  union, mapped onto the SSE envelope at the server (the `BuildLoopEvent`
+  pattern).
 - **`Renderer<A, S>`** — pure, synchronous: artifact → one surface. Swapping the
   renderer is how a capability gets richer (Mermaid → React Flow; raw result →
   Insights).
@@ -133,8 +136,15 @@ today; the generic `Input` slot lets future equipment primitives reuse the seam.
 
 Run an analysis: `runCapability(heroCapability, "rendered", skill)` →
 `Result<RenderedDoc, DomainError>`. Run an evaluation:
-`runEvaluation(triggeringEvalCapability, "insights", skill, gateway)` →
-`Result<Insight, DomainError>` (fails `model_unavailable` offline).
+`runEvaluation(triggeringEvalCapability, "insights", skill, gateway, observer?)`
+→ `Result<{ artifact, body }, DomainError>` (fails `model_unavailable` offline).
+The outcome carries the raw Evaluation result alongside the rendered surface —
+recording and eval feedback need the artifact, and handing it back here is what
+keeps callers on this interface instead of reaching for the evaluator. The seam
+stays persistence-free (a result is *ephemeral* here, CONTEXT.md); the
+choreography around a production run — pin the version, stamp the harness
+version, record the Evaluation record, shape the HTTP response — lives once in
+the server's recorded-evaluation driver (`src/server/evaluation-run.ts`, §4).
 
 ---
 
@@ -219,6 +229,15 @@ concern (ARCHITECTURE §2 *Eval feedback*, §4 *Eval → build feedback*).
   `import "server-only"`.
 - `build-stream.ts` — `buildLoopResponse(input, gateway, skills, userId)`: drives
   `runBuildLoop` and encodes events as an SSE `Response`.
+- `evaluation-run.ts` — `evaluationResponse({kind, surface, sse, skill, pin, deps})`:
+  the recorded-evaluation driver both evaluation routes share. Runs the seam's
+  `runEvaluation`, then the persistence choreography — resolve the pinned
+  version, stamp the harness version, record via a kind-keyed dispatch
+  (`test-run` → `TestRunRepository`, `triggering-eval` → `EvalRunRepository`,
+  exhaustively checked) — and shapes the response: 503 offline *before* any
+  stream opens, SSE (observer events → `EvaluationEvent`) when asked, JSON
+  otherwise. Ports are handed in, so the whole choreography is tested against
+  memory adapters.
 
 ### Presentation (`src/app`, `src/components`)
 
@@ -227,8 +246,9 @@ concern (ARCHITECTURE §2 *Eval feedback*, §4 *Eval → build feedback*).
 - `app/api/build/route.ts` — auth → stream; the **model gateway** gates the
   `build` cap and resolves the model through the router (the route never touches
   the raw model or keys).
-- `app/api/{test-run,triggering-eval}/route.ts` — auth → evaluation stream when
-  requested; records runs against the current skill version.
+- `app/api/{test-run,triggering-eval}/route.ts` — thin HTTP adapters: auth →
+  parse → one call into the recorded-evaluation driver (`evaluation-run.ts`),
+  identical except for the capability they name.
 - `app/api/model-router/route.ts` — **admin-gated** (the selection is
   instance-wide): GET the secret-free router snapshot, POST to switch the active
   provider/model or store/clear a bring-your-own key. With Clerk auth on, only an
@@ -285,7 +305,7 @@ Almost every change is one of these. If a task fits neither, surface it.
    `container.ts` behind a config flag (with a memory/stub fallback so the app
    still boots offline).
 
-**Worked example — branching iteration (landed, [#128](https://github.com/CrowBe/agentbranch/issues/128); ARCHITECTURE §9.3).** The draft/main/promote substrate is a rule-2 change, not rule-1: it changes *which* `SkillSource` the seam runs against, never the seam's `artifact → render` shape, so no new capability/`ArtifactKind`/renderer. It extends the **existing `SkillRepository` port** (`skill.repository.ts`) with branch/promote reads and writes (`createBranch`/`saveToBranch`/`listBranches`/`listBranchVersions`/`promoteBranch`/`discardBranch`) — implemented in *both* the Prisma and memory adapters, tested as one contract at that seam — and adds **one new retention port** (`SkillRetentionRepository`, daily cleanup off the write path), wired in `container.ts` with a memory fallback and driven by a Vercel Cron route (`app/api/cron/retention`). No new domain module, so §4's table keeps the same rows (only the skill row's port list grew). The **evaluate-on-draft + promote surface** riding on it ([#129](https://github.com/CrowBe/agentbranch/issues/129)) is likewise not a rule-1 change: thin route handlers expose the branch/promote methods (`app/api/skills/[id]/branches/…`) and the app shell holds the draft-vs-main presentation state. Evaluation-on-draft is a version-*pin* change in the eval routes (a shared `resolvePinnedVersionId` keyed on `branchId`), not a new renderer — the seam's `artifact → render` tail is untouched, exactly as ARCHITECTURE §9.3 predicted.
+**Worked example — branching iteration (landed, [#128](https://github.com/CrowBe/agentbranch/issues/128); ARCHITECTURE §9.3).** The draft/main/promote substrate is a rule-2 change, not rule-1: it changes *which* `SkillSource` the seam runs against, never the seam's `artifact → render` shape, so no new capability/`ArtifactKind`/renderer. It extends the **existing `SkillRepository` port** (`skill.repository.ts`) with branch/promote reads and writes (`createBranch`/`saveToBranch`/`listBranches`/`listBranchVersions`/`promoteBranch`/`discardBranch`) — implemented in *both* the Prisma and memory adapters, tested as one contract at that seam — and adds **one new retention port** (`SkillRetentionRepository`, daily cleanup off the write path), wired in `container.ts` with a memory fallback and driven by a Vercel Cron route (`app/api/cron/retention`). No new domain module, so §4's table keeps the same rows (only the skill row's port list grew). The **evaluate-on-draft + promote surface** riding on it ([#129](https://github.com/CrowBe/agentbranch/issues/129)) is likewise not a rule-1 change: thin route handlers expose the branch/promote methods (`app/api/skills/[id]/branches/…`) and the app shell holds the draft-vs-main presentation state. Evaluation-on-draft is a version-*pin* change (the evaluation-run driver's `resolvePinnedVersionId`, keyed on `branchId`), not a new renderer — the seam's `artifact → render` tail is untouched, exactly as ARCHITECTURE §9.3 predicted.
 
 **Other conventions**
 

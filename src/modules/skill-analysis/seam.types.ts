@@ -74,6 +74,40 @@ export interface Analyzer<Input, A extends Artifact> {
 }
 
 /**
+ * What an evaluation reports while it runs. Evaluators emit these through the
+ * optional observer as their method unfolds — building their world, checking a
+ * case — and the server maps them onto the SSE envelope at the edge. Mirrors
+ * the build loop's `BuildLoopEvent` pattern: a domain union here, wire format
+ * at the boundary.
+ */
+export type EvaluationRunEvent =
+  | { readonly kind: "progress"; readonly message: string }
+  | {
+      readonly kind: "case";
+      readonly index: number;
+      readonly total: number;
+      readonly prompt: string;
+      readonly expected: "fire" | "silent";
+      readonly actual: "fire" | "silent";
+      readonly pass: boolean;
+      readonly rationale: string;
+    };
+
+/** Receives run events as an evaluation unfolds. Optional everywhere — an
+ * evaluation runs identically unobserved. */
+export type EvaluationObserver = (event: EvaluationRunEvent) => void;
+
+/**
+ * What `runEvaluation` hands back: the raw Evaluation result (recording, eval
+ * feedback) alongside the rendered surface (display). One crossing of the seam
+ * serves both — callers never reach past the interface for the artifact.
+ */
+export type EvaluationOutcome<A extends Artifact, Body> = {
+  readonly artifact: A;
+  readonly body: Body;
+};
+
+/**
  * Step one of an EVALUATION capability: run the input through a model and emit
  * a structured result. Owns its *method* — it builds its own conditions
  * (scenario / distractors / battery) — but is handed its *resource*: model
@@ -87,7 +121,11 @@ export interface Analyzer<Input, A extends Artifact> {
  */
 export interface Evaluator<Input, A extends Artifact> {
   readonly kind: A["kind"];
-  evaluate(input: Input, gateway: ModelGateway): Promise<Result<A, DomainError>>;
+  evaluate(
+    input: Input,
+    gateway: ModelGateway,
+    observer?: EvaluationObserver,
+  ): Promise<Result<A, DomainError>>;
 }
 
 /**
