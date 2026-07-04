@@ -2,7 +2,7 @@ import type { Skill } from "@/modules/skill";
 import { skillName, skillDescription } from "@/modules/skill";
 import type { ModelGateway, AccountingTag } from "@/modules/model-gateway";
 import type { ModelSelection } from "@/modules/model-router";
-import { insightSchema } from "@/modules/skill-analysis";
+import { insightSchema, type EvaluationObserver } from "@/modules/skill-analysis";
 import { ok, isErr, type Result, type DomainError } from "@/shared";
 import { generatePromptBattery } from "./prompt-battery";
 import { distractorLibrary } from "./distractor-library";
@@ -25,18 +25,19 @@ export async function runTriggeringEval(
   gateway: ModelGateway,
   tag: AccountingTag,
   options: {
-    readonly onCase?: (event: {
-      readonly index: number;
-      readonly total: number;
-      readonly result: CaseResult;
-    }) => void | Promise<void>;
+    /** Reports the method as it unfolds (progress + per-case results). */
+    readonly observer?: EvaluationObserver;
     readonly target?: ModelSelection;
     readonly battery?: readonly PromptCase[];
   } = {},
 ): Promise<Result<TriggeringResult, DomainError>> {
-  const battery = options.battery
-    ? ok(options.battery)
-    : await generatePromptBattery(skill, gateway, tag, options.target);
+  let battery: Result<readonly PromptCase[], DomainError>;
+  if (options.battery) {
+    battery = ok(options.battery);
+  } else {
+    options.observer?.({ kind: "progress", message: "Building prompt battery." });
+    battery = await generatePromptBattery(skill, gateway, tag, options.target);
+  }
   if (isErr(battery)) return battery;
 
   const candidate = candidateLabel(skill);
@@ -60,7 +61,16 @@ export async function runTriggeringEval(
       rationale: selected.value.rationale,
     };
     cases.push(result);
-    await options.onCase?.({ index: index + 1, total: battery.value.length, result });
+    options.observer?.({
+      kind: "case",
+      index: index + 1,
+      total: battery.value.length,
+      prompt: result.prompt,
+      expected: result.expected,
+      actual: result.actual,
+      pass: result.pass,
+      rationale: result.rationale,
+    });
   }
   const passed = cases.every((c) => c.pass);
 

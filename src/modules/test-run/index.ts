@@ -42,7 +42,7 @@ export type { TestRunRepository } from "./test-run.repository";
 
 const testRunEvaluator: Evaluator<Skill, TestRunResult> = {
   kind: "test-run",
-  evaluate: (skill, gateway) =>
+  evaluate: (skill, gateway, observer) =>
     // A test run is user-attributable work → `account` tag, declaring the
     // `test-run` capability so usage gates it against the right cap. The
     // evaluator builds its own scenario + registry inside executeSkill (method).
@@ -50,6 +50,7 @@ const testRunEvaluator: Evaluator<Skill, TestRunResult> = {
       skill,
       gateway,
       tag: { kind: "account", userId: skill.userId, capability: "test-run" },
+      observer,
     }),
 };
 

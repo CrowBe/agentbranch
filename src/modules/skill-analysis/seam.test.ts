@@ -5,7 +5,13 @@ import {
   runCapability,
   runEvaluation,
 } from "./seam";
-import type { Artifact, Analyzer, Evaluator, Renderer } from "./seam.types";
+import type {
+  Artifact,
+  Analyzer,
+  Evaluator,
+  EvaluationRunEvent,
+  Renderer,
+} from "./seam.types";
 import type { ModelGateway } from "@/modules/model-gateway";
 import { makeSkill, parseSkillMd, type Skill } from "@/modules/skill";
 import { ok, err, domainError, isErr, unwrap, SkillId, UserId } from "@/shared";
@@ -120,9 +126,31 @@ describe("the seam — evaluation", () => {
     expect(cap.mode).toBe("evaluation");
   });
 
-  it("runs evaluate → render when a model is available", async () => {
+  it("runs evaluate → render when a model is available, handing back artifact + surface", async () => {
     const result = await runEvaluation(cap, "insights", fixtureSkill(), fakeGateway(true));
-    expect(unwrap(result)).toBe("Fires on the right prompt");
+    const outcome = unwrap(result);
+    expect(outcome.body).toBe("Fires on the right prompt");
+    // The raw Evaluation result rides along — recording and eval feedback need
+    // it, and handing it back here is what keeps callers on this interface.
+    expect(outcome.artifact).toEqual({ kind: "triggering-eval", fired: true });
+  });
+
+  it("threads the observer through to the evaluator", async () => {
+    const events: EvaluationRunEvent[] = [];
+    const observing = defineEvaluation({
+      name: "observed",
+      evaluator: {
+        kind: "triggering-eval",
+        async evaluate(_skill, _gateway, observer) {
+          observer?.({ kind: "progress", message: "Building the world." });
+          return ok({ kind: "triggering-eval", fired: true } satisfies Verdict);
+        },
+      } satisfies Evaluator<Skill, Verdict>,
+      renderers: { insights: verdictInsights },
+    });
+
+    unwrap(await runEvaluation(observing, "insights", fixtureSkill(), fakeGateway(true), (e) => events.push(e)));
+    expect(events).toEqual([{ kind: "progress", message: "Building the world." }]);
   });
 
   it("fails model_unavailable offline — guarded once in the seam", async () => {

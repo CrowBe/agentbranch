@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Skill } from "@/modules/skill";
 import { skillDescription, skillName } from "@/modules/skill";
 import type { ModelGateway, AccountingTag, GatewayTool } from "@/modules/model-gateway";
-import { insightSchema } from "@/modules/skill-analysis";
+import { insightSchema, type EvaluationObserver } from "@/modules/skill-analysis";
 import { ok, isErr, type Result, type DomainError } from "@/shared";
 import { createMockToolRegistry, defaultMockToolRegistry } from "./mock-tool-registry";
 import type {
@@ -30,11 +30,14 @@ export async function executeSkill(input: {
   skill: Skill;
   gateway: ModelGateway;
   tag: AccountingTag;
+  /** Reports the method as it unfolds (building the mock world). */
+  observer?: EvaluationObserver;
   /** Optional overrides; both default to the evaluator's inferred world. */
   scenario?: Scenario;
   registry?: MockToolRegistry;
 }): Promise<Result<TestRunResult, DomainError>> {
   const { skill, gateway, tag } = input;
+  input.observer?.({ kind: "progress", message: "Preparing mock world." });
   const world =
     input.registry && input.scenario
       ? ok({ registry: input.registry, scenario: input.scenario })
