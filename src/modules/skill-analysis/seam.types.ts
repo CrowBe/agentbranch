@@ -21,7 +21,8 @@ export type ArtifactKind =
   | "lint"
   | "test-run"
   | "triggering-eval"
-  | "cross-runtime-validation";
+  | "cross-runtime-validation"
+  | "harness-recommendation";
 
 /**
  * The plain-language interpretation of an Evaluation result (CONTEXT.md →
