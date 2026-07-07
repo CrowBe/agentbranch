@@ -1,7 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { executeSkill, defaultMockToolRegistry } from "./index";
+import {
+  computeContractChecks,
+  executeSkill,
+  defaultMockToolRegistry,
+  testRunCapability,
+} from "./index";
 import { makeSkill, parseSkillMd, type Skill } from "@/modules/skill";
 import type { ModelGateway, AgentStep, GenerateInput } from "@/modules/model-gateway";
+import { parseResponseSchema } from "@/modules/response-schema";
+import { parseToolContract } from "@/modules/tool-contract";
 import { ok, unwrap, SkillId, UserId } from "@/shared";
 
 function fixtureSkill(id = "s1"): Skill {
@@ -165,5 +172,85 @@ describe("test run", () => {
     const insightPrompt = calls.generate.at(-1)?.prompt ?? "";
     expect(insightPrompt).not.toContain(longText);
     expect(insightPrompt).toContain(longText.slice(0, 120));
+  });
+});
+
+const INVOICE_SCHEMA_RAW = JSON.stringify({
+  title: "invoice-summary",
+  description: "Summary of one invoice.",
+  type: "object",
+  required: ["invoiceId"],
+  properties: { invoiceId: { type: "string", description: "The invoice id." } },
+});
+
+const REMINDER_CONTRACT_RAW = JSON.stringify({
+  name: "send_invoice_reminder",
+  description: "Send a payment reminder for one overdue invoice.",
+  input: {
+    type: "object",
+    required: ["invoiceId"],
+    properties: { invoiceId: { type: "string", description: "The invoice to remind about." } },
+  },
+  output: { $ref: "invoice-summary" },
+});
+
+describe("relational test run (Skill × Tool contract bundle)", () => {
+  const bundle = {
+    toolContracts: [unwrap(parseToolContract(REMINDER_CONTRACT_RAW))],
+    responseSchemas: [unwrap(parseResponseSchema(INVOICE_SCHEMA_RAW))],
+  };
+
+  it("drives the mock-tool registry from the contract and validates each call", async () => {
+    const calls: { generate: GenerateInput<unknown>[] } = { generate: [] };
+    const result = unwrap(
+      await executeSkill({
+        skill: fixtureSkill("s-bundle"),
+        gateway: fakeGateway(calls),
+        tag: TAG,
+        scenario: { prompt: "Chase the overdue invoice.", seedData: {} },
+        ...bundle,
+      }),
+    );
+
+    // The registry came from the contract, not the inferred world.
+    expect(
+      result.transcript.some((s) => s.kind === "tool-call" && s.tool === "send_invoice_reminder"),
+    ).toBe(true);
+
+    // The fake gateway calls tools with `{}` — missing the required argument.
+    const check = result.contractChecks.find((c) => c.tool === "send_invoice_reminder");
+    expect(check?.called).toBe(true);
+    expect(check?.calls[0]?.argumentIssues[0]).toContain("missing required property `invoiceId`");
+    // The mock output was generated from the referenced response schema.
+    expect(check?.calls[0]?.outputIssues).toEqual([]);
+
+    // The deterministic checks reach the insight prompt.
+    const insightPrompt = calls.generate.at(-1)?.prompt ?? "";
+    expect(insightPrompt).toContain("Tool-contract checks");
+
+    // …and the Insights renderer surfaces them in `watch` regardless of the model.
+    const insights = testRunCapability.renderers.insights.render(result);
+    expect(insights.watch.join("\n")).toContain("did not match the contract's input schema");
+  });
+
+  it("reports a contract whose tool the skill never called", () => {
+    const checks = computeContractChecks([], bundle.toolContracts, bundle.responseSchemas);
+    expect(checks).toEqual([
+      { tool: "send_invoice_reminder", called: false, calls: [] },
+    ]);
+  });
+
+  it("stays a plain single-primitive run without contracts", async () => {
+    const result = unwrap(
+      await executeSkill({
+        skill: fixtureSkill("s-plain"),
+        gateway: fakeGateway(),
+        tag: TAG,
+        scenario: { prompt: "Check the inbox.", seedData: {} },
+        registry: defaultMockToolRegistry(),
+      }),
+    );
+    expect(result.contractChecks).toEqual([]);
+    expect(testRunCapability.renderers.insights.render(result)).toEqual(result.insight);
   });
 });

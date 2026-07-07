@@ -22,12 +22,14 @@ export function InteractionPanel({
   mode = "build",
   onSend,
   onImport,
+  onEquipment,
 }: {
   entries: readonly InteractionEntry[];
   busy?: boolean;
-  mode?: "build" | "import" | "skills" | "history";
+  mode?: "build" | "import" | "skills" | "equipment" | "history";
   onSend: (message: string) => void;
   onImport?: (raw: string) => void;
+  onEquipment?: (raw: string) => void;
 }) {
   const [value, setValue] = useState("");
 
@@ -37,6 +39,8 @@ export function InteractionPanel({
     if (busy) return;
     if (mode === "import") {
       onImport?.(trimmed);
+    } else if (mode === "equipment") {
+      onEquipment?.(trimmed);
     } else {
       onSend(trimmed);
     }
@@ -44,7 +48,7 @@ export function InteractionPanel({
   };
 
   const copy = copyForMode(mode);
-  const acceptsInput = mode === "build" || mode === "import";
+  const acceptsInput = mode === "build" || mode === "import" || mode === "equipment";
 
   return (
     <aside
@@ -109,7 +113,7 @@ function InteractionEntryView({ entry }: { entry: InteractionEntry }) {
   return <p className={className}>{entry.label}</p>;
 }
 
-function copyForMode(mode: "build" | "import" | "skills" | "history"): {
+function copyForMode(mode: "build" | "import" | "skills" | "equipment" | "history"): {
   title: string;
   empty: string;
   placeholder: string;
@@ -117,6 +121,17 @@ function copyForMode(mode: "build" | "import" | "skills" | "history"): {
   busy: string;
   hint?: string;
 } {
+  if (mode === "equipment") {
+    return {
+      title: "Equipment",
+      empty:
+        "Paste a response schema (a JSON Schema document) or a tool contract to quality-check it. Checked tool contracts run with your next test run.",
+      placeholder:
+        '{\n  "name": "send_invoice_reminder",\n  "description": "Send a payment reminder.",\n  "input": { "type": "object" }\n}',
+      button: "Check equipment",
+      busy: "Checking...",
+    };
+  }
   if (mode === "import") {
     return {
       title: "Import a skill",

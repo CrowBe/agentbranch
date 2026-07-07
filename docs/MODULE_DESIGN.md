@@ -94,10 +94,12 @@ Both shapes share one `artifact → render` tail and differ only at the head, as
 the diagram shows: **analysis** wraps an `Analyzer` (static, offline);
 **evaluation** wraps an `Evaluator` (runs through the model gateway, can fail
 `model_unavailable`). Why the split exists and which capabilities are which is
-ARCHITECTURE §3.1 — this section is the mechanics. Concrete inputs are Skills
-today; the generic `Input` slot lets future equipment primitives reuse the seam.
+ARCHITECTURE §3.1 — this section is the mechanics. The generic `Input` slot is in use:
+most capabilities read a `Skill`, the equipment primitives (`response-schema`,
+`tool-contract`) read their own source models, and the test run reads a
+`TestRunInput` bundle (ARCHITECTURE §9.2).
 
-- **`ArtifactKind`** — closed union of valid kind strings (`"hero" | "skill-ir" | "export" | "lint" | "test-run" | "triggering-eval"`). Add a new member here when a new capability needs its own artifact type. Free-string kinds are a compile error.
+- **`ArtifactKind`** — closed union of valid kind strings (`"hero" | "skill-ir" | "export" | "lint" | "response-schema-lint" | "tool-contract-lint" | "test-run" | "triggering-eval" | "cross-runtime-validation" | "harness-recommendation"`). Add a new member here when a new capability needs its own artifact type. Free-string kinds are a compile error.
 - **`Artifact<K>`** — the base artifact type; `K` must be an `ArtifactKind`. Each capability extends this with its own fields.
 - **`Analyzer<Input, A>`** — read an input, emit a structured artifact. Async +
   `Result` (some analyzers call the model).
@@ -131,7 +133,9 @@ today; the generic `Input` slot lets future equipment primitives reuse the seam.
 | Visualise | analysis | `visualise` | IR extraction | `mermaid` | extraction model-backed (deterministic offline fallback); render real |
 | Export | analysis | `export` | instruction intent | `claude` (manifest) | real |
 | Lint | analysis | `lint` | frontmatter + body + refs quality rules + static policy rules | `insights`, `breakdown` | real |
-| Test run | evaluation | `test-run` | composes `gateway.runAgent` + mock-tool registry | `insights`, `breakdown` | run + world generation real (scenario + mock tools generated, cached); email mock = offline fallback |
+| Response schema quality | analysis | `response-schema` | JSON Schema structure + smell rules (pure, zero tokens) | `insights`, `breakdown` | real |
+| Tool contract quality | analysis | `tool-contract` | I/O typing, description/example quality, failure modes, safety notes (pure) | `insights`, `breakdown` | real |
+| Test run | evaluation | `test-run` | composes `gateway.runAgent` + mock-tool registry over a `TestRunInput` bundle; contracts drive the mocks + per-call validation | `insights`, `breakdown` | run + world generation real (scenario + mock tools generated, cached); contract-driven mocks + checks real; email mock = offline fallback |
 | Triggering eval | evaluation | `triggering-eval` | composes `gateway.classify` over the field | `insights`, `breakdown` | run + battery generation real (cached); distractor library a static v1 seed |
 | Harness recommendation | analysis | `harness-recommendation` | Tier-1 correlation over a corpus cohort (fired lint rules × eval outcomes) | `report` | real; the first capability whose `Input` is not a `Skill` |
 
@@ -165,10 +169,12 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **skill-analysis** | `defineCapability`, `runCapability`, `Analyzer/Renderer/Capability/SourceSpan/Artifact` | — | real |
 | **hero** | `heroCapability`, `HeroView`, doc types | — | real |
 | **visualise** | `visualiseCapability`, IR + Mermaid types | — | extraction model-backed · deterministic offline fallback · render real |
-| **test-run** | `testRunCapability`, `executeSkill`, `createMockToolRegistry`, `defaultMockToolRegistry`, `emailMockTool`, `toTestRunAnalysisRecord` | `TestRunRepository` | evaluation capability · run + world generation real · email mock = offline fallback |
+| **test-run** | `testRunCapability`, `executeSkill`, `createMockToolRegistry`, `defaultMockToolRegistry`, `emailMockTool`, `registryFromContracts`, `computeContractChecks`, `contractCheckIssues`, `toTestRunAnalysisRecord` | `TestRunRepository` | evaluation capability over a `TestRunInput` bundle · run + world generation real · contract-driven mocks + per-call validation real · email mock = offline fallback |
 | **triggering-eval** | `triggeringEvalCapability`, `runTriggeringEval`, `runBatteryCases`, `generatePromptBattery`, `distractorLibrary`, `toEvalRunAnalysisRecord` | `EvalRunRepository` | evaluation capability · run + battery generation real · adversarial negative battery · distractor library static v1 seed |
 | **export** | `exportCapability`, manifest types | — | real |
-| **lint** | `lintCapability`, `LintReport`, `LintFinding` | — | real (quality + pure policy rules) |
+| **lint** | `lintCapability`, `summarizeLintFindings`, `LintReport`, `LintFinding` | — | real (quality + pure policy rules; `summarizeLintFindings` is the shared scorer every LintReport-shaped artifact uses) |
+| **response-schema** | `responseSchemaCapability`, `parseResponseSchema`, `serializeResponseSchema`, `responseSchemaName`, `schemaShapeFindings`, `validateAgainstSchema`, `exampleValueForSchema` + types | — | real (first equipment primitive: lossless source model + pure lint + offline schema-subset validation) |
+| **tool-contract** | `toolContractCapability`, `parseToolContract`, `serializeToolContract` + types | — | real (second equipment primitive: lossless source model + pure lint; I/O `$ref`s response schemas) |
 | **skill-import** | `SkillImportFetcher`, `SkillImportFetchError` | `SkillImportFetcher` | port |
 | **portability** | `portabilityCapability`, `runCrossRuntimeValidation`, runtime-target/result types | — | real cross-runtime validation engine |
 | **build-loop** | `runBuildLoop`, `buildTools`, `BuildToolName`, `BuildLoopEvent`, `formatTestRunFeedback`, `formatTriggeringEvalFeedback` | — (consumes `ModelGateway`) | real |
@@ -255,7 +261,13 @@ concern (ARCHITECTURE §2 *Eval feedback*, §4 *Eval → build feedback*).
   the raw model or keys).
 - `app/api/{test-run,triggering-eval}/route.ts` — thin HTTP adapters: auth →
   parse → one call into the recorded-evaluation driver (`evaluation-run.ts`),
-  identical except for the capability they name.
+  identical except for the capability they name. The test-run route also
+  accepts the optional bundle (`toolContracts` / `responseSchemas` as raw JSON
+  documents), parsed through the primitives' source models before the run.
+- `app/api/{response-schema,tool-contract}/route.ts` — the equipment
+  primitives' quality checks: auth → parse the raw document through the
+  module's source model → `runCapability` (pure, offline) → Insights or
+  Breakdown JSON.
 - `app/api/model-router/route.ts` — **admin-gated** (the selection is
   instance-wide): GET the secret-free router snapshot, POST to switch the active
   provider/model or store/clear a bring-your-own key. With Clerk auth on, only an
@@ -277,6 +289,10 @@ concern (ARCHITECTURE §2 *Eval feedback*, §4 *Eval → build feedback*).
 - `components/` — `app-shell`, `top-bar`, `side-rail`, `hero-panel`,
   `view-toggle`, `tool-chips`, `interaction-panel`, `model-console` (the
   provider/model + auth overlay, opened from the rail), `ui/{chip,button,pill}`.
+  The interaction panel's Equipment mode (side-rail entry) checks pasted
+  response schemas / tool contracts against the two routes above and keeps them
+  for the session; the app shell bundles kept contracts into the next test run,
+  and the breakdown panel shows the per-call contract checks.
 
 ---
 

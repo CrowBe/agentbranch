@@ -4,14 +4,17 @@ import {
   type EvaluationCapability,
   type EvaluationObserver,
 } from "@/modules/skill-analysis";
+import type { ResponseSchemaSource } from "@/modules/response-schema";
 import type { Skill, SkillRepository, SkillSource } from "@/modules/skill";
 import type { ModelGateway } from "@/modules/model-gateway";
 import type { HarnessVersion } from "@/modules/harness-version";
 import {
   testRunCapability,
+  type TestRunInput,
   type TestRunRepository,
   type TestRunResult,
 } from "@/modules/test-run";
+import type { ToolContractSource } from "@/modules/tool-contract";
 import {
   triggeringEvalCapability,
   type EvalRunRepository,
@@ -63,6 +66,16 @@ export type EvaluationPin = {
   readonly branchId: string | null;
 };
 
+/**
+ * The equipment half of a test-run bundle (ARCHITECTURE §9.2): Tool contracts
+ * to run the skill against plus the Response schemas they reference. Ignored
+ * by capabilities whose input is the Skill alone (triggering eval).
+ */
+export type EvaluationEquipment = {
+  readonly toolContracts?: readonly ToolContractSource[];
+  readonly responseSchemas?: readonly ResponseSchemaSource[];
+};
+
 /** The ports the run needs, handed in so tests drive it with memory adapters. */
 export type EvaluationRunDeps = {
   readonly gateway: ModelGateway;
@@ -96,8 +109,9 @@ export async function evaluationResponse(input: {
   readonly skill: Skill;
   readonly pin: EvaluationPin;
   readonly deps: EvaluationRunDeps;
+  readonly equipment?: EvaluationEquipment;
 }): Promise<Response> {
-  const { kind, surface, skill, pin, deps } = input;
+  const { kind, surface, skill, pin, deps, equipment } = input;
 
   if (!deps.gateway.hasModel) {
     return domainErrorResponse(
@@ -108,9 +122,9 @@ export async function evaluationResponse(input: {
     );
   }
 
-  if (input.sse) return evaluationStreamResponse(kind, surface, skill, pin, deps);
+  if (input.sse) return evaluationStreamResponse(kind, surface, skill, pin, deps, equipment);
 
-  const outcome = await runRecordedEvaluation(kind, surface, skill, pin, deps);
+  const outcome = await runRecordedEvaluation(kind, surface, skill, pin, deps, undefined, equipment);
   if (isErr(outcome)) return domainErrorResponse(outcome.error);
   return Response.json(outcome.value.body);
 }
@@ -127,12 +141,13 @@ export async function runRecordedEvaluation(
   pin: EvaluationPin,
   deps: EvaluationRunDeps,
   observer?: EvaluationObserver,
+  equipment?: EvaluationEquipment,
 ): Promise<Result<RecordedEvaluation, DomainError>> {
   switch (kind) {
     case "test-run":
-      return runEntry(testRunEntry, surface, skill, pin, deps, observer);
+      return runEntry(testRunEntry, surface, skill, pin, deps, observer, equipment);
     case "triggering-eval":
-      return runEntry(triggeringEvalEntry, surface, skill, pin, deps, observer);
+      return runEntry(triggeringEvalEntry, surface, skill, pin, deps, observer, equipment);
     default:
       return unreachable(kind);
   }
@@ -194,10 +209,13 @@ type RecordBase = {
   readonly harnessVersionId: HarnessVersionId;
 };
 
-/** One arm of the kind-keyed dispatch: which capability to run, and how its
- * artifact becomes the capability's Evaluation record row. */
-type EvaluationEntry<A extends Artifact> = {
-  readonly capability: EvaluationCapability<Skill, A, Record<EvaluationSurface, unknown>>;
+/** One arm of the kind-keyed dispatch: which capability to run, how the
+ * request's skill (+ equipment) becomes the capability's `Input` — the seam's
+ * generic slot at work — and how its artifact becomes the capability's
+ * Evaluation record row. */
+type EvaluationEntry<Input, A extends Artifact> = {
+  readonly capability: EvaluationCapability<Input, A, Record<EvaluationSurface, unknown>>;
+  input(skill: Skill, equipment: EvaluationEquipment | undefined): Input;
   record(
     deps: EvaluationRunDeps,
     base: RecordBase,
@@ -205,8 +223,13 @@ type EvaluationEntry<A extends Artifact> = {
   ): Promise<Result<unknown, DomainError>>;
 };
 
-const testRunEntry: EvaluationEntry<TestRunResult> = {
+const testRunEntry: EvaluationEntry<TestRunInput, TestRunResult> = {
   capability: testRunCapability,
+  input: (skill, equipment) => ({
+    skill,
+    toolContracts: equipment?.toolContracts,
+    responseSchemas: equipment?.responseSchemas,
+  }),
   record: (deps, base, artifact) =>
     deps.testRuns.record({
       ...base,
@@ -216,8 +239,9 @@ const testRunEntry: EvaluationEntry<TestRunResult> = {
     }),
 };
 
-const triggeringEvalEntry: EvaluationEntry<TriggeringResult> = {
+const triggeringEvalEntry: EvaluationEntry<Skill, TriggeringResult> = {
   capability: triggeringEvalCapability,
+  input: (skill) => skill,
   record: (deps, base, artifact) =>
     deps.evalRuns.record({
       ...base,
@@ -226,18 +250,19 @@ const triggeringEvalEntry: EvaluationEntry<TriggeringResult> = {
     }),
 };
 
-async function runEntry<A extends Artifact>(
-  entry: EvaluationEntry<A>,
+async function runEntry<Input, A extends Artifact>(
+  entry: EvaluationEntry<Input, A>,
   surface: EvaluationSurface,
   skill: Skill,
   pin: EvaluationPin,
   deps: EvaluationRunDeps,
   observer?: EvaluationObserver,
+  equipment?: EvaluationEquipment,
 ): Promise<Result<RecordedEvaluation, DomainError>> {
   const outcome = await runEvaluation(
     entry.capability,
     surface,
-    skill,
+    entry.input(skill, equipment),
     deps.gateway,
     observer,
   );
@@ -272,6 +297,7 @@ function evaluationStreamResponse(
   skill: Skill,
   pin: EvaluationPin,
   deps: EvaluationRunDeps,
+  equipment?: EvaluationEquipment,
 ): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -288,7 +314,15 @@ function evaluationStreamResponse(
       };
 
       try {
-        const outcome = await runRecordedEvaluation(kind, surface, skill, pin, deps, observer);
+        const outcome = await runRecordedEvaluation(
+          kind,
+          surface,
+          skill,
+          pin,
+          deps,
+          observer,
+          equipment,
+        );
         if (isErr(outcome)) {
           send({
             event: "error",

@@ -73,12 +73,24 @@ export type EvaluationBreakdown =
       readonly kind: "test-run";
       readonly scenario: { readonly prompt: string };
       readonly transcript: readonly TranscriptStepPanel[];
+      /** Per-contract validation when the run had tool contracts attached. */
+      readonly contractChecks?: readonly ContractCheckPanel[];
     }
   | {
       readonly kind: "triggering-eval";
       readonly passed: boolean;
       readonly cases: readonly TriggeringCasePanel[];
     };
+
+export type ContractCheckPanel = {
+  readonly tool: string;
+  readonly called: boolean;
+  readonly calls: readonly {
+    readonly call: number;
+    readonly argumentIssues: readonly string[];
+    readonly outputIssues: readonly string[];
+  }[];
+};
 
 export type TranscriptStepPanel =
   | { readonly kind: "model"; readonly text: string }
@@ -458,6 +470,37 @@ function TestRunBreakdownView({
         <h2 className="text-doc-rendered-h">Scenario</h2>
         <p className="text-doc-rendered text-on-surface-variant">{breakdown.scenario.prompt}</p>
       </section>
+      {breakdown.contractChecks && breakdown.contractChecks.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-doc-rendered-h">Tool contract checks</h2>
+          <div className="flex flex-col gap-2">
+            {breakdown.contractChecks.map((check) => (
+              <div
+                key={check.tool}
+                className="rounded-[var(--radius-sm)] border border-outline-variant p-3"
+              >
+                <p className="text-doc-rendered">
+                  <code>{check.tool}</code>{" "}
+                  {check.called
+                    ? `— called ${check.calls.length === 1 ? "once" : `${check.calls.length} times`}`
+                    : "— never called"}
+                </p>
+                <ul className="text-doc-rendered mt-1 list-disc space-y-1 pl-5 text-on-surface-variant">
+                  {check.calls.map((call) => {
+                    const issues = [...call.argumentIssues, ...call.outputIssues];
+                    return (
+                      <li key={call.call}>
+                        Call {call.call}:{" "}
+                        {issues.length === 0 ? "arguments and output match the contract." : issues.join(" ")}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
       <section className="flex flex-col gap-2">
         <h2 className="text-doc-rendered-h">Transcript</h2>
         <div className="flex flex-col gap-2">

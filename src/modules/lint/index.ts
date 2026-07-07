@@ -21,6 +21,7 @@ export {
   createLintSummary,
   LINT_RULESET_VERSION,
   lintAnalyzer,
+  summarizeLintFindings,
 } from "./lint-analyzer";
 export { lintBreakdownRenderer, lintInsightsRenderer } from "./renderers";
 export type {

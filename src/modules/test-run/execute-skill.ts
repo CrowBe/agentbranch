@@ -3,9 +3,13 @@ import type { Skill } from "@/modules/skill";
 import { skillDescription, skillName } from "@/modules/skill";
 import type { ModelGateway, AccountingTag, GatewayTool } from "@/modules/model-gateway";
 import { insightSchema, type EvaluationObserver } from "@/modules/skill-analysis";
+import type { ResponseSchemaSource } from "@/modules/response-schema";
+import type { ToolContractSource } from "@/modules/tool-contract";
 import { ok, isErr, type Result, type DomainError } from "@/shared";
+import { computeContractChecks, contractCheckIssues, registryFromContracts } from "./contract-checks";
 import { createMockToolRegistry, defaultMockToolRegistry } from "./mock-tool-registry";
 import type {
+  ContractCheck,
   MockTool,
   MockToolRegistry,
   Scenario,
@@ -25,6 +29,12 @@ const INSIGHT_TRANSCRIPT_TEXT_MAX = 600;
  * the agent's tool *handlers*: the gateway runs the loop, but each tool's
  * behaviour is ours, so nothing real is ever touched. The gateway is pure
  * resource; this composes the test run from one primitive.
+ *
+ * With a **bundle** (Tool contracts + the Response schemas they reference,
+ * ARCHITECTURE §9.2) the registry is driven by the contracts instead of being
+ * inferred — mock outputs conform to each contract's output schema — and the
+ * finished transcript is validated per call: arguments against the input
+ * schema, handled output against the output schema (`contractChecks`).
  */
 export async function executeSkill(input: {
   skill: Skill;
@@ -35,13 +45,22 @@ export async function executeSkill(input: {
   /** Optional overrides; both default to the evaluator's inferred world. */
   scenario?: Scenario;
   registry?: MockToolRegistry;
+  /** The bundle's relational half: contracts drive the mocks + validation. */
+  toolContracts?: readonly ToolContractSource[];
+  responseSchemas?: readonly ResponseSchemaSource[];
 }): Promise<Result<TestRunResult, DomainError>> {
   const { skill, gateway, tag } = input;
+  const toolContracts = input.toolContracts ?? [];
+  const responseSchemas = input.responseSchemas ?? [];
   input.observer?.({ kind: "progress", message: "Preparing mock world." });
+
+  const registryOverride =
+    input.registry ??
+    (toolContracts.length > 0 ? registryFromContracts(toolContracts, responseSchemas) : undefined);
   const world =
-    input.registry && input.scenario
-      ? ok({ registry: input.registry, scenario: input.scenario })
-      : await generatedWorld(skill, gateway, input.registry, input.scenario);
+    registryOverride && input.scenario
+      ? ok({ registry: registryOverride, scenario: input.scenario })
+      : await generatedWorld(skill, gateway, registryOverride, input.scenario);
   if (isErr(world)) return world;
 
   const { registry, scenario } = world.value;
@@ -61,10 +80,14 @@ export async function executeSkill(input: {
   });
   if (isErr(turn)) return turn;
 
+  // The relational half (bundle input): validate the observed calls against
+  // the supplied contracts before interpretation, so the insight sees them.
+  const contractChecks = computeContractChecks(turn.value.transcript, toolContracts, responseSchemas);
+
   // Turn the raw transcript into a plain-language Insight (one bounded call).
   const insight = await gateway.generate({
     system: INSIGHT_SYSTEM,
-    prompt: insightPrompt(skillName(skill), scenario.prompt, turn.value.transcript),
+    prompt: insightPrompt(skillName(skill), scenario.prompt, turn.value.transcript, contractChecks),
     schema: insightSchema,
     tag,
   });
@@ -74,6 +97,7 @@ export async function executeSkill(input: {
     kind: "test-run",
     scenario,
     transcript: turn.value.transcript,
+    contractChecks,
     insight: insight.value,
   });
 }
@@ -101,6 +125,7 @@ function insightPrompt(
   name: string,
   prompt: string,
   transcript: readonly TranscriptStep[],
+  contractChecks: readonly ContractCheck[] = [],
 ): string {
   const steps = transcript
     .map((s) =>
@@ -111,7 +136,15 @@ function insightPrompt(
           : `tool-result: ${s.tool} → ${clampJson(s.output, INSIGHT_TRANSCRIPT_TEXT_MAX)}`,
     )
     .join("\n");
-  return `Skill "${name}" was test-run on: "${clampText(prompt, INSIGHT_TRANSCRIPT_TEXT_MAX)}".\n\nWhat happened:\n${steps}`;
+  const base = `Skill "${name}" was test-run on: "${clampText(prompt, INSIGHT_TRANSCRIPT_TEXT_MAX)}".\n\nWhat happened:\n${steps}`;
+  if (contractChecks.length === 0) return base;
+
+  const issues = contractCheckIssues(contractChecks);
+  const checks =
+    issues.length > 0
+      ? issues.map((issue) => `- ${clampText(issue, INSIGHT_TRANSCRIPT_TEXT_MAX)}`).join("\n")
+      : "- Every supplied tool contract was called with matching arguments and output.";
+  return `${base}\n\nTool-contract checks (deterministic, against the supplied contracts):\n${checks}`;
 }
 
 async function generatedWorld(

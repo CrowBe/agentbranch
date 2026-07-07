@@ -7,6 +7,7 @@ const NAV = [
   { key: "build", label: "Build", icon: "✶" },
   { key: "import", label: "Import", icon: "⇪" },
   { key: "skills", label: "My skills", icon: "▤" },
+  { key: "equipment", label: "Equipment", icon: "⚒" },
   { key: "history", label: "History", icon: "↻" },
   { key: "templates", label: "Templates", icon: "◳" },
   { key: "models", label: "Models", icon: "◈" },
@@ -20,6 +21,7 @@ export function SideRail({
   onBuild,
   onImport,
   onSkills,
+  onEquipment,
   onHistory,
   onModels,
 }: {
@@ -28,6 +30,7 @@ export function SideRail({
   onBuild?: () => void;
   onImport?: () => void;
   onSkills?: () => void;
+  onEquipment?: () => void;
   onHistory?: () => void;
   onModels?: () => void;
 }) {
@@ -42,7 +45,14 @@ export function SideRail({
             <button
               type="button"
               aria-label={expanded ? undefined : item.label}
-              onClick={handlerFor(item.key, { onBuild, onImport, onSkills, onHistory, onModels })}
+              onClick={handlerFor(item.key, {
+                onBuild,
+                onImport,
+                onSkills,
+                onEquipment,
+                onHistory,
+                onModels,
+              })}
               className={`flex w-full items-center gap-3 rounded-[var(--radius-md)] px-2.5 py-2 text-left ${
                 item.key === active
                   ? "bg-primary/10 text-primary"
@@ -80,6 +90,7 @@ function handlerFor(
     readonly onBuild?: () => void;
     readonly onImport?: () => void;
     readonly onSkills?: () => void;
+    readonly onEquipment?: () => void;
     readonly onHistory?: () => void;
     readonly onModels?: () => void;
   },
@@ -87,6 +98,7 @@ function handlerFor(
   if (key === "build") return handlers.onBuild;
   if (key === "import") return handlers.onImport;
   if (key === "skills") return handlers.onSkills;
+  if (key === "equipment") return handlers.onEquipment;
   if (key === "history") return handlers.onHistory;
   if (key === "models") return handlers.onModels;
   return undefined;

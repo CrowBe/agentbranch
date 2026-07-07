@@ -19,6 +19,8 @@ export type ArtifactKind =
   | "skill-ir"
   | "export"
   | "lint"
+  | "response-schema-lint"
+  | "tool-contract-lint"
   | "test-run"
   | "triggering-eval"
   | "cross-runtime-validation"

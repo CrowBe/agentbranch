@@ -186,7 +186,7 @@ export function createLintReportForSource(
     });
   }
 
-  return { kind: "lint", summary: summarize(findings), findings };
+  return { kind: "lint", summary: summarizeLintFindings(findings), findings };
 }
 
 function folderDocumentsFor(
@@ -503,7 +503,12 @@ function spanOf(raw: string, needle: string): { start: number; end: number } | u
   return start === -1 ? undefined : { start, end: start + needle.length };
 }
 
-function summarize(findings: readonly LintFinding[]): LintSummary {
+/**
+ * Fold findings into the score/grade/counts summary. Shared by every
+ * LintReport-shaped quality artifact (skill lint here; response-schema and
+ * tool-contract lint reuse it), so all quality surfaces grade the same way.
+ */
+export function summarizeLintFindings(findings: readonly LintFinding[]): LintSummary {
   const counts: Record<LintSeverity, number> = { error: 0, warn: 0, info: 0 };
   for (const finding of findings) counts[finding.severity] += 1;
 
