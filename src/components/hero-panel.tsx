@@ -1,119 +1,17 @@
 import type { ReactNode } from "react";
 import type { RenderedDoc, SourceDoc, HeroView } from "@/modules/hero";
 import type { SkillVersionLintSummary } from "@/modules/skill";
-import type { TestRunResult } from "@/modules/test-run";
-import type { TriggeringResult } from "@/modules/triggering-eval";
 import { Button } from "./ui/button";
 import { ViewToggle } from "./view-toggle";
-import { ToolChips, type ToolAction } from "./tool-chips";
-
-export type CapabilityPanel =
-  | { readonly kind: "visualise"; readonly mermaid: string }
-  | {
-      readonly kind: "evaluation-progress";
-      readonly action: EvaluationToolAction;
-      readonly title: string;
-      readonly messages: readonly string[];
-      readonly cases: readonly TriggeringCaseProgressPanel[];
-    }
-  | {
-      readonly kind: "insights";
-      readonly action: EvaluationToolAction;
-      readonly title: string;
-      readonly insight: InsightPanel;
-      readonly result?: EvaluationFeedbackResult;
-    }
-  | {
-      readonly kind: "breakdown";
-      readonly action: EvaluationToolAction;
-      readonly title: string;
-      readonly breakdown: EvaluationBreakdown;
-    }
-  | {
-      readonly kind: "lint-insights";
-      readonly title: string;
-      readonly insight: LintInsightPanel;
-    }
-  | {
-      readonly kind: "lint-breakdown";
-      readonly title: string;
-      readonly breakdown: LintBreakdownPanel;
-    }
-  | { readonly kind: "export"; readonly rootDir: string; readonly files: readonly ExportPanelFile[] };
-
-export type EvaluationToolAction = "test-run" | "triggering-eval";
-export type EvaluationFeedbackResult = TestRunResult | TriggeringResult;
-
-export type InsightPanel = {
-  readonly verdict: "good" | "needs-attention" | "failing";
-  readonly summary: string;
-  readonly findings: readonly string[];
-  readonly watch: readonly string[];
-};
-
-export type LintInsightPanel = {
-  readonly score: number;
-  readonly grade: SkillVersionLintSummary["grade"];
-  readonly summary: string;
-  readonly findings: readonly string[];
-  readonly watch: readonly string[];
-};
-
-export type LintBreakdownPanel = {
-  readonly summary: SkillVersionLintSummary;
-  readonly findings: readonly {
-    readonly rule: string;
-    readonly severity: "error" | "warn" | "info";
-    readonly message: string;
-  }[];
-};
-
-export type EvaluationBreakdown =
-  | {
-      readonly kind: "test-run";
-      readonly scenario: { readonly prompt: string };
-      readonly transcript: readonly TranscriptStepPanel[];
-      /** Per-contract validation when the run had tool contracts attached. */
-      readonly contractChecks?: readonly ContractCheckPanel[];
-    }
-  | {
-      readonly kind: "triggering-eval";
-      readonly passed: boolean;
-      readonly cases: readonly TriggeringCasePanel[];
-    };
-
-export type ContractCheckPanel = {
-  readonly tool: string;
-  readonly called: boolean;
-  readonly calls: readonly {
-    readonly call: number;
-    readonly argumentIssues: readonly string[];
-    readonly outputIssues: readonly string[];
-  }[];
-};
-
-export type TranscriptStepPanel =
-  | { readonly kind: "model"; readonly text: string }
-  | { readonly kind: "tool-call"; readonly tool: string; readonly input: unknown }
-  | { readonly kind: "tool-result"; readonly tool: string; readonly output: unknown };
-
-export type TriggeringCasePanel = {
-  readonly prompt: string;
-  readonly expected: "fire" | "silent";
-  readonly actual: "fire" | "silent";
-  readonly pass: boolean;
-  readonly rationale: string;
-};
-
-export type TriggeringCaseProgressPanel = TriggeringCasePanel & {
-  readonly index: number;
-  readonly total: number;
-};
-
-export type ExportPanelFile = {
-  readonly path: string;
-  readonly contents: string;
-};
+import { ToolChips } from "./tool-chips";
+import type {
+  CapabilityPanel,
+  EvaluationBreakdown,
+  EvaluationFeedbackResult,
+  InsightPanel,
+  ToolAction,
+  TranscriptStepPanel,
+} from "./workspace";
 
 /**
  * The hero — the centred streaming skill document, the product's centrepiece

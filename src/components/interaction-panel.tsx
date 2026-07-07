@@ -2,14 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "./ui/button";
-
-export type InteractionEntry = {
-  readonly id: string;
-  readonly label: string;
-  readonly tone?: "muted" | "error";
-  readonly actionLabel?: string;
-  readonly onAction?: () => void;
-};
+import type { InteractionEntry, InteractionMode } from "./workspace";
 
 /**
  * Slim right interaction panel — the demoted control surface beside the hero
@@ -26,7 +19,7 @@ export function InteractionPanel({
 }: {
   entries: readonly InteractionEntry[];
   busy?: boolean;
-  mode?: "build" | "import" | "skills" | "equipment" | "history";
+  mode?: InteractionMode;
   onSend: (message: string) => void;
   onImport?: (raw: string) => void;
   onEquipment?: (raw: string) => void;
@@ -113,7 +106,7 @@ function InteractionEntryView({ entry }: { entry: InteractionEntry }) {
   return <p className={className}>{entry.label}</p>;
 }
 
-function copyForMode(mode: "build" | "import" | "skills" | "equipment" | "history"): {
+function copyForMode(mode: InteractionMode): {
   title: string;
   empty: string;
   placeholder: string;

@@ -1,6 +1,5 @@
 import { Chip, type ChipAccent } from "./ui/chip";
-
-export type ToolAction = "visualise" | "test-run" | "triggering-eval" | "export";
+import type { ToolAction } from "./workspace";
 
 /**
  * Tool surfaces as chips on the hero header (ARCHITECTURE §7). Chip → tool
