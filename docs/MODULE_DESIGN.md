@@ -133,6 +133,7 @@ today; the generic `Input` slot lets future equipment primitives reuse the seam.
 | Lint | analysis | `lint` | frontmatter + body + refs quality rules + static policy rules | `insights`, `breakdown` | real |
 | Test run | evaluation | `test-run` | composes `gateway.runAgent` + mock-tool registry | `insights`, `breakdown` | run + world generation real (scenario + mock tools generated, cached); email mock = offline fallback |
 | Triggering eval | evaluation | `triggering-eval` | composes `gateway.classify` over the field | `insights`, `breakdown` | run + battery generation real (cached); distractor library a static v1 seed |
+| Harness recommendation | analysis | `harness-recommendation` | Tier-1 correlation over a corpus cohort (fired lint rules × eval outcomes) | `report` | real; the first capability whose `Input` is not a `Skill` |
 
 Run an analysis: `runCapability(heroCapability, "rendered", skill)` →
 `Result<RenderedDoc, DomainError>`. Run an evaluation:
@@ -164,8 +165,8 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **skill-analysis** | `defineCapability`, `runCapability`, `Analyzer/Renderer/Capability/SourceSpan/Artifact` | — | real |
 | **hero** | `heroCapability`, `HeroView`, doc types | — | real |
 | **visualise** | `visualiseCapability`, IR + Mermaid types | — | extraction model-backed · deterministic offline fallback · render real |
-| **test-run** | `testRunCapability`, `executeSkill`, `createMockToolRegistry`, `defaultMockToolRegistry`, `emailMockTool` | `TestRunRepository` | evaluation capability · run + world generation real · email mock = offline fallback |
-| **triggering-eval** | `triggeringEvalCapability`, `runTriggeringEval`, `generatePromptBattery`, `distractorLibrary` | `EvalRunRepository` | evaluation capability · run + battery generation real · adversarial negative battery · distractor library static v1 seed |
+| **test-run** | `testRunCapability`, `executeSkill`, `createMockToolRegistry`, `defaultMockToolRegistry`, `emailMockTool`, `toTestRunAnalysisRecord` | `TestRunRepository` | evaluation capability · run + world generation real · email mock = offline fallback |
+| **triggering-eval** | `triggeringEvalCapability`, `runTriggeringEval`, `runBatteryCases`, `generatePromptBattery`, `distractorLibrary`, `toEvalRunAnalysisRecord` | `EvalRunRepository` | evaluation capability · run + battery generation real · adversarial negative battery · distractor library static v1 seed |
 | **export** | `exportCapability`, manifest types | — | real |
 | **lint** | `lintCapability`, `LintReport`, `LintFinding` | — | real (quality + pure policy rules) |
 | **skill-import** | `SkillImportFetcher`, `SkillImportFetchError` | `SkillImportFetcher` | port |
@@ -177,18 +178,24 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **harness-version** | `currentHarnessManifest`, `hashHarnessManifest`, manifest/version types | `HarnessVersionRepository` | real |
 | **auth** | `AuthPort`, `AuthIdentity` | `AuthPort` | port |
 | **baseline-corpus** | `baselineSkillCorpus`, `baselineDistractors`, `BaselineSkillCorpusEntry` + types | — | real |
+| **harness-recommendation** | `harnessRecommendationCapability`, `CorpusCohort`, `HarnessRecommendationReport` + types | — | real (Tier-1 static correlation) |
+| **regression-benchmark** | `regressionBenchmarkSet`, `regressionBenchmarkSetHash`, `runRegressionBenchmark`, `BenchmarkRun` + types | `BenchmarkRunRepository` | real |
 
-**Designed next — harness improvement loop (admin).** ARCHITECTURE §9 defines the
-admin loop that reads a cohort of stored evaluation records and emits a
-harness-recommendation report. It is a future seam capability whose `Input` is
-not a `Skill`: the input is an aggregate cohort of `eval_runs` / `test_runs`
-pinned by skill version and harness version. If the recommendation method is
-model-written, it is an evaluation capability (`defineEvaluation`) and spends
-with a `platform` accounting tag; if it is static correlation, it is an analysis
-capability. The one new persistence boundary is an admin-only aggregate-read
-port over evaluation records, implemented in both Prisma and memory adapters and
-gated through `isAdmin` before any route or surface can call it. The default read
-model returns outcomes/features rather than raw skill or prompt content.
+**Harness improvement loop (admin).** ARCHITECTURE §9 carries the design; the
+build spans three seams. The **aggregate read** is `listForAnalysis` on
+`EvalRunRepository` / `TestRunRepository` — the one read on those ports not
+scoped to a user, implemented in both Prisma and memory adapters against a
+shared outcomes/features projection (`toEvalRunAnalysisRecord` /
+`toTestRunAnalysisRecord`): user identity, prompt text, and skill content never
+cross into it, and the skill version's stored lint summary (score + fired
+rules) rides along as the static feature set. The **report** is the
+`harness-recommendation` module — an analysis capability whose `Input` is the
+corpus cohort. The **measurement guardrail** is the `regression-benchmark`
+module: the baseline corpus + curated batteries as a hash-pinned frozen set,
+scored through the triggering eval's competitive selection (`runBatteryCases`,
+candidate excluded from its own distractor field, `platform`-tagged) and
+recorded per harness version behind `BenchmarkRunRepository`. All three surface
+only through the admin routes (below), gated by `isAdmin`.
 
 **Stub boundaries (where the real interface is set but behaviour is a
 placeholder):** none.
@@ -205,9 +212,9 @@ concern (ARCHITECTURE §2 *Eval feedback*, §4 *Eval → build feedback*).
 
 | Adapter | Implements | Notes |
 |---|---|---|
-| `memory/{skill,usage,test-run,eval,harness-version}.memory-repository.ts` | the five repos + `SkillRetentionRepository` | **offline default**, tested; skill repo + retention share one store |
+| `memory/{skill,usage,test-run,eval,harness-version,benchmark}.memory-repository.ts` | the six repos + `SkillRetentionRepository` | **offline default**, tested; skill repo + retention share one store; the eval/test-run adapters take an optional lint-summary resolver over that store for the analysis reads |
 | `prisma/client.ts` | — | PrismaClient + `@prisma/adapter-pg` (Prisma 7 driver adapter) |
-| `prisma/{skill,usage,test-run,eval,harness-version}.prisma-repository.ts` | `SkillRepository` (+ `SkillRetentionRepository`), `UsageRepository`, `TestRunRepository`, `EvalRunRepository`, `HarnessVersionRepository` | real |
+| `prisma/{skill,usage,test-run,eval,harness-version,benchmark}.prisma-repository.ts` | `SkillRepository` (+ `SkillRetentionRepository`), `UsageRepository`, `TestRunRepository`, `EvalRunRepository`, `HarnessVersionRepository`, `BenchmarkRunRepository` | real; the eval/test-run analysis reads join `skill_versions.lint_summary_json` |
 | `prisma/user-provisioning-auth.ts` | `AuthPort` | wraps Clerk auth, provisions the `users` row on first sight |
 | `ai/model-gateway.ts` | `ModelGateway` | the metered gateway; resolves a `LanguageModel` per call from a `ModelRouter` (or a static `ModelProvider` in tests); routes accounting through `usage` |
 | `ai/model-router.ts` | `ModelRouter` | the provider/model selection authority: builds providers from the registry + server-pool keys, holds the runtime active selection + bring-your-own overrides (process-local), and resolves per primitive. Secret-free snapshot |
@@ -254,7 +261,17 @@ concern (ARCHITECTURE §2 *Eval feedback*, §4 *Eval → build feedback*).
   provider/model or store/clear a bring-your-own key. With Clerk auth on, only an
   admin (`config.admin` allowlist, via `isAdmin`) passes — others get 403; with
   auth off it is open (dev); an empty allowlist locks it (fail-safe). Drives the
-  **model console**.
+  **model console**. The gate itself is the shared `_shared/admin-gate.ts`
+  helper.
+- `app/api/admin/harness-report/route.ts` — **admin-gated** (same gate): GET
+  assembles the corpus cohort from the two `listForAnalysis` reads and renders
+  the harness-recommendation report. Offline-safe (static correlation);
+  `?limit=` / `?since=` bound the cohort; the response carries
+  outcomes/features, never skill or prompt content.
+- `app/api/admin/benchmark/route.ts` — **admin-gated** (same gate): GET the
+  score-over-harness-versions view of recorded benchmark runs; POST scores the
+  frozen set now (`platform`-tagged spend) and records the run pinned to the
+  current harness version. 503 offline, like every evaluation surface.
 - `app/layout.tsx` — next/font + conditional `ClerkProvider`; `globals.css`
   holds the DESIGN tokens as CSS variables; `proxy.ts` is Clerk/passthrough.
 - `components/` — `app-shell`, `top-bar`, `side-rail`, `hero-panel`,
@@ -338,8 +355,8 @@ npm run db:generate / db:push / db:migrate # Prisma (needs DATABASE_URL)
   Tailwind 4 · Vitest 4 · npm.
 - Data model lives in `prisma/schema.prisma` (ARCHITECTURE §6): `users`,
   `skills`, `skill_branches`, `skill_versions` (append-only), `usage`,
-  `harness_versions`, `test_runs`, `eval_runs`. Migrations under
-  `prisma/migrations/`.
+  `harness_versions`, `test_runs`, `eval_runs`, `benchmark_runs`. Migrations
+  under `prisma/migrations/`.
 
 ---
 
