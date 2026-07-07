@@ -1,4 +1,4 @@
-import type { TestRunResult, TranscriptStep } from "@/modules/test-run";
+import { contractCheckIssues, type TestRunResult, type TranscriptStep } from "@/modules/test-run";
 import type { CaseResult, TriggeringResult } from "@/modules/triggering-eval";
 import type { LintFinding, LintReport } from "@/modules/lint";
 
@@ -46,11 +46,24 @@ export function formatTestRunFeedback(result: TestRunResult): string {
     "",
     ...formatList("Watch:", result.insight.watch),
     "",
+    ...formatContractChecks(result),
     "Transcript:",
     ...result.transcript.map(formatTranscriptStep),
     "",
     "Please revise the skill to address this test-run evidence. The body workflow and instructions are the primary targets.",
   ].join("\n");
+}
+
+/** The bundle's relational evidence (Skill × Tool contract): deterministic
+ * per-call validation against the supplied contracts. Empty lines for a
+ * single-primitive run so the message shape is unchanged. */
+function formatContractChecks(result: TestRunResult): string[] {
+  if (result.contractChecks.length === 0) return [];
+  const issues = contractCheckIssues(result.contractChecks);
+  if (issues.length === 0) {
+    return ["Tool-contract checks: every supplied contract was called with matching arguments and output.", ""];
+  }
+  return [...formatList("Tool-contract checks:", issues), ""];
 }
 
 export function formatLintFeedback(report: LintReport): string | null {

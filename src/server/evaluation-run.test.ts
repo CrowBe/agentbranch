@@ -13,6 +13,8 @@ import { createMemoryHarnessVersionRepository } from "@/infra/memory/harness-ver
 import { currentHarnessManifest } from "@/modules/harness-version";
 import { makeSkill, parseSkillMd, type Skill, type SkillSource } from "@/modules/skill";
 import type { ModelGateway } from "@/modules/model-gateway";
+import type { TestRunBreakdown } from "@/modules/test-run";
+import { parseToolContract } from "@/modules/tool-contract";
 import type { TriggeringResult } from "@/modules/triggering-eval";
 import {
   domainError,
@@ -147,6 +149,53 @@ describe("runRecordedEvaluation — the choreography, once, against memory adapt
     expect(recorded[0]?.status).toBe("completed");
     expect(recorded[0]?.harnessVersionId).toBeTruthy();
     expect(recorded[0]?.skillVersionId).toBeNull(); // unsaved skill → null pin
+  });
+
+  it("threads a bundle's equipment into the test run and surfaces contract checks", async () => {
+    const { deps, testRuns } = makeDeps();
+    const skill = skillOf(sourceOf("Chase the overdue invoice."));
+    const equipment = {
+      toolContracts: [
+        unwrap(
+          parseToolContract(
+            JSON.stringify({
+              name: "send_invoice_reminder",
+              description: "Send a payment reminder for one overdue invoice.",
+              input: {
+                type: "object",
+                required: ["invoiceId"],
+                properties: { invoiceId: { type: "string", description: "The invoice id." } },
+              },
+            }),
+          ),
+        ),
+      ],
+    };
+
+    const outcome = unwrap(
+      await runRecordedEvaluation(
+        "test-run",
+        "breakdown",
+        skill,
+        noPin,
+        deps,
+        undefined,
+        equipment,
+      ),
+    );
+
+    const body = outcome.body as TestRunBreakdown;
+    expect(body.contractChecks[0]?.tool).toBe("send_invoice_reminder");
+    expect(body.contractChecks[0]?.called).toBe(true);
+    // The fake gateway calls with `{}`, so the argument validation must fire.
+    expect(body.contractChecks[0]?.calls[0]?.argumentIssues[0]).toContain("invoiceId");
+    // The contract, not the inferred world, provided the mock tool.
+    expect(
+      body.transcript.some((s) => s.kind === "tool-call" && s.tool === "send_invoice_reminder"),
+    ).toBe(true);
+
+    const recorded = unwrap(await testRuns.listBySkill(skill.id, userId));
+    expect(recorded).toHaveLength(1);
   });
 
   it("runs a triggering eval and records pass/fail from the artifact", async () => {

@@ -120,6 +120,18 @@ _Avoid_: **sandbox** (banned — intimidates both audiences), execution, simulat
 The mechanism behind a test run — when the skill calls a tool, the registry returns generated mock data instead of doing anything real. Internal term; never surfaced in user copy.
 _Avoid_: stub, fake (in user copy); harness, interceptor (jargon)
 
+**Response schema**:
+The first equipment primitive beyond Skill (§9.2) — a structured output definition, authored as a JSON Schema document. Lossless source model + pure offline lint; its schema subset validates tool-contract examples and test-run calls.
+_Avoid_: output schema (ambiguous with a tool's output side), JSON file, spec
+
+**Tool contract**:
+The second equipment primitive — a tool's typed input/output plus description, examples, failure modes, and safety notes. I/O is an inline schema or a `$ref` to a response schema by title. Drives the test run's mock tools and per-call validation when bundled.
+_Avoid_: tool definition (the runtime artifact, not the reviewed contract), API spec, tool schema
+
+**Bundle**:
+The test run's composed input — the Skill plus selected Tool contracts and the Response schemas they reference. The smallest useful composition (§9.2): does the Skill call the Tool correctly and produce valid output?
+_Avoid_: package, kit, workspace (all name other things), input set
+
 **Triggering eval**:
 The v1 validation — does the skill *fire* on the right prompts and *stay silent* on the wrong ones? Run against a **distractor library** + a positive/negative **prompt battery**.
 _Avoid_: trigger test, firing test, selection eval
@@ -154,7 +166,7 @@ _Avoid_: preview/raw, doc/code, formatted/plain
 - **Usage** is the accounting authority: `account`-tagged calls are subject to tier policy (free = structural caps + provider cap-catch; paid = token stream, deferred), `platform`-tagged calls go to our own cost ledger (deferred). The gateway is mechanism, usage is policy.
 - When no model is configured (offline / no key) the gateway can't run a primitive — an Evaluation capability fails with the shared `model_unavailable` **DomainError**, checked once in the seam's evaluation path, not in each evaluator. Analysis capabilities still run offline (pure text). This is evaluation's hard dependency that analysis doesn't have.
 - **Visualise** is an Analysis capability whose Artifact is the **Skill IR**; each IR node carries a **Source-span**.
-- A **Test run** drives the **Mock-tool registry**; a **Triggering eval** drives the **Distractor library** + **Prompt battery**. Both are Evaluation capabilities.
+- A **Test run** drives the **Mock-tool registry**; a **Triggering eval** drives the **Distractor library** + **Prompt battery**. Both are Evaluation capabilities. A test run's input is a **Bundle**: when it carries **Tool contracts**, they drive the registry (mock output conforms to each contract's — possibly **Response schema**-referenced — output schema) and every observed call is validated against the contract.
 - An **Evaluation capability** emits an **Evaluation result** (the run-record Artifact), which renders to **Insights** (default, plain-language) and a detailed breakdown (depth on demand) — two renderers, one result.
 - **Eval feedback** connects the seam's evaluation output back to the build loop's input: a feedback formatter (pure function in `build-loop`) translates an Evaluation result or Lint artifact into a user message. **Insights** is what the *user* reads; eval feedback is what *Claude* reads to author the revision. The same result serves both surfaces.
 - An **Evaluation result** is ephemeral on the seam; it is persisted as an **Evaluation record** (§6). Analysis artifacts are never persisted — they recompute. The result is rendered *now*; the record is re-rendered *later*.

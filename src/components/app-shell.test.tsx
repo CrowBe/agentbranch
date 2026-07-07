@@ -468,6 +468,7 @@ describe("AppShell capability chips", () => {
             result: {
               kind: "test-run",
               scenario: { prompt: "Summarise recent tickets.", seedData: { customer: "Acme" } },
+              contractChecks: [],
               insight: {
                 verdict: "needs-attention",
                 summary: "The skill skipped prioritisation.",

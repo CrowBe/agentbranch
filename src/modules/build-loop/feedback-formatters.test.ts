@@ -89,6 +89,7 @@ describe("eval feedback formatters", () => {
         prompt: "Summarise the recent customer tickets.",
         seedData: { customer: "Acme" },
       },
+      contractChecks: [],
       insight: {
         verdict: "needs-attention",
         summary: "The skill found tickets but skipped prioritisation.",

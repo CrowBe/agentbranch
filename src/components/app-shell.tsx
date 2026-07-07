@@ -16,6 +16,7 @@ import { ModelConsole } from "./model-console";
 import {
   HeroPanel,
   type CapabilityPanel,
+  type ContractCheckPanel,
   type EvaluationBreakdown,
   type EvaluationFeedbackResult,
   type EvaluationToolAction,
@@ -48,7 +49,11 @@ export function AppShell({
   const [menuExpanded, setMenuExpanded] = useState(false);
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [view, setView] = useState<HeroView>("rendered");
-  const [interactionMode, setInteractionMode] = useState<"build" | "import" | "skills" | "history">("build");
+  const [interactionMode, setInteractionMode] = useState<InteractionMode>("build");
+  // Equipment (ARCHITECTURE §9.2): quality-checked tool contracts + response
+  // schemas kept for the session; the next test run bundles them with the skill.
+  const [equipment, setEquipment] = useState<EquipmentState>({ contracts: [], schemas: [] });
+  const [equipmentBusy, setEquipmentBusy] = useState(false);
   const [toolBusy, setToolBusy] = useState(false);
   const [lintBusy, setLintBusy] = useState(false);
   const [activeTool, setActiveTool] = useState<ToolAction | null>(null);
@@ -109,6 +114,7 @@ export function AppShell({
           }}
           onModels={() => setConsoleOpen(true)}
           onSkills={handleSkills}
+          onEquipment={handleEquipmentMode}
           onHistory={handleHistory}
         />
         <main className="min-w-0 flex-1 overflow-hidden">
@@ -151,10 +157,11 @@ export function AppShell({
         </main>
         <InteractionPanel
           entries={entries}
-          busy={busy}
+          busy={busy || equipmentBusy}
           mode={interactionMode}
           onSend={(message) => void handleSend(message, branchId ?? undefined)}
           onImport={handleImport}
+          onEquipment={(raw) => void handleEquipmentSubmit(raw)}
         />
       </div>
       {consoleOpen && <ModelConsole onClose={() => setConsoleOpen(false)} />}
@@ -270,6 +277,89 @@ export function AppShell({
       const error = friendlyError(String(cause));
       setStatus(error);
       setEntries((prev) => [...prev, entry(error, "error")]);
+    }
+  }
+
+  function handleEquipmentMode() {
+    if (busy) return;
+    setInteractionMode("equipment");
+    setCapability(null);
+    setActiveTool(null);
+    setStatus(
+      equipment.contracts.length + equipment.schemas.length > 0
+        ? "Equipment ready — tool contracts run with your next test run."
+        : "Paste a response schema or tool contract to check it.",
+    );
+    refreshEquipmentEntries(equipment);
+  }
+
+  function refreshEquipmentEntries(state: EquipmentState) {
+    const docs = [
+      ...state.contracts.map((doc) => ({ doc, kind: "tool-contract" as const })),
+      ...state.schemas.map((doc) => ({ doc, kind: "response-schema" as const })),
+    ];
+    setEntries(
+      docs.map(({ doc, kind }) => ({
+        id: `${kind}-${doc.name}`,
+        label: `${kind === "tool-contract" ? "Tool contract" : "Response schema"}: ${doc.name}`,
+        actionLabel: "Remove",
+        onAction: () => {
+          const updated = removeEquipment(state, kind, doc.name);
+          setEquipment(updated);
+          refreshEquipmentEntries(updated);
+        },
+      })),
+    );
+  }
+
+  async function handleEquipmentSubmit(raw: string) {
+    if (equipmentBusy) return;
+    const detected = detectEquipmentKind(raw);
+    if (!detected.ok) {
+      setStatus(detected.error);
+      setEntries((prev) => [...prev, entry(detected.error, "error")]);
+      return;
+    }
+
+    const isContract = detected.kind === "tool-contract";
+    setEquipmentBusy(true);
+    setStatus(isContract ? "Checking tool contract..." : "Checking response schema...");
+    try {
+      const res = await fetch(isContract ? "/api/tool-contract" : "/api/response-schema", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ document: raw, surface: "insights" }),
+      });
+      const body = (await res.json().catch(() => null)) as unknown;
+      if (!res.ok) {
+        const error = parseGenericError(body, res.status);
+        setStatus(error);
+        setEntries((prev) => [...prev, entry(error, "error")]);
+        return;
+      }
+      if (!isLintInsight(body)) {
+        throw new Error("Equipment check returned an unexpected response.");
+      }
+
+      setCapability({
+        kind: "lint-insights",
+        title: isContract ? "Tool contract quality" : "Response schema quality",
+        insight: body,
+      });
+      const next = storeEquipment(equipment, detected.kind, detected.name, raw);
+      setEquipment(next);
+      refreshEquipmentEntries(next);
+      setStatus(
+        isContract
+          ? `Tool contract "${detected.name}" checked — it runs with your next test run.`
+          : `Response schema "${detected.name}" checked and kept for tool contracts to reference.`,
+      );
+    } catch (cause) {
+      const error = friendlyError(String(cause));
+      setStatus(error);
+      setEntries((prev) => [...prev, entry(error, "error")]);
+    } finally {
+      setEquipmentBusy(false);
     }
   }
 
@@ -619,6 +709,14 @@ export function AppShell({
           currentSkillId: currentSkillId ?? undefined,
           branchId: branchId ?? undefined,
           surface,
+          // A test run bundles the session's checked equipment (ARCHITECTURE
+          // §9.2): contracts drive the mock tools + per-call validation.
+          ...(action === "test-run" && equipment.contracts.length > 0
+            ? {
+                toolContracts: equipment.contracts.map((doc) => doc.raw),
+                responseSchemas: equipment.schemas.map((doc) => doc.raw),
+              }
+            : {}),
         }),
       });
       if (
@@ -677,7 +775,73 @@ export function AppShell({
   }
 }
 
-function activeRailView(mode: "build" | "import" | "skills" | "history"): SideRailView {
+type InteractionMode = "build" | "import" | "skills" | "equipment" | "history";
+
+/** One checked equipment document kept for the session (raw JSON text). */
+type EquipmentDoc = { readonly name: string; readonly raw: string };
+
+type EquipmentState = {
+  readonly contracts: readonly EquipmentDoc[];
+  readonly schemas: readonly EquipmentDoc[];
+};
+
+type EquipmentKind = "tool-contract" | "response-schema";
+
+/**
+ * Decide which primitive a pasted document is. A tool contract carries call
+ * shape keys (`input`/`output`/`failureModes`/`safetyNotes`); anything else
+ * that parses as a JSON object is treated as a response schema (a JSON Schema
+ * document). The server re-parses through the real source models either way.
+ */
+function detectEquipmentKind(raw: string):
+  | { readonly ok: true; readonly kind: EquipmentKind; readonly name: string }
+  | { readonly ok: false; readonly error: string } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { ok: false, error: "Equipment must be a JSON document." };
+  }
+  if (!isRecord(parsed)) {
+    return { ok: false, error: "Equipment must be a JSON object." };
+  }
+
+  const contractKeys = ["input", "output", "failureModes", "safetyNotes", "examples"];
+  const looksLikeContract =
+    typeof parsed.name === "string" &&
+    typeof parsed.description === "string" &&
+    (contractKeys.some((key) => key in parsed) || !("type" in parsed || "properties" in parsed));
+  if (looksLikeContract) {
+    return { ok: true, kind: "tool-contract", name: String(parsed.name) };
+  }
+  const title = typeof parsed.title === "string" && parsed.title.trim() ? parsed.title.trim() : "untitled schema";
+  return { ok: true, kind: "response-schema", name: title };
+}
+
+function storeEquipment(
+  state: EquipmentState,
+  kind: EquipmentKind,
+  name: string,
+  raw: string,
+): EquipmentState {
+  const doc: EquipmentDoc = { name, raw };
+  if (kind === "tool-contract") {
+    return {
+      ...state,
+      contracts: [...state.contracts.filter((item) => item.name !== name), doc],
+    };
+  }
+  return { ...state, schemas: [...state.schemas.filter((item) => item.name !== name), doc] };
+}
+
+function removeEquipment(state: EquipmentState, kind: EquipmentKind, name: string): EquipmentState {
+  if (kind === "tool-contract") {
+    return { ...state, contracts: state.contracts.filter((item) => item.name !== name) };
+  }
+  return { ...state, schemas: state.schemas.filter((item) => item.name !== name) };
+}
+
+function activeRailView(mode: InteractionMode): SideRailView {
   return mode;
 }
 
@@ -814,7 +978,14 @@ function toEvaluationBreakdown(
   body: unknown,
 ): EvaluationBreakdown | null {
   if (action === "test-run" && isTestRunBreakdown(body)) {
-    return { kind: "test-run", scenario: body.scenario, transcript: body.transcript };
+    return {
+      kind: "test-run",
+      scenario: body.scenario,
+      transcript: body.transcript,
+      contractChecks: isRecord(body) && isContractChecks(body.contractChecks)
+        ? body.contractChecks
+        : undefined,
+    };
   }
   if (action === "triggering-eval" && isTriggeringBreakdown(body)) {
     return { kind: "triggering-eval", passed: body.passed, cases: body.cases };
@@ -1147,7 +1318,30 @@ function isTestRunResult(value: unknown): value is TestRunResult {
     isRecord(value.scenario.seedData) &&
     Array.isArray(value.transcript) &&
     value.transcript.every(isTranscriptStep) &&
+    isContractChecks(value.contractChecks) &&
     isInsight(value.insight)
+  );
+}
+
+function isContractChecks(value: unknown): value is ContractCheckPanel[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (check) =>
+        isRecord(check) &&
+        typeof check.tool === "string" &&
+        typeof check.called === "boolean" &&
+        Array.isArray(check.calls) &&
+        check.calls.every(
+          (call) =>
+            isRecord(call) &&
+            typeof call.call === "number" &&
+            Array.isArray(call.argumentIssues) &&
+            call.argumentIssues.every((issue) => typeof issue === "string") &&
+            Array.isArray(call.outputIssues) &&
+            call.outputIssues.every((issue) => typeof issue === "string"),
+        ),
+    )
   );
 }
 
