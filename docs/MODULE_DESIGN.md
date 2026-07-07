@@ -288,10 +288,22 @@ concern (ARCHITECTURE §2 *Eval feedback*, §4 *Eval → build feedback*).
   holds the DESIGN tokens as CSS variables; `proxy.ts` is Clerk/passthrough.
 - `components/` — `app-shell`, `top-bar`, `side-rail`, `hero-panel`,
   `view-toggle`, `tool-chips`, `interaction-panel`, `model-console` (the
-  provider/model + auth overlay, opened from the rail), `ui/{chip,button,pill}`.
+  provider/model + auth overlay, opened from the rail), `ui/{chip,button,pill}`,
+  and `workspace/` — the **client workspace module**
+  ([#159](https://github.com/CrowBe/agentbranch/issues/159)): a framework-free
+  store owning the HTTP protocol and the request choreography behind a small
+  interface — actions (build turn, import, open skill, restore, draft/promote/
+  discard, run tool, lint, equipment) over one immutable snapshot. Every route
+  response is decoded once, in `workspace/decoders.ts`, against the domain
+  modules' exported types — shape drift breaks there, loudly, not in scattered
+  guards. The build loop's SSE stream and the evaluation streams are consumed
+  here too. `use-workspace.ts` (`useSyncExternalStore`) is its one React
+  touchpoint; the app shell is composition/JSX only — no fetch calls, no
+  `unknown` guards — and workspace behaviour (choreography, decoding, error
+  paths) is tested without rendering React (`workspace.test.ts`).
   The interaction panel's Equipment mode (side-rail entry) checks pasted
-  response schemas / tool contracts against the two routes above and keeps them
-  for the session; the app shell bundles kept contracts into the next test run,
+  response schemas / tool contracts against the two routes above; the workspace
+  keeps them for the session and bundles kept contracts into the next test run,
   and the breakdown panel shows the per-call contract checks.
 
 ---
@@ -338,7 +350,7 @@ Almost every change is one of these. If a task fits neither, surface it.
    `container.ts` behind a config flag (with a memory/stub fallback so the app
    still boots offline).
 
-**Worked example — branching iteration (landed, [#128](https://github.com/CrowBe/agentbranch/issues/128); ARCHITECTURE §9.3).** The draft/main/promote substrate is a rule-2 change, not rule-1: it changes *which* `SkillSource` the seam runs against, never the seam's `artifact → render` shape, so no new capability/`ArtifactKind`/renderer. It extends the **existing `SkillRepository` port** (`skill.repository.ts`) with branch/promote reads and writes (`createBranch`/`saveToBranch`/`listBranches`/`listBranchVersions`/`promoteBranch`/`discardBranch`) — implemented in *both* the Prisma and memory adapters, tested as one contract at that seam — and adds **one new retention port** (`SkillRetentionRepository`, daily cleanup off the write path), wired in `container.ts` with a memory fallback and driven by a Vercel Cron route (`app/api/cron/retention`). No new domain module, so §4's table keeps the same rows (only the skill row's port list grew). The **evaluate-on-draft + promote surface** riding on it ([#129](https://github.com/CrowBe/agentbranch/issues/129)) is likewise not a rule-1 change: thin route handlers expose the branch/promote methods (`app/api/skills/[id]/branches/…`) and the app shell holds the draft-vs-main presentation state. Evaluation-on-draft is a version-*pin* change (the evaluation-run driver's `resolvePinnedVersionId`, keyed on `branchId`), not a new renderer — the seam's `artifact → render` tail is untouched, exactly as ARCHITECTURE §9.3 predicted.
+**Worked example — branching iteration (landed, [#128](https://github.com/CrowBe/agentbranch/issues/128); ARCHITECTURE §9.3).** The draft/main/promote substrate is a rule-2 change, not rule-1: it changes *which* `SkillSource` the seam runs against, never the seam's `artifact → render` shape, so no new capability/`ArtifactKind`/renderer. It extends the **existing `SkillRepository` port** (`skill.repository.ts`) with branch/promote reads and writes (`createBranch`/`saveToBranch`/`listBranches`/`listBranchVersions`/`promoteBranch`/`discardBranch`) — implemented in *both* the Prisma and memory adapters, tested as one contract at that seam — and adds **one new retention port** (`SkillRetentionRepository`, daily cleanup off the write path), wired in `container.ts` with a memory fallback and driven by a Vercel Cron route (`app/api/cron/retention`). No new domain module, so §4's table keeps the same rows (only the skill row's port list grew). The **evaluate-on-draft + promote surface** riding on it ([#129](https://github.com/CrowBe/agentbranch/issues/129)) is likewise not a rule-1 change: thin route handlers expose the branch/promote methods (`app/api/skills/[id]/branches/…`) and the client workspace (`components/workspace`) holds the draft-vs-main state. Evaluation-on-draft is a version-*pin* change (the evaluation-run driver's `resolvePinnedVersionId`, keyed on `branchId`), not a new renderer — the seam's `artifact → render` tail is untouched, exactly as ARCHITECTURE §9.3 predicted.
 
 **Other conventions**
 

@@ -1,14 +1,7 @@
 "use client";
 
 import { Button } from "./ui/button";
-
-/** A draft in progress, summarised for the resume affordance (ARCHITECTURE §9.3). */
-export type DraftSummary = {
-  readonly id: string;
-  readonly revision: number | null;
-  readonly name: string | null;
-  readonly description: string | null;
-};
+import type { DraftSummary } from "./workspace";
 
 /**
  * State legibility + promote/discard for branching iteration (ARCHITECTURE §9.3,
