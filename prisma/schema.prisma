@@ -39,10 +39,27 @@ model HarnessVersion {
   gitSha                         String?  @map("git_sha")
   createdAt                      DateTime @default(now()) @map("created_at")
 
-  testRuns TestRun[]
-  evalRuns EvalRun[]
+  testRuns      TestRun[]
+  evalRuns      EvalRun[]
+  benchmarkRuns BenchmarkRun[]
 
   @@map("harness_versions")
+}
+
+/// A scoring of the frozen regression-benchmark set, pinned to the harness
+/// version in effect — the measurement guardrail of the harness improvement
+/// loop (ARCHITECTURE §9). Append-only; admin-only surface, so no user scoping.
+model BenchmarkRun {
+  id               String   @id @default(cuid())
+  harnessVersionId String   @map("harness_version_id")
+  benchmarkSetHash String   @map("benchmark_set_hash")
+  scoreJson        Json     @map("score_json")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  harnessVersion HarnessVersion @relation(fields: [harnessVersionId], references: [id], onDelete: Cascade)
+
+  @@index([harnessVersionId])
+  @@map("benchmark_runs")
 }
 
 /// The persisted skill. Exports are rendered from this record.
