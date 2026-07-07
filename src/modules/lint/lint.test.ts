@@ -14,6 +14,7 @@ describe("lint capability", () => {
       score: 100,
       grade: "A",
       counts: { error: 0, warn: 0, info: 0 },
+      rules: [],
     });
     expect(report.findings).toEqual([]);
   });

@@ -22,16 +22,20 @@ export type TriggeringBreakdown = {
 };
 
 export type {
+  AnalysisReadFilter,
   Distractor,
   PromptCase,
   CaseResult,
+  EvalCaseOutcome,
+  EvalRunAnalysisRecord,
   TriggeringResult,
   EvalRun,
   EvalStatus,
 } from "./triggering-eval.types";
 export { distractorLibrary } from "./distractor-library";
 export { generatePromptBattery, PROMPT_BATTERY_GENERATOR_VERSION } from "./prompt-battery";
-export { runTriggeringEval } from "./run-eval";
+export { runTriggeringEval, runBatteryCases } from "./run-eval";
+export { analysisReadLimit, toEvalRunAnalysisRecord } from "./analysis-read";
 export type { EvalRunRepository } from "./eval.repository";
 
 const triggeringEvaluator: Evaluator<Skill, TriggeringResult> = {

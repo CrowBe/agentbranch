@@ -510,7 +510,8 @@ function summarize(findings: readonly LintFinding[]): LintSummary {
   const score = Math.max(0, 100 - counts.error * 35 - counts.warn * 12 - counts.info * 3);
   const grade: LintSummary["grade"] =
     score >= 90 ? "A" : score >= 75 ? "B" : score >= 60 ? "C" : "D";
-  return { score, grade, counts };
+  const rules = [...new Set(findings.map((finding) => finding.rule))].sort();
+  return { score, grade, counts, rules };
 }
 
 function estimateTokens(text: string): number {

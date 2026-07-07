@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { getContainer } from "@/server/container";
-import { isAdmin } from "@/modules/auth";
 import { isErr, type Result, type DomainError } from "@/shared";
 import type { ModelSelection, RouterSnapshot } from "@/modules/model-router";
 import { domainErrorResponse } from "../_shared/skill-request";
 import { invalidRequestResponse, parseJsonRequest } from "../_shared/request-body";
+import { requireAdmin } from "../_shared/admin-gate";
 
 export const runtime = "nodejs";
 
@@ -50,16 +50,21 @@ const commandSchema = z.discriminatedUnion("action", [
   }),
 ]);
 
+const GATE_MESSAGES = {
+  signIn: "Sign in to manage models.",
+  restricted: "Model settings are restricted to administrators.",
+} as const;
+
 export async function GET(): Promise<Response> {
   const container = getContainer();
-  const gate = await requireAdmin();
+  const gate = await requireAdmin(GATE_MESSAGES);
   if (gate) return gate;
   return Response.json(container.modelRouter.snapshot());
 }
 
 export async function POST(request: Request): Promise<Response> {
   const container = getContainer();
-  const gate = await requireAdmin();
+  const gate = await requireAdmin(GATE_MESSAGES);
   if (gate) return gate;
 
   const body = await parseJsonRequest(request);
@@ -87,24 +92,4 @@ export async function POST(request: Request): Promise<Response> {
 
   if (isErr(result)) return domainErrorResponse(result.error);
   return Response.json(result.value);
-}
-
-/**
- * Authorize an admin caller; null when they may proceed. 401 signed-out, 403 a
- * non-admin while auth is configured. Open on a no-auth dev box; locked when auth
- * is on but no admin allowlist is set (fail-safe).
- */
-async function requireAdmin(): Promise<Response | null> {
-  const container = getContainer();
-  const identity = await container.auth.currentIdentity();
-  if (!identity.ok) return domainErrorResponse(identity.error);
-  if (identity.value === null) {
-    return Response.json({ error: "Sign in to manage models." }, { status: 401 });
-  }
-  if (!container.config.flags.hasAuth) return null;
-  if (isAdmin(identity.value, container.config.admin)) return null;
-  return Response.json(
-    { error: "Model settings are restricted to administrators." },
-    { status: 403 },
-  );
 }

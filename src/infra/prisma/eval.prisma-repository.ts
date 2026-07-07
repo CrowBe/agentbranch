@@ -5,6 +5,8 @@ import type {
   EvalStatus,
   TriggeringResult,
 } from "@/modules/triggering-eval";
+import { analysisReadLimit, toEvalRunAnalysisRecord } from "@/modules/triggering-eval";
+import type { SkillVersionLintSummary } from "@/modules/skill";
 import {
   domainError,
   err,
@@ -91,6 +93,30 @@ export function createPrismaEvalRunRepository(prisma: PrismaClient): EvalRunRepo
         return ok(rows.map((row) => toEvalRun(row as EvalRunRow)));
       } catch (cause) {
         return err(domainError("persistence_failed", "Eval runs could not be listed.", cause));
+      }
+    },
+
+    async listForAnalysis(filter = {}) {
+      try {
+        const rows = await prisma.evalRun.findMany({
+          where: filter.since ? { createdAt: { gte: filter.since } } : undefined,
+          orderBy: { createdAt: "desc" },
+          take: analysisReadLimit(filter.limit),
+          include: { skillVersion: { select: { lintSummaryJson: true } } },
+        });
+        return ok(
+          rows.map((row) =>
+            toEvalRunAnalysisRecord(
+              toEvalRun(row as EvalRunRow),
+              ((row as { skillVersion?: { lintSummaryJson: unknown } | null }).skillVersion
+                ?.lintSummaryJson ?? null) as SkillVersionLintSummary | null,
+            ),
+          ),
+        );
+      } catch (cause) {
+        return err(
+          domainError("persistence_failed", "Eval runs could not be read for analysis.", cause),
+        );
       }
     },
   };

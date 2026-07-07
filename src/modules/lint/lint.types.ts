@@ -13,6 +13,9 @@ export type LintSummary = {
   readonly score: number;
   readonly grade: "A" | "B" | "C" | "D";
   readonly counts: Readonly<Record<LintSeverity, number>>;
+  /** Which rules fired, sorted unique — the static skill feature the harness
+   * improvement loop correlates against evaluation outcomes (ARCHITECTURE §9). */
+  readonly rules: readonly string[];
 };
 
 export type LintReport = Artifact<"lint"> & {

@@ -6,7 +6,7 @@ import { insightSchema, type EvaluationObserver } from "@/modules/skill-analysis
 import { ok, isErr, type Result, type DomainError } from "@/shared";
 import { generatePromptBattery } from "./prompt-battery";
 import { distractorLibrary } from "./distractor-library";
-import type { CaseResult, PromptCase, TriggeringResult } from "./triggering-eval.types";
+import type { CaseResult, Distractor, PromptCase, TriggeringResult } from "./triggering-eval.types";
 
 const INSIGHT_CASE_TEXT_MAX = 240;
 
@@ -40,38 +40,15 @@ export async function runTriggeringEval(
   }
   if (isErr(battery)) return battery;
 
-  const candidate = candidateLabel(skill);
-  const choices = [candidate, ...distractorLibrary.map((d) => `${d.name}: ${d.description}`)];
-
-  const cases: CaseResult[] = [];
-  for (const [index, c] of battery.value.entries()) {
-    const selected = await gateway.classify({
-      prompt: c.prompt,
-      choices,
-      tag,
-      target: options.target,
-    });
-    if (isErr(selected)) return selected;
-    const actual: CaseResult["actual"] =
-      selected.value.choice === candidate ? "fire" : "silent";
-    const result: CaseResult = {
-      ...c,
-      actual,
-      pass: actual === c.expected,
-      rationale: selected.value.rationale,
-    };
-    cases.push(result);
-    options.observer?.({
-      kind: "case",
-      index: index + 1,
-      total: battery.value.length,
-      prompt: result.prompt,
-      expected: result.expected,
-      actual: result.actual,
-      pass: result.pass,
-      rationale: result.rationale,
-    });
-  }
+  const run = await runBatteryCases(
+    { name: skillName(skill), description: skillDescription(skill) },
+    battery.value,
+    gateway,
+    tag,
+    options,
+  );
+  if (isErr(run)) return run;
+  const cases = run.value;
   const passed = cases.every((c) => c.pass);
 
   // Turn the raw cases into a plain-language Insight (one bounded structured call).
@@ -87,6 +64,61 @@ export async function runTriggeringEval(
   return ok({ kind: "triggering-eval", cases, passed, insight: insight.value });
 }
 
+/**
+ * The competitive-selection core the triggering eval (and the regression
+ * benchmark) share: for each battery case, ask `classify` which skill the
+ * prompt selects from the candidate + the distractor field. The candidate
+ * "fires" iff it wins. Distractors default to the library; callers whose
+ * candidate *is in* the library (the benchmark's corpus skills) pass a field
+ * with the candidate excluded.
+ */
+export async function runBatteryCases(
+  candidate: { readonly name: string; readonly description: string },
+  battery: readonly PromptCase[],
+  gateway: ModelGateway,
+  tag: AccountingTag,
+  options: {
+    readonly observer?: EvaluationObserver;
+    readonly target?: ModelSelection;
+    readonly distractors?: readonly Distractor[];
+  } = {},
+): Promise<Result<readonly CaseResult[], DomainError>> {
+  const candidateChoice = `${candidate.name}: ${candidate.description}`;
+  const field = options.distractors ?? distractorLibrary;
+  const choices = [candidateChoice, ...field.map((d) => `${d.name}: ${d.description}`)];
+
+  const cases: CaseResult[] = [];
+  for (const [index, c] of battery.entries()) {
+    const selected = await gateway.classify({
+      prompt: c.prompt,
+      choices,
+      tag,
+      target: options.target,
+    });
+    if (isErr(selected)) return selected;
+    const actual: CaseResult["actual"] =
+      selected.value.choice === candidateChoice ? "fire" : "silent";
+    const result: CaseResult = {
+      ...c,
+      actual,
+      pass: actual === c.expected,
+      rationale: selected.value.rationale,
+    };
+    cases.push(result);
+    options.observer?.({
+      kind: "case",
+      index: index + 1,
+      total: battery.length,
+      prompt: result.prompt,
+      expected: result.expected,
+      actual: result.actual,
+      pass: result.pass,
+      rationale: result.rationale,
+    });
+  }
+  return ok(cases);
+}
+
 const INSIGHT_SYSTEM = `You explain a skill's triggering-eval result to its
 author in plain language — warm, concrete, no jargon. The author may be
 non-technical. Focus on whether the skill fires on the right prompts and stays
@@ -100,12 +132,6 @@ function insightPrompt(name: string, cases: readonly CaseResult[], passed: boole
     )
     .join("\n");
   return `Skill "${name}" triggering eval ${passed ? "passed" : "found issues"}.\n\nCases:\n${lines}`;
-}
-
-/** The candidate's choice label — name + description, so the model can tell it
- *  apart from the distractors (which use the same shape). */
-function candidateLabel(skill: Skill): string {
-  return `${skillName(skill)}: ${skillDescription(skill)}`;
 }
 
 function clampText(text: string, max: number): string {

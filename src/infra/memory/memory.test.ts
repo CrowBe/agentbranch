@@ -30,8 +30,30 @@ describe("in-memory adapters", () => {
 
     const versions = unwrap(await repo.listVersions(created.id, created.userId));
     expect(versions.map((version) => version.lintSummary)).toEqual([
-      { score: 58, grade: "D", counts: { error: 0, warn: 3, info: 2 } },
-      { score: 58, grade: "D", counts: { error: 0, warn: 3, info: 2 } },
+      {
+        score: 58,
+        grade: "D",
+        counts: { error: 0, warn: 3, info: 2 },
+        rules: [
+          "body.examples.missing",
+          "body.negative-scope.missing",
+          "body.structure.headings",
+          "frontmatter.description.too-short",
+          "frontmatter.description.trigger-vocabulary",
+        ],
+      },
+      {
+        score: 58,
+        grade: "D",
+        counts: { error: 0, warn: 3, info: 2 },
+        rules: [
+          "body.examples.missing",
+          "body.negative-scope.missing",
+          "body.structure.headings",
+          "frontmatter.description.too-short",
+          "frontmatter.description.trigger-vocabulary",
+        ],
+      },
     ]);
   });
 
@@ -117,6 +139,13 @@ describe("in-memory adapters", () => {
       score: 58,
       grade: "D",
       counts: { error: 0, warn: 3, info: 2 },
+      rules: [
+        "body.examples.missing",
+        "body.negative-scope.missing",
+        "body.structure.headings",
+        "frontmatter.description.too-short",
+        "frontmatter.description.trigger-vocabulary",
+      ],
     });
   });
 

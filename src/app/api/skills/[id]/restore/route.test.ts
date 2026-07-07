@@ -53,6 +53,11 @@ describe("POST /api/skills/:id/restore", () => {
           score: 73,
           grade: "C",
           counts: { error: 0, warn: 2, info: 1 },
+          rules: [
+            "body.examples.missing",
+            "body.negative-scope.missing",
+            "frontmatter.description.too-short",
+          ],
         },
         latestVersionId: "version-3",
         createdAt: "2026-01-01T00:00:00.000Z",
