@@ -6,6 +6,8 @@ import type {
   TestRunStatus,
   TranscriptStep,
 } from "@/modules/test-run";
+import { analysisReadLimit, toTestRunAnalysisRecord } from "@/modules/test-run";
+import type { SkillVersionLintSummary } from "@/modules/skill";
 import {
   domainError,
   err,
@@ -95,6 +97,30 @@ export function createPrismaTestRunRepository(prisma: PrismaClient): TestRunRepo
         return ok(rows.map((row) => toTestRun(row as TestRunRow)));
       } catch (cause) {
         return err(domainError("persistence_failed", "Test runs could not be listed.", cause));
+      }
+    },
+
+    async listForAnalysis(filter = {}) {
+      try {
+        const rows = await prisma.testRun.findMany({
+          where: filter.since ? { createdAt: { gte: filter.since } } : undefined,
+          orderBy: { createdAt: "desc" },
+          take: analysisReadLimit(filter.limit),
+          include: { skillVersion: { select: { lintSummaryJson: true } } },
+        });
+        return ok(
+          rows.map((row) =>
+            toTestRunAnalysisRecord(
+              toTestRun(row as TestRunRow),
+              ((row as { skillVersion?: { lintSummaryJson: unknown } | null }).skillVersion
+                ?.lintSummaryJson ?? null) as SkillVersionLintSummary | null,
+            ),
+          ),
+        );
+      } catch (cause) {
+        return err(
+          domainError("persistence_failed", "Test runs could not be read for analysis.", cause),
+        );
       }
     },
   };

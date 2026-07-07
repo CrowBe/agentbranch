@@ -1,6 +1,6 @@
-import type { Skill } from "@/modules/skill";
+import type { Skill, SkillVersionLintSummary } from "@/modules/skill";
 import type { Artifact, Insight } from "@/modules/skill-analysis";
-import type { HarnessVersionId, SkillVersionId, TestRunId, UserId } from "@/shared";
+import type { HarnessVersionId, SkillId, SkillVersionId, TestRunId, UserId } from "@/shared";
 
 /**
  * A mock tool the skill can "call" during a test run. The registry returns
@@ -56,5 +56,38 @@ export type TestRun = {
   readonly status: TestRunStatus;
   readonly scenario: Scenario;
   readonly transcript: readonly TranscriptStep[];
+  readonly createdAt: Date;
+};
+
+// --- Admin aggregate read (harness improvement loop, ARCHITECTURE §9) -------
+
+/** Bounds an aggregate read; both fields optional (adapters cap `limit`). */
+export type AnalysisReadFilter = {
+  readonly since?: Date;
+  readonly limit?: number;
+};
+
+/** Which tools the skill reached for during the run — names and call counts,
+ * never the payloads. */
+export type TestRunToolUse = {
+  readonly tool: string;
+  readonly calls: number;
+};
+
+/**
+ * The cross-user read model for the harness improvement loop. Outcomes and
+ * features only, by design: no user identity, no scenario or transcript
+ * content — the transcript is reduced to tool-use shape, and the joined lint
+ * summary carries the static skill features (ARCHITECTURE §9).
+ */
+export type TestRunAnalysisRecord = {
+  readonly id: TestRunId;
+  readonly skillId: SkillId;
+  readonly skillVersionId: SkillVersionId | null;
+  readonly harnessVersionId: HarnessVersionId | null;
+  readonly status: TestRunStatus;
+  readonly toolUse: readonly TestRunToolUse[];
+  readonly modelSteps: number;
+  readonly skillLintSummary: SkillVersionLintSummary | null;
   readonly createdAt: Date;
 };

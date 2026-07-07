@@ -9,6 +9,7 @@ import type { ModelRouter } from "@/modules/model-router";
 import type { SkillImportFetcher } from "@/modules/skill-import";
 import type { HarnessVersion, HarnessVersionRepository } from "@/modules/harness-version";
 import { currentHarnessManifest } from "@/modules/harness-version";
+import type { BenchmarkRunRepository } from "@/modules/regression-benchmark";
 import type { DomainError, Result } from "@/shared";
 
 import { readConfig, type AppConfig } from "./config";
@@ -22,6 +23,7 @@ import { createMemoryRequestRateLimiter } from "@/infra/memory/rate-limit.memory
 import { createMemoryTestRunRepository } from "@/infra/memory/test-run.memory-repository";
 import { createMemoryEvalRunRepository } from "@/infra/memory/eval.memory-repository";
 import { createMemoryHarnessVersionRepository } from "@/infra/memory/harness-version.memory-repository";
+import { createMemoryBenchmarkRunRepository } from "@/infra/memory/benchmark.memory-repository";
 import { createPrismaClient } from "@/infra/prisma/client";
 import {
   createPrismaSkillRepository,
@@ -32,6 +34,7 @@ import { createPrismaRequestRateLimiter } from "@/infra/prisma/rate-limit.prisma
 import { createPrismaTestRunRepository } from "@/infra/prisma/test-run.prisma-repository";
 import { createPrismaEvalRunRepository } from "@/infra/prisma/eval.prisma-repository";
 import { createPrismaHarnessVersionRepository } from "@/infra/prisma/harness-version.prisma-repository";
+import { createPrismaBenchmarkRunRepository } from "@/infra/prisma/benchmark.prisma-repository";
 import { createUserProvisioningAuth } from "@/infra/prisma/user-provisioning-auth";
 import { createModelRouter } from "@/infra/ai/model-router";
 import { createModelGateway } from "@/infra/ai/model-gateway";
@@ -65,6 +68,9 @@ export type AppContainer = {
   readonly evalRuns: EvalRunRepository;
   readonly harnessVersions: HarnessVersionRepository;
   readonly currentHarnessVersion: () => Promise<Result<HarnessVersion, DomainError>>;
+  // Frozen-set scorings pinned per harness version — the admin benchmark
+  // route's persistence (ARCHITECTURE §9 harness improvement loop).
+  readonly benchmarkRuns: BenchmarkRunRepository;
   readonly skillImportFetcher: SkillImportFetcher;
 };
 
@@ -109,6 +115,17 @@ export function getContainer(): AppContainer {
   // The skill repo and its retention job share one in-memory store offline, so
   // the daily prune sees the same branches/versions the write path produced.
   const memorySkillStore = prisma ? null : createMemorySkillStore();
+  // The analysis reads join each run's skill version to its lint summary; the
+  // memory adapters get that join as a lookup over the same shared store.
+  const resolveLintSummary = memorySkillStore
+    ? (versionId: string) => {
+        for (const versions of memorySkillStore.versions.values()) {
+          const version = versions.find((v) => v.id === versionId);
+          if (version) return version.lintSummary ?? null;
+        }
+        return null;
+      }
+    : undefined;
   const harnessVersions = prisma
     ? createPrismaHarnessVersionRepository(prisma)
     : createMemoryHarnessVersionRepository();
@@ -128,10 +145,17 @@ export function getContainer(): AppContainer {
     usage,
     requestRateLimiter,
     tierFor: tierFor ?? (async () => "free" as Tier),
-    testRuns: prisma ? createPrismaTestRunRepository(prisma) : createMemoryTestRunRepository(),
-    evalRuns: prisma ? createPrismaEvalRunRepository(prisma) : createMemoryEvalRunRepository(),
+    testRuns: prisma
+      ? createPrismaTestRunRepository(prisma)
+      : createMemoryTestRunRepository({ resolveLintSummary }),
+    evalRuns: prisma
+      ? createPrismaEvalRunRepository(prisma)
+      : createMemoryEvalRunRepository({ resolveLintSummary }),
     harnessVersions,
     currentHarnessVersion: () => harnessVersionPromise,
+    benchmarkRuns: prisma
+      ? createPrismaBenchmarkRunRepository(prisma)
+      : createMemoryBenchmarkRunRepository(),
     skillImportFetcher: createGithubSkillImportFetcher(),
   };
   return cached;

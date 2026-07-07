@@ -81,6 +81,12 @@ describe("buildLoopResponse", () => {
       score: 70,
       grade: "C",
       counts: { error: 0, warn: 2, info: 2 },
+      rules: [
+        "body.examples.missing",
+        "body.negative-scope.missing",
+        "body.structure.headings",
+        "frontmatter.description.trigger-vocabulary",
+      ],
     });
   });
 

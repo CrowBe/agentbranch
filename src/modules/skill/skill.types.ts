@@ -45,6 +45,9 @@ export type SkillVersionLintSummary = {
   readonly score: number;
   readonly grade: "A" | "B" | "C" | "D";
   readonly counts: Readonly<Record<"error" | "warn" | "info", number>>;
+  /** Fired rule ids. Optional: versions persisted before the harness loop
+   * landed carry a summary without it. */
+  readonly rules?: readonly string[];
 };
 
 export type SkillVersion = {

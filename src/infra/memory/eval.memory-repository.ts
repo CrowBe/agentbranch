@@ -1,8 +1,18 @@
 import type { EvalRun, EvalRunRepository } from "@/modules/triggering-eval";
+import { analysisReadLimit, toEvalRunAnalysisRecord } from "@/modules/triggering-eval";
+import type { SkillVersionLintSummary } from "@/modules/skill";
 import { ok, EvalRunId, type SkillId, type UserId } from "@/shared";
 
+export type MemoryEvalRunOptions = {
+  /** Joins the skill version's lint summary into the analysis read model —
+   * wired from the shared memory skill store; absent means no join (null). */
+  readonly resolveLintSummary?: (versionId: string) => SkillVersionLintSummary | null;
+};
+
 /** In-memory EvalRunRepository — the offline default. */
-export function createMemoryEvalRunRepository(): EvalRunRepository {
+export function createMemoryEvalRunRepository(
+  options: MemoryEvalRunOptions = {},
+): EvalRunRepository {
   const runs = new Map<string, EvalRun>();
 
   return {
@@ -20,6 +30,19 @@ export function createMemoryEvalRunRepository(): EvalRunRepository {
     },
     async listByUser(userId: UserId) {
       return ok([...runs.values()].filter((r) => r.userId === userId));
+    },
+    async listForAnalysis(filter = {}) {
+      const records = [...runs.values()]
+        .filter((r) => (filter.since ? r.createdAt >= filter.since : true))
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, analysisReadLimit(filter.limit))
+        .map((r) =>
+          toEvalRunAnalysisRecord(
+            r,
+            r.skillVersionId ? (options.resolveLintSummary?.(r.skillVersionId) ?? null) : null,
+          ),
+        );
+      return ok(records);
     },
   };
 }

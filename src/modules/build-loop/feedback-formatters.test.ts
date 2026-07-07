@@ -127,7 +127,12 @@ describe("eval feedback formatters", () => {
   it("formats lint findings by severity", () => {
     const report: LintReport = {
       kind: "lint",
-      summary: { score: 55, grade: "D", counts: { error: 1, warn: 1, info: 0 } },
+      summary: {
+        score: 55,
+        grade: "D",
+        counts: { error: 1, warn: 1, info: 0 },
+        rules: ["body.examples.missing", "frontmatter.description.required"],
+      },
       findings: [
         {
           rule: "frontmatter.description.required",
@@ -163,7 +168,7 @@ describe("eval feedback formatters", () => {
   it("skips lint feedback for clean reports", () => {
     const report: LintReport = {
       kind: "lint",
-      summary: { score: 100, grade: "A", counts: { error: 0, warn: 0, info: 0 } },
+      summary: { score: 100, grade: "A", counts: { error: 0, warn: 0, info: 0 }, rules: [] },
       findings: [],
     };
 

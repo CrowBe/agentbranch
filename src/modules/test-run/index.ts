@@ -24,12 +24,15 @@ export type TestRunBreakdown = {
 };
 
 export type {
+  AnalysisReadFilter,
   MockTool,
   MockToolRegistry,
   Scenario,
   TestRun,
+  TestRunAnalysisRecord,
   TestRunResult,
   TestRunStatus,
+  TestRunToolUse,
   TranscriptStep,
 } from "./test-run.types";
 export {
@@ -38,6 +41,7 @@ export {
   emailMockTool,
 } from "./mock-tool-registry";
 export { executeSkill, TEST_RUN_WORLD_GENERATOR_VERSION } from "./execute-skill";
+export { analysisReadLimit, toTestRunAnalysisRecord } from "./analysis-read";
 export type { TestRunRepository } from "./test-run.repository";
 
 const testRunEvaluator: Evaluator<Skill, TestRunResult> = {
