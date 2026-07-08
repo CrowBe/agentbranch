@@ -259,7 +259,7 @@ Supporting policy: publishers are attributable (OAuth-only identity, already tru
 
 **Consumer-side honesty.** We can't make another runtime safe and the standard has no permissions manifest. At the install boundary we surface what analysis can derive: the skill's tool/behaviour footprint, trust tier, gate results, content hash. Presentation, never a guarantee — copy says so.
 
-**Build order (when greenlit) — moderation leads, distribution follows:** static lint policy and the adversarial negative battery run today; the remaining layers land in order: 1. `safetyReviewCapability` → 2. publication domain (pinned version, slug, tier, hash, rate limit) → 3. tap repo + bot (PR flow, open-source lint CI, hosted-gate checks, auto-merge, revert path) → 4. reviewed tier + Skill library surface (Templates becomes a view over the reviewed tier).
+**Build order (when greenlit) — moderation leads, distribution follows:** static lint policy, the adversarial negative battery, and `safetyReviewCapability` run today; the remaining layers land in order: 1. publication domain (pinned version, slug, tier, hash, rate limit) → 2. tap repo + bot (PR flow, open-source lint CI, hosted-gate checks, auto-merge, revert path) → 3. reviewed tier + Skill library surface (Templates becomes a view over the reviewed tier).
 
 ### 9.2 Equipment primitives & composition (broadening beyond Skill)
 
