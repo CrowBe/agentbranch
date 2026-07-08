@@ -1,4 +1,5 @@
 import type { RenderedDoc, SourceDoc, HeroView } from "@/modules/hero";
+import type { SafetyReviewScore, SafetyReviewVerdict } from "@/modules/safety-review";
 import type { SkillSource, SkillVersionLintSummary } from "@/modules/skill";
 import type { TestRunResult } from "@/modules/test-run";
 import type { TriggeringResult } from "@/modules/triggering-eval";
@@ -13,7 +14,12 @@ import type { TriggeringResult } from "@/modules/triggering-eval";
 export type InteractionMode = "build" | "import" | "skills" | "equipment" | "history";
 
 /** The tool surfaces reachable from the hero's chips. */
-export type ToolAction = "visualise" | "test-run" | "triggering-eval" | "export";
+export type ToolAction =
+  | "visualise"
+  | "test-run"
+  | "triggering-eval"
+  | "safety-review"
+  | "export";
 
 export type EvaluationToolAction = "test-run" | "triggering-eval";
 export type EvaluationFeedbackResult = TestRunResult | TriggeringResult;
@@ -44,6 +50,18 @@ export type EquipmentState = {
 };
 
 export type EquipmentKind = "tool-contract" | "response-schema";
+
+/**
+ * The safety rating held for the version on the hero (ARCHITECTURE §9.1).
+ * Null means the version is unrated — the manual "Safety" scan is on offer.
+ * The full rating rides in one shape so Insights and the breakdown render
+ * locally; switching surfaces never re-spends credits.
+ */
+export type SafetyRatingState = {
+  readonly verdict: SafetyReviewVerdict;
+  readonly scores: readonly SafetyReviewScore[];
+  readonly insight: InsightPanel;
+};
 
 export type CapabilityPanel =
   | { readonly kind: "visualise"; readonly mermaid: string }
@@ -76,6 +94,16 @@ export type CapabilityPanel =
       readonly kind: "lint-breakdown";
       readonly title: string;
       readonly breakdown: LintBreakdownPanel;
+    }
+  | {
+      readonly kind: "safety-insights";
+      readonly title: string;
+      readonly rating: SafetyRatingState;
+    }
+  | {
+      readonly kind: "safety-breakdown";
+      readonly title: string;
+      readonly rating: SafetyRatingState;
     }
   | { readonly kind: "export"; readonly rootDir: string; readonly files: readonly ExportPanelFile[] };
 
@@ -165,6 +193,8 @@ export type WorkspaceSnapshot = {
   readonly capability: CapabilityPanel | null;
   readonly activeTool: ToolAction | null;
   readonly equipment: EquipmentState;
+  /** The stored safety rating for the version on the hero; null = unrated. */
+  readonly safetyRating: SafetyRatingState | null;
   /** Non-null means the hero is showing an in-progress draft (ARCHITECTURE §9.3). */
   readonly branchId: string | null;
   readonly openDrafts: readonly DraftSummary[];
@@ -196,6 +226,8 @@ export type WorkspaceActions = {
   readonly runTool: (action: ToolAction) => Promise<void>;
   readonly selectEvaluationSurface: (surface: EvaluationSurface) => Promise<void>;
   readonly selectLintSurface: (surface: EvaluationSurface) => Promise<void>;
+  /** Re-render the stored rating on the other surface — local, zero spend. */
+  readonly selectSafetySurface: (surface: EvaluationSurface) => void;
   readonly reviseWithFeedback: (result: EvaluationFeedbackResult) => void;
 };
 

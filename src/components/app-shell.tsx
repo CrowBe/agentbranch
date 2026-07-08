@@ -76,6 +76,7 @@ export function AppShell({
             onLintSelect={() => void actions.selectLintSurface("insights")}
             onEvaluationSurfaceChange={(surface) => void actions.selectEvaluationSurface(surface)}
             onLintSurfaceChange={(surface) => void actions.selectLintSurface(surface)}
+            onSafetySurfaceChange={(surface) => actions.selectSafetySurface(surface)}
             onReviseWithFeedback={actions.reviseWithFeedback}
             feedbackBusy={snapshot.busy || snapshot.toolBusy}
           />

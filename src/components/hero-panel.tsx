@@ -34,6 +34,7 @@ export function HeroPanel({
   onLintSelect,
   onEvaluationSurfaceChange,
   onLintSurfaceChange,
+  onSafetySurfaceChange,
   onReviseWithFeedback,
   feedbackBusy,
 }: {
@@ -52,6 +53,7 @@ export function HeroPanel({
   onLintSelect: () => void;
   onEvaluationSurfaceChange: (surface: "insights" | "breakdown") => void;
   onLintSurfaceChange: (surface: "insights" | "breakdown") => void;
+  onSafetySurfaceChange: (surface: "insights" | "breakdown") => void;
   onReviseWithFeedback: (result: EvaluationFeedbackResult) => void;
   feedbackBusy: boolean;
 }) {
@@ -70,6 +72,7 @@ export function HeroPanel({
             busy={toolBusy}
             onEvaluationSurfaceChange={onEvaluationSurfaceChange}
             onLintSurfaceChange={onLintSurfaceChange}
+            onSafetySurfaceChange={onSafetySurfaceChange}
             onReviseWithFeedback={onReviseWithFeedback}
             feedbackBusy={feedbackBusy}
           />
@@ -142,6 +145,7 @@ function CapabilityView({
   busy,
   onEvaluationSurfaceChange,
   onLintSurfaceChange,
+  onSafetySurfaceChange,
   onReviseWithFeedback,
   feedbackBusy,
 }: {
@@ -149,6 +153,7 @@ function CapabilityView({
   busy: boolean;
   onEvaluationSurfaceChange: (surface: "insights" | "breakdown") => void;
   onLintSurfaceChange: (surface: "insights" | "breakdown") => void;
+  onSafetySurfaceChange: (surface: "insights" | "breakdown") => void;
   onReviseWithFeedback: (result: EvaluationFeedbackResult) => void;
   feedbackBusy: boolean;
 }) {
@@ -231,6 +236,47 @@ function CapabilityView({
               </section>
             ))
           )}
+        </div>
+      </div>
+    );
+  }
+
+  if (panel.kind === "safety-insights") {
+    return (
+      <div className="flex flex-col gap-4">
+        <EvaluationSurfaceTabs value="insights" busy={busy} onChange={onSafetySurfaceChange} />
+        <header className="flex flex-col gap-2">
+          <p className="text-label text-on-surface-variant">{panel.title}</p>
+          <h1 className="text-headline-md">{safetyVerdictLabel(panel.rating.verdict)}</h1>
+          <p className="text-doc-rendered text-on-surface-variant">{panel.rating.insight.summary}</p>
+        </header>
+        <InsightList title="Findings" items={panel.rating.insight.findings} />
+        <InsightList title="Watch" items={panel.rating.insight.watch} />
+      </div>
+    );
+  }
+
+  if (panel.kind === "safety-breakdown") {
+    return (
+      <div className="flex flex-col gap-4">
+        <EvaluationSurfaceTabs value="breakdown" busy={busy} onChange={onSafetySurfaceChange} />
+        <header className="flex flex-col gap-1">
+          <p className="text-label text-on-surface-variant">{panel.title}</p>
+          <h1 className="text-headline-md">{safetyVerdictLabel(panel.rating.verdict)}</h1>
+        </header>
+        <div className="flex flex-col gap-3">
+          {panel.rating.scores.map((score) => (
+            <section
+              key={score.class}
+              className="rounded-[var(--radius-sm)] border border-outline-variant p-3"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-doc-rendered-h capitalize">{score.class}</h2>
+                <p className="text-label text-on-surface-variant">{score.score.toFixed(2)}</p>
+              </div>
+              <p className="text-doc-rendered mt-2 text-on-surface-variant">{score.rationale}</p>
+            </section>
+          ))}
         </div>
       </div>
     );
@@ -471,4 +517,10 @@ function verdictLabel(verdict: InsightPanel["verdict"]): string {
   if (verdict === "good") return "Looks good";
   if (verdict === "needs-attention") return "Needs attention";
   return "Failing";
+}
+
+function safetyVerdictLabel(verdict: "passed" | "needs-review" | "blocked"): string {
+  if (verdict === "passed") return "Passed";
+  if (verdict === "needs-review") return "Needs review";
+  return "Blocked";
 }

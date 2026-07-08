@@ -40,14 +40,14 @@ Return all three classes with concise rationales. A benign productivity skill
 should score low even when it mentions ordinary user data it needs for its job.`;
 
 const INSIGHT_SYSTEM = `You explain a skill safety review result in plain language.
-Be concrete and restrained. This is an advisory publication gate result, not a
+Be concrete and restrained. This is an advisory safety rating, not a
 guarantee. Mention the specific risk classes that need attention.`;
 
 export async function runSafetyReview(
   input: SafetyReviewInput,
   gateway: ModelGateway,
 ): Promise<Result<SafetyReviewResult, DomainError>> {
-  const tag = { kind: "platform", reason: "safety-review" } as const;
+  const tag = input.tag;
   const review = await gateway.generate({
     system: REVIEW_SYSTEM,
     prompt: folderPrompt(input),

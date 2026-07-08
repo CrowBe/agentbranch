@@ -9,6 +9,7 @@ export type GatedCapability =
   | "visualise"
   | "test-run"
   | "triggering-eval"
+  | "safety-review"
   | "export"
   | "import"
   | "publish";

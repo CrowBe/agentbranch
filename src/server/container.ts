@@ -3,6 +3,7 @@ import type { SkillRepository, SkillRetentionRepository } from "@/modules/skill"
 import type { RequestRateLimiter, Tier, UsageRepository } from "@/modules/usage";
 import type { TestRunRepository } from "@/modules/test-run";
 import type { EvalRunRepository } from "@/modules/triggering-eval";
+import type { SafetyRatingRepository } from "@/modules/safety-review";
 import type { AuthPort } from "@/modules/auth";
 import { createModelGateway, type ModelGateway } from "@/modules/model-gateway";
 import type { ModelRouter } from "@/modules/model-router";
@@ -23,6 +24,7 @@ import { createMemoryUsageRepository } from "@/infra/memory/usage.memory-reposit
 import { createMemoryRequestRateLimiter } from "@/infra/memory/rate-limit.memory-repository";
 import { createMemoryTestRunRepository } from "@/infra/memory/test-run.memory-repository";
 import { createMemoryEvalRunRepository } from "@/infra/memory/eval.memory-repository";
+import { createMemorySafetyRatingRepository } from "@/infra/memory/safety-rating.memory-repository";
 import { createMemoryHarnessVersionRepository } from "@/infra/memory/harness-version.memory-repository";
 import { createMemoryBenchmarkRunRepository } from "@/infra/memory/benchmark.memory-repository";
 import { createMemoryPublicationRepository } from "@/infra/memory/publication.memory-repository";
@@ -35,6 +37,7 @@ import { createPrismaUsageRepository } from "@/infra/prisma/usage.prisma-reposit
 import { createPrismaRequestRateLimiter } from "@/infra/prisma/rate-limit.prisma-repository";
 import { createPrismaTestRunRepository } from "@/infra/prisma/test-run.prisma-repository";
 import { createPrismaEvalRunRepository } from "@/infra/prisma/eval.prisma-repository";
+import { createPrismaSafetyRatingRepository } from "@/infra/prisma/safety-rating.prisma-repository";
 import { createPrismaHarnessVersionRepository } from "@/infra/prisma/harness-version.prisma-repository";
 import { createPrismaBenchmarkRunRepository } from "@/infra/prisma/benchmark.prisma-repository";
 import { createPrismaPublicationRepository } from "@/infra/prisma/publication.prisma-repository";
@@ -69,6 +72,9 @@ export type AppContainer = {
   readonly tierFor: (userId: import("@/shared").UserId) => Promise<Tier>;
   readonly testRuns: TestRunRepository;
   readonly evalRuns: EvalRunRepository;
+  // Recorded safety ratings — the opt-in safety review's Evaluation records
+  // (ARCHITECTURE §9.1).
+  readonly safetyRatings: SafetyRatingRepository;
   readonly harnessVersions: HarnessVersionRepository;
   readonly currentHarnessVersion: () => Promise<Result<HarnessVersion, DomainError>>;
   // Frozen-set scorings pinned per harness version — the admin benchmark
@@ -157,6 +163,9 @@ export function getContainer(): AppContainer {
     evalRuns: prisma
       ? createPrismaEvalRunRepository(prisma)
       : createMemoryEvalRunRepository({ resolveLintSummary }),
+    safetyRatings: prisma
+      ? createPrismaSafetyRatingRepository(prisma)
+      : createMemorySafetyRatingRepository(),
     harnessVersions,
     currentHarnessVersion: () => harnessVersionPromise,
     benchmarkRuns: prisma

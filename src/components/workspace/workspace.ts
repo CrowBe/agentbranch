@@ -30,6 +30,7 @@ import {
   decodeLintPanel,
   decodePromotedSkill,
   decodeRunHistory,
+  decodeSafetyRating,
   decodeSkillDetail,
   decodeSkillList,
   errorMessage,
@@ -50,6 +51,7 @@ import type {
   EvaluationToolAction,
   HeroDocs,
   InteractionEntry,
+  SafetyRatingState,
   ToolAction,
   TriggeringCaseProgressPanel,
   Workspace,
@@ -82,6 +84,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     capability: null,
     activeTool: null,
     equipment: { contracts: [], schemas: [] },
+    safetyRating: null,
     branchId: null,
     openDrafts: [],
     busy: false,
@@ -243,6 +246,8 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       capability: null,
       activeTool: null,
       lintSummary: null,
+      // The content changed, so any stored rating no longer describes it.
+      safetyRating: null,
     });
   }
 
@@ -406,6 +411,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
         lintSummary: imported.skill.lintSummary ?? null,
         heroDocs: { rendered: imported.rendered, source: imported.source },
         view: "rendered",
+        safetyRating: null,
         status: "Import complete.",
       });
       appendEntry(entry(`Imported ${imported.rendered.title}.`, "muted"));
@@ -436,11 +442,13 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
         view: "rendered",
         capability: null,
         branchId: null,
+        safetyRating: null,
         status: "Skill opened.",
         mode: "build",
         entries: [entry(`Opened ${loaded.skill.source.frontmatter.name}.`, "muted")],
       });
       void refreshDrafts(loaded.skill.id);
+      void refreshSafetyRating(loaded.skill.id, null);
     } catch (cause) {
       fail(friendlyError(String(cause)));
     }
@@ -472,6 +480,8 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
         view: "rendered",
         capability: null,
         branchId: null,
+        // Restore lands a fresh head revision, which starts unrated.
+        safetyRating: null,
         status: "Version restored.",
         entries: [entry(`Restored revision ${revision} as revision ${restored.skill.latestRevision}.`, "muted")],
         mode: "build",
@@ -760,6 +770,25 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     );
     if (!confirmed) return;
 
+    // The optional safety-rating step (ARCHITECTURE §9.1): offered only when
+    // the draft head is unrated, opt-in (skipping costs nothing), and advisory
+    // — a verdict never gates promote, the user decides.
+    if (!snapshot.safetyRating) {
+      const wantsRating = confirmImpl(
+        "Optional: run a safety rating on this draft first? It uses your plan's model credits — cancel to skip and set the main version now.",
+      );
+      if (wantsRating) {
+        const rating = await runSafetyRating();
+        if (!rating) return; // the run failed; the error is on screen, the draft is untouched
+        if (rating.verdict !== "passed") {
+          const proceed = confirmImpl(
+            `The safety rating is "${safetyVerdictLabel(rating.verdict)}". Set this draft as your main version anyway?`,
+          );
+          if (!proceed) return;
+        }
+      }
+    }
+
     patch({ draftBusy: true, capability: null, activeTool: null, status: "Setting as main version..." });
     try {
       const res = await fetchImpl(
@@ -807,9 +836,10 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
         fail(errorMessage(body, res.status));
         return;
       }
-      patch({ branchId: null });
+      patch({ branchId: null, safetyRating: null });
       await reloadMainVersion(skillId);
       await refreshDrafts(skillId);
+      void refreshSafetyRating(skillId, null);
       patch({
         status: "Draft discarded. Back to your main version.",
         entries: [entry("Draft discarded — back to your main version.", "muted")],
@@ -829,7 +859,10 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       heroDocs: renderHeroDocs(draft.source),
       view: "rendered",
       mode: "build",
+      safetyRating: null,
     });
+    const skillId = snapshot.currentSkillId;
+    if (skillId) void refreshSafetyRating(skillId, draft.id);
   }
 
   async function reloadMainVersion(skillId: string): Promise<void> {
@@ -850,7 +883,93 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
   // Capabilities on the hero (tools + lint)
 
   async function runToolAction(action: ToolAction): Promise<void> {
+    if (action === "safety-review") {
+      await runSafetyRating();
+      return;
+    }
     await runTool(action, "insights");
+  }
+
+  // -------------------------------------------------------------------------
+  // Safety rating (ARCHITECTURE §9.1) — always a manual, opt-in step. The scan
+  // runs only when the user asks for it on an unrated version; a rated version
+  // re-renders the stored rating for free.
+
+  /** The version's stored rating, refreshed from the server. Non-fatal: on any
+   * failure the version just reads as unrated and the manual offer stands. */
+  async function refreshSafetyRating(skillId: string, branchId: string | null): Promise<void> {
+    try {
+      const params = new URLSearchParams({ skillId });
+      if (branchId) params.set("branchId", branchId);
+      const res = await fetchImpl(`/api/safety-review?${params.toString()}`);
+      if (!res.ok) return;
+      const body = (await res.json().catch(() => null)) as unknown;
+      patch({ safetyRating: decodeSafetyRating(body) });
+    } catch {
+      // Non-fatal — the offer just treats the version as unrated.
+    }
+  }
+
+  /** Run the opt-in scan (spends the user's credits), or re-show the stored
+   * rating at zero cost when the version already carries one. Returns the
+   * rating so the promote flow can offer it as its optional step. */
+  async function runSafetyRating(): Promise<SafetyRatingState | null> {
+    const skill = snapshot.current;
+    if (!skill || snapshot.toolBusy) return snapshot.safetyRating;
+    if (snapshot.safetyRating) {
+      patch({
+        activeTool: "safety-review",
+        capability: safetyPanel("insights", snapshot.safetyRating),
+        status: "Safety rating ready.",
+      });
+      return snapshot.safetyRating;
+    }
+
+    patch({
+      activeTool: "safety-review",
+      toolBusy: true,
+      capability: null,
+      status: "Safety rating running...",
+    });
+    try {
+      const res = await fetchImpl("/api/safety-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          skill,
+          currentSkillId: snapshot.currentSkillId ?? undefined,
+          branchId: snapshot.branchId ?? undefined,
+        }),
+      });
+      const body = (await res.json().catch(() => null)) as unknown;
+      if (!res.ok) {
+        fail(toolErrorMessage(body, res.status, "safety-review"));
+        return null;
+      }
+      const rating = decodeSafetyRating(body);
+      if (!rating) {
+        fail("Safety rating returned an unexpected response.");
+        return null;
+      }
+      patch({
+        safetyRating: rating,
+        capability: safetyPanel("insights", rating),
+        status: "Safety rating ready.",
+      });
+      return rating;
+    } catch (cause) {
+      fail(friendlyError(String(cause)));
+      return null;
+    } finally {
+      patch({ toolBusy: false });
+    }
+  }
+
+  /** Local re-render of the stored rating — switching surfaces never re-spends. */
+  function selectSafetySurface(surface: EvaluationSurface): void {
+    const rating = snapshot.safetyRating;
+    if (!rating) return;
+    patch({ activeTool: "safety-review", capability: safetyPanel(surface, rating) });
   }
 
   async function selectEvaluationSurface(surface: EvaluationSurface): Promise<void> {
@@ -1004,6 +1123,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     runTool: runToolAction,
     selectEvaluationSurface,
     selectLintSurface,
+    selectSafetySurface,
     reviseWithFeedback,
   };
 
@@ -1044,7 +1164,20 @@ function toolLabel(action: ToolAction): string {
   if (action === "visualise") return "Visualise";
   if (action === "test-run") return "Test run";
   if (action === "triggering-eval") return "Triggering eval";
+  if (action === "safety-review") return "Safety rating";
   return "Export";
+}
+
+function safetyPanel(surface: EvaluationSurface, rating: SafetyRatingState): CapabilityPanel {
+  return surface === "breakdown"
+    ? { kind: "safety-breakdown", title: "Safety rating", rating }
+    : { kind: "safety-insights", title: "Safety rating", rating };
+}
+
+function safetyVerdictLabel(verdict: SafetyRatingState["verdict"]): string {
+  if (verdict === "passed") return "passed";
+  if (verdict === "needs-review") return "needs review";
+  return "blocked";
 }
 
 function apiPath(action: ToolAction): string {

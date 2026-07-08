@@ -16,12 +16,13 @@ model User {
   email     String   @unique
   createdAt DateTime @default(now()) @map("created_at")
 
-  skills     Skill[]
-  usage      Usage?
-  rateLimits RateLimitWindow[]
-  testRuns   TestRun[]
-  evalRuns   EvalRun[]
-  publications Publication[]
+  skills        Skill[]
+  usage         Usage?
+  rateLimits    RateLimitWindow[]
+  testRuns      TestRun[]
+  evalRuns      EvalRun[]
+  safetyRatings SafetyRating[]
+  publications  Publication[]
 
   @@map("users")
 }
@@ -42,6 +43,7 @@ model HarnessVersion {
 
   testRuns      TestRun[]
   evalRuns      EvalRun[]
+  safetyRatings SafetyRating[]
   benchmarkRuns BenchmarkRun[]
   publications  Publication[]
 
@@ -83,13 +85,14 @@ model Skill {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  mainVersion SkillVersion? @relation("SkillMainVersion", fields: [mainVersionId], references: [id], onDelete: SetNull)
-  versions    SkillVersion[]
-  branches    SkillBranch[]
-  testRuns    TestRun[]
-  evalRuns    EvalRun[]
-  publications Publication[]
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mainVersion   SkillVersion? @relation("SkillMainVersion", fields: [mainVersionId], references: [id], onDelete: SetNull)
+  versions      SkillVersion[]
+  branches      SkillBranch[]
+  testRuns      TestRun[]
+  evalRuns      EvalRun[]
+  safetyRatings SafetyRating[]
+  publications  Publication[]
 
   @@index([userId])
   @@map("skills")
@@ -138,10 +141,11 @@ model SkillVersion {
   branch      SkillBranch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
   parent      SkillVersion?  @relation("SkillVersionParent", fields: [parentId], references: [id], onDelete: SetNull)
   children    SkillVersion[] @relation("SkillVersionParent")
-  mainOfSkill Skill?         @relation("SkillMainVersion")
-  testRuns    TestRun[]
-  evalRuns    EvalRun[]
-  publications Publication[]
+  mainOfSkill   Skill?         @relation("SkillMainVersion")
+  testRuns      TestRun[]
+  evalRuns      EvalRun[]
+  safetyRatings SafetyRating[]
+  publications  Publication[]
 
   @@unique([branchId, revision])
   @@index([skillId])
@@ -227,6 +231,30 @@ model EvalRun {
   @@index([skillVersionId])
   @@index([harnessVersionId])
   @@map("eval_runs")
+}
+
+/// Recorded safety ratings: the opt-in safety review's Evaluation record
+/// (ARCHITECTURE §9.1). Pins the reviewed skill version; append-only, so a
+/// rating stays true for its version and a new revision is simply unrated.
+model SafetyRating {
+  id               String   @id @default(cuid())
+  skillId          String   @map("skill_id")
+  skillVersionId   String?  @map("skill_version_id")
+  harnessVersionId String?  @map("harness_version_id")
+  userId           String   @map("user_id")
+  verdict          String // passed | needs-review | blocked
+  resultJson       Json     @map("result_json")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  skill          Skill           @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  skillVersion   SkillVersion?   @relation(fields: [skillVersionId], references: [id], onDelete: SetNull)
+  harnessVersion HarnessVersion? @relation(fields: [harnessVersionId], references: [id], onDelete: SetNull)
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([skillId])
+  @@index([skillVersionId])
+  @@index([harnessVersionId])
+  @@map("safety_ratings")
 }
 
 /// Recorded test-run results: skill executed against the mock-tool registry.

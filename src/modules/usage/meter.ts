@@ -28,6 +28,7 @@ export const TIER_LIMITS: Readonly<Record<Tier, TierLimits>> = {
       "visualise",
       "test-run",
       "triggering-eval",
+      "safety-review",
       "export",
       "import",
       "publish",

@@ -171,7 +171,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **visualise** | `visualiseCapability`, IR + Mermaid types | — | extraction model-backed · deterministic offline fallback · render real |
 | **test-run** | `testRunCapability`, `executeSkill`, `createMockToolRegistry`, `defaultMockToolRegistry`, `emailMockTool`, `registryFromContracts`, `computeContractChecks`, `contractCheckIssues`, `toTestRunAnalysisRecord` | `TestRunRepository` | evaluation capability over a `TestRunInput` bundle · run + world generation real · contract-driven mocks + per-call validation real · email mock = offline fallback |
 | **triggering-eval** | `triggeringEvalCapability`, `runTriggeringEval`, `runBatteryCases`, `generatePromptBattery`, `distractorLibrary`, `toEvalRunAnalysisRecord` | `EvalRunRepository` | evaluation capability · run + battery generation real · adversarial negative battery · distractor library static v1 seed |
-| **safety-review** | `safetyReviewCapability`, `runSafetyReview`, safety verdict/score types | — | evaluation capability · LLM-judge over a full skill folder as structurally untrusted data · `platform`-tagged |
+| **safety-review** | `safetyReviewCapability`, `runSafetyReview`, `SafetyRating` + verdict/score types | `SafetyRatingRepository` | evaluation capability · LLM-judge over a full skill folder as structurally untrusted data · caller-tagged (opt-in rating = `account`, publication gate = `platform`) · records persist as safety ratings pinned to the reviewed version |
 | **publication** | `publishSkillVersion`, `Publication`, `PublicationRepository` + types | `PublicationRepository` | real (pins a Skill version + content hash + slug + tier + gate binding; rate-limited publish service) |
 | **export** | `exportCapability`, manifest types | — | real |
 | **lint** | `lintCapability`, `summarizeLintFindings`, `LintReport`, `LintFinding` | — | real (quality + pure policy rules; `summarizeLintFindings` is the shared scorer every LintReport-shaped artifact uses) |
@@ -233,10 +233,10 @@ when they become chat-buildable (ARCHITECTURE §9.2 order).
 
 | Adapter | Implements | Notes |
 |---|---|---|
-| `memory/{skill,usage,test-run,eval,harness-version,benchmark}.memory-repository.ts` | the six repos + `SkillRetentionRepository` | **offline default**, tested; skill repo + retention share one store; the eval/test-run adapters take an optional lint-summary resolver over that store for the analysis reads |
+| `memory/{skill,usage,test-run,eval,safety-rating,harness-version,benchmark}.memory-repository.ts` | the seven repos + `SkillRetentionRepository` | **offline default**, tested; skill repo + retention share one store; the eval/test-run adapters take an optional lint-summary resolver over that store for the analysis reads |
 | `memory/publication.memory-repository.ts` | `PublicationRepository` | offline default; shares the skill store to enforce publisher ownership of the pinned version |
 | `prisma/client.ts` | — | PrismaClient + `@prisma/adapter-pg` (Prisma 7 driver adapter) |
-| `prisma/{skill,usage,test-run,eval,harness-version,benchmark}.prisma-repository.ts` | `SkillRepository` (+ `SkillRetentionRepository`), `UsageRepository`, `TestRunRepository`, `EvalRunRepository`, `HarnessVersionRepository`, `BenchmarkRunRepository` | real; the eval/test-run analysis reads join `skill_versions.lint_summary_json` |
+| `prisma/{skill,usage,test-run,eval,safety-rating,harness-version,benchmark}.prisma-repository.ts` | `SkillRepository` (+ `SkillRetentionRepository`), `UsageRepository`, `TestRunRepository`, `EvalRunRepository`, `SafetyRatingRepository`, `HarnessVersionRepository`, `BenchmarkRunRepository` | real; the eval/test-run analysis reads join `skill_versions.lint_summary_json` |
 | `prisma/publication.prisma-repository.ts` | `PublicationRepository` | real; writes only when the version belongs to the publisher and the slug is unused |
 | `prisma/user-provisioning-auth.ts` | `AuthPort` | wraps Clerk auth, provisions the `users` row on first sight |
 | `ai/sdk-model-calls.ts` | `RawModelCalls` | SDK translation only: message/tool mapping, stream-part mapping, token-usage shape reading, provider cap-error detection. Admission + recording live above it, in the model-gateway module's accounting shell (`createModelGateway`), so policy holds for every adapter by construction |
@@ -265,14 +265,16 @@ when they become chat-buildable (ARCHITECTURE §9.2 order).
   and encodes events as an SSE `Response`. No persistence — equipment is
   session-kept by the client workspace.
 - `evaluation-run.ts` — `evaluationResponse({kind, surface, sse, skill, pin, deps})`:
-  the recorded-evaluation driver both evaluation routes share. Runs the seam's
+  the recorded-evaluation driver the evaluation routes share. Runs the seam's
   `runEvaluation`, then the persistence choreography — resolve the pinned
   version, stamp the harness version, record via a kind-keyed dispatch
   (`test-run` → `TestRunRepository`, `triggering-eval` → `EvalRunRepository`,
-  exhaustively checked) — and shapes the response: 503 offline *before* any
-  stream opens, SSE (observer events → `EvaluationEvent`) when asked, JSON
-  otherwise. Ports are handed in, so the whole choreography is tested against
-  memory adapters.
+  `safety-review` → `SafetyRatingRepository`, exhaustively checked) — and
+  shapes the response: 503 offline *before* any stream opens, SSE (observer
+  events → `EvaluationEvent`) when asked, JSON otherwise. Ports are handed in,
+  so the whole choreography is tested against memory adapters. The
+  safety-review entry declares the `account` tag on its input — the opt-in
+  rating is the user's own spend (ARCHITECTURE §9.1).
 
 ### Presentation (`src/app`, `src/components`)
 
@@ -286,6 +288,13 @@ when they become chat-buildable (ARCHITECTURE §9.2 order).
   identical except for the capability they name. The test-run route also
   accepts the optional bundle (`toolContracts` / `responseSchemas` as raw JSON
   documents), parsed through the primitives' source models before the run.
+- `app/api/safety-review/route.ts` — the opt-in safety rating (ARCHITECTURE
+  §9.1). POST runs the safety review through the recorded-evaluation driver and
+  answers with the full rating (verdict + scores + Insight) in one shape, so
+  the client renders Insights and the breakdown locally and switching surfaces
+  never re-spends; GET answers whether the current head version (main or a
+  named draft) already carries a rating, which is what makes the offer show
+  only for an unrated version.
 - `app/api/{response-schema,tool-contract}/route.ts` — the equipment
   primitives' quality checks: auth → parse the raw document through the
   module's source model → `runCapability` (pure, offline) → Insights or
@@ -345,7 +354,7 @@ when they become chat-buildable (ARCHITECTURE §9.2 order).
 | Export | Purpose |
 |---|---|
 | `Result<T,E>`, `ok`, `err`, `isOk/isErr`, `mapResult`, `unwrap` | explicit success/failure at boundaries (domain returns these, doesn't throw across modules) |
-| branded ids: `SkillId`, `UserId`, `SkillVersionId`, `TestRunId`, `EvalRunId` | structural string ids that don't interchange |
+| branded ids: `SkillId`, `UserId`, `SkillVersionId`, `TestRunId`, `EvalRunId`, `SafetyRatingId` | structural string ids that don't interchange |
 | `DomainError`, `domainError`, `notConfigured` | **closed discriminated union** — `tag` is the discriminant; callers can switch exhaustively. New tags go here, not in modules. |
 | `SseEvent`, `encodeSse` | the typed SSE envelope shared by loop (server) and preview (client) |
 
@@ -415,8 +424,8 @@ npm run db:generate / db:push / db:migrate # Prisma (needs DATABASE_URL)
   Tailwind 4 · Vitest 4 · npm.
 - Data model lives in `prisma/schema.prisma` (ARCHITECTURE §6): `users`,
   `skills`, `skill_branches`, `skill_versions` (append-only), `usage`,
-  `harness_versions`, `test_runs`, `eval_runs`, `benchmark_runs`. Migrations
-  under `prisma/migrations/`.
+  `publications`, `harness_versions`, `test_runs`, `eval_runs`,
+  `safety_ratings`, `benchmark_runs`. Migrations under `prisma/migrations/`.
 
 ---
 

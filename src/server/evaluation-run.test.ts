@@ -9,6 +9,7 @@ import {
 import { createMemorySkillRepository } from "@/infra/memory/skill.memory-repository";
 import { createMemoryTestRunRepository } from "@/infra/memory/test-run.memory-repository";
 import { createMemoryEvalRunRepository } from "@/infra/memory/eval.memory-repository";
+import { createMemorySafetyRatingRepository } from "@/infra/memory/safety-rating.memory-repository";
 import { createMemoryHarnessVersionRepository } from "@/infra/memory/harness-version.memory-repository";
 import { currentHarnessManifest } from "@/modules/harness-version";
 import { makeSkill, parseSkillMd, type Skill, type SkillSource } from "@/modules/skill";
@@ -93,6 +94,17 @@ function fakeGateway(hasModel = true): ModelGateway {
           }),
         );
       }
+      if (input.system.includes("security reviewer")) {
+        return ok(
+          input.schema.parse({
+            scores: [
+              { class: "injection", score: 0.02, rationale: "No override language." },
+              { class: "exfiltration", score: 0.03, rationale: "No secret collection." },
+              { class: "deception", score: 0.01, rationale: "Clear purpose." },
+            ],
+          }),
+        );
+      }
       if (input.system.includes("deterministic test-run inputs")) {
         return ok(
           input.schema.parse({
@@ -123,15 +135,17 @@ function makeDeps(gateway: ModelGateway = fakeGateway()) {
   const skills = createMemorySkillRepository();
   const testRuns = createMemoryTestRunRepository();
   const evalRuns = createMemoryEvalRunRepository();
+  const safetyRatings = createMemorySafetyRatingRepository();
   const harnessVersions = createMemoryHarnessVersionRepository();
   const deps: EvaluationRunDeps = {
     gateway,
     skills,
     testRuns,
     evalRuns,
+    safetyRatings,
     currentHarnessVersion: () => harnessVersions.current(currentHarnessManifest()),
   };
-  return { deps, skills, testRuns, evalRuns };
+  return { deps, skills, testRuns, evalRuns, safetyRatings };
 }
 
 const noPin = { skillId: null, branchId: null };
@@ -211,6 +225,34 @@ describe("runRecordedEvaluation — the choreography, once, against memory adapt
     expect(recorded).toHaveLength(1);
     expect(recorded[0]?.status).toBe(artifact.passed ? "passed" : "failed");
     expect(recorded[0]?.result).toEqual(artifact);
+  });
+
+  it("runs a safety review and records the rating spent on the user's account tag", async () => {
+    const { deps, safetyRatings } = makeDeps();
+    const tags: unknown[] = [];
+    const gateway: ModelGateway = {
+      ...deps.gateway,
+      async generate(input) {
+        tags.push(input.tag);
+        return deps.gateway.generate(input);
+      },
+    };
+    const skill = skillOf(sourceOf("Say hello."));
+
+    const outcome = unwrap(
+      await runRecordedEvaluation("safety-review", "insights", skill, noPin, {
+        ...deps,
+        gateway,
+      }),
+    );
+    expect(outcome.artifact).toMatchObject({ kind: "safety-review", verdict: "passed" });
+    // The opt-in rating is the user's own spend, not a platform gate.
+    expect(tags[0]).toEqual({ kind: "account", userId, capability: "safety-review" });
+
+    const recorded = unwrap(await safetyRatings.listBySkill(skill.id, userId));
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]?.verdict).toBe("passed");
+    expect(recorded[0]?.harnessVersionId).toBeTruthy();
   });
 
   it("reports progress and per-case events through the observer, recording last", async () => {

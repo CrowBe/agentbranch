@@ -287,26 +287,32 @@ describe("workspace choreography", () => {
   it("starts, promotes, and refuses drafts through the confirm edge", async () => {
     const fetchMock = vi
       .fn()
-      // open the saved skill (+ its draft list)
+      // open the saved skill (+ its draft list + the version's safety rating)
       .mockResolvedValueOnce(Response.json({ skill: savedSkill, versions: [] }))
       .mockResolvedValueOnce(Response.json({ branches: [] }))
-      // start a draft (+ refreshed draft list)
+      .mockResolvedValueOnce(Response.json({ rating: null }))
+      // start a draft (+ the draft head's rating + refreshed draft list)
       .mockResolvedValueOnce(
         Response.json({ branch: { id: "draft-1", source: skill, lintSummary: null } }),
       )
+      .mockResolvedValueOnce(Response.json({ rating: null }))
       .mockResolvedValueOnce(
         Response.json({ branches: [{ id: "draft-1", isMain: false, status: "open", revision: 1 }] }),
       )
       // promote (+ refreshed draft list)
       .mockResolvedValueOnce(Response.json({ skill: { source: skill, lintSummary: null } }))
       .mockResolvedValueOnce(Response.json({ branches: [] }));
-    const confirm = vi.fn().mockReturnValue(true);
+    const confirm = vi
+      .fn()
+      // Promote: yes, set as main — and skip the optional safety rating.
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(false);
     const workspace = createWorkspace(init, { fetch: fetchMock, confirm });
 
     await workspace.actions.openSkill("skill-1");
     await workspace.actions.startDraft();
     expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
+      4,
       "/api/skills/skill-1/branches",
       expect.objectContaining({ method: "POST" }),
     );
@@ -316,10 +322,18 @@ describe("workspace choreography", () => {
 
     await workspace.actions.promote();
     expect(fetchMock).toHaveBeenNthCalledWith(
-      5,
+      7,
       "/api/skills/skill-1/branches/draft-1/promote",
       expect.objectContaining({ method: "POST" }),
     );
+    // Skipping the optional rating never reaches /api/safety-review with a POST.
+    expect(
+      fetchMock.mock.calls.filter(
+        ([url, opts]) =>
+          url === "/api/safety-review" &&
+          (opts as RequestInit | undefined)?.method === "POST",
+      ),
+    ).toHaveLength(0);
     expect(workspace.getSnapshot().branchId).toBeNull();
     expect(workspace.getSnapshot().status).toBe("This draft is now your main version.");
 
@@ -328,6 +342,98 @@ describe("workspace choreography", () => {
     const calls = fetchMock.mock.calls.length;
     await workspace.actions.restoreVersion("skill-1", 1);
     expect(fetchMock.mock.calls).toHaveLength(calls);
+  });
+
+  it("runs the opt-in safety rating once and re-opens the stored rating for free", async () => {
+    const ratingBody = {
+      rating: {
+        verdict: "passed",
+        scores: [
+          { class: "injection", score: 0.02, rationale: "No override language." },
+          { class: "exfiltration", score: 0.05, rationale: "No secret collection." },
+          { class: "deception", score: 0.01, rationale: "Clear purpose." },
+        ],
+        insight: { verdict: "good", summary: "Nothing risky found.", findings: [], watch: [] },
+      },
+    };
+    const fetchMock = vi.fn().mockResolvedValue(Response.json(ratingBody));
+    const workspace = createWorkspace(init, { fetch: fetchMock });
+
+    await workspace.actions.runTool("safety-review");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/safety-review",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(workspace.getSnapshot().safetyRating?.verdict).toBe("passed");
+    expect(workspace.getSnapshot().capability?.kind).toBe("safety-insights");
+    expect(workspace.getSnapshot().status).toBe("Safety rating ready.");
+
+    // A rated version never re-spends: the second click re-renders the stored
+    // rating, and switching surfaces stays local.
+    await workspace.actions.runTool("safety-review");
+    workspace.actions.selectSafetySurface("breakdown");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(workspace.getSnapshot().capability?.kind).toBe("safety-breakdown");
+  });
+
+  it("offers the optional safety rating during promote and lets its verdict pause the promote", async () => {
+    const needsReview = {
+      rating: {
+        verdict: "needs-review",
+        scores: [
+          { class: "injection", score: 0.5, rationale: "Broad override language." },
+          { class: "exfiltration", score: 0.1, rationale: "No secret collection." },
+          { class: "deception", score: 0.1, rationale: "Clear purpose." },
+        ],
+        insight: {
+          verdict: "needs-attention",
+          summary: "Injection needs a look.",
+          findings: [],
+          watch: [],
+        },
+      },
+    };
+    const fetchMock = vi
+      .fn()
+      // open the saved skill (+ draft list + rating)
+      .mockResolvedValueOnce(Response.json({ skill: savedSkill, versions: [] }))
+      .mockResolvedValueOnce(Response.json({ branches: [] }))
+      .mockResolvedValueOnce(Response.json({ rating: null }))
+      // start a draft (+ the draft head's rating + refreshed draft list)
+      .mockResolvedValueOnce(
+        Response.json({ branch: { id: "draft-1", source: skill, lintSummary: null } }),
+      )
+      .mockResolvedValueOnce(Response.json({ rating: null }))
+      .mockResolvedValueOnce(
+        Response.json({ branches: [{ id: "draft-1", isMain: false, status: "open", revision: 1 }] }),
+      )
+      // the accepted optional rating run
+      .mockResolvedValueOnce(Response.json(needsReview));
+    const confirm = vi
+      .fn()
+      .mockReturnValueOnce(true) // set as main?
+      .mockReturnValueOnce(true) // run the optional rating first?
+      .mockReturnValueOnce(false); // "needs review" — promote anyway? no
+    const workspace = createWorkspace(init, { fetch: fetchMock, confirm });
+
+    await workspace.actions.openSkill("skill-1");
+    await workspace.actions.startDraft();
+    await workspace.actions.promote();
+
+    // The rating ran against the draft, promote never reached the network, and
+    // the draft + its rating are still on the hero.
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      7,
+      "/api/safety-review",
+      expect.objectContaining({ method: "POST" }),
+    );
+    const promoteCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).includes("/promote"),
+    );
+    expect(promoteCalls).toHaveLength(0);
+    expect(workspace.getSnapshot().branchId).toBe("draft-1");
+    expect(workspace.getSnapshot().safetyRating?.verdict).toBe("needs-review");
   });
 
   it("keeps checked equipment for the session and bundles contracts into the next test run", async () => {
@@ -452,6 +558,7 @@ describe("workspace choreography", () => {
       .fn()
       .mockResolvedValueOnce(Response.json({ skill: savedSkill, versions: [] }))
       .mockResolvedValueOnce(Response.json({ branches: [] }))
+      .mockResolvedValueOnce(Response.json({ rating: null }))
       .mockResolvedValueOnce(
         Response.json({
           testRuns: [{ status: "completed", scenario: { prompt: "Triage the inbox." } }],
