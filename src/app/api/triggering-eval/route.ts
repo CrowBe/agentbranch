@@ -49,6 +49,7 @@ export async function POST(request: Request): Promise<Response> {
       skills: container.skills,
       testRuns: container.testRuns,
       evalRuns: container.evalRuns,
+      safetyRatings: container.safetyRatings,
       currentHarnessVersion: container.currentHarnessVersion,
     },
   });

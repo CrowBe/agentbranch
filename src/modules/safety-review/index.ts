@@ -3,9 +3,12 @@
  * (ARCHITECTURE §9.1).
  *
  * An evaluation capability on the seam. It reads the full skill folder as
- * structurally untrusted data, scores injection / exfiltration / deception, and
- * spends with a `platform` accounting tag because publication moderation is the
- * platform's gate, not a user's allowance.
+ * structurally untrusted data and scores injection / exfiltration / deception.
+ * The review is **opt-in — never automatic**: the caller declares the
+ * accounting tag on the input (`account` for the user's manual safety rating,
+ * `platform` for the future publication gate), so a user never spends credits
+ * on a rating they didn't ask for. The persisted record is the **safety
+ * rating** behind the `SafetyRatingRepository` port.
  */
 import { defineEvaluation } from "@/modules/skill-analysis";
 import type { Evaluator, Insight, Renderer } from "@/modules/skill-analysis";
@@ -17,6 +20,7 @@ import type {
 } from "./safety-review.types";
 
 export type {
+  SafetyRating,
   SafetyReviewBreakdown,
   SafetyReviewClass,
   SafetyReviewInput,
@@ -25,6 +29,7 @@ export type {
   SafetyReviewScore,
   SafetyReviewVerdict,
 } from "./safety-review.types";
+export type { SafetyRatingRepository } from "./safety-rating.repository";
 export { runSafetyReview } from "./run-safety-review";
 
 const safetyReviewEvaluator: Evaluator<SafetyReviewInput, SafetyReviewResult> = {

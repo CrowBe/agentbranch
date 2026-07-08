@@ -13,6 +13,7 @@ import type {
   LintBreakdownPanel,
   LintInsightPanel,
   InsightPanel,
+  SafetyRatingState,
   ToolAction,
 } from "./workspace.types";
 
@@ -48,6 +49,9 @@ export function toolErrorMessage(body: unknown, status: number, action: ToolActi
   const code = body && typeof body === "object" && "code" in body ? String(body.code) : "";
   if (code === "cap_reached" && action === "triggering-eval") {
     return "Triggering eval is not available on the free plan.";
+  }
+  if (code === "cap_reached" && action === "safety-review") {
+    return "Safety rating is not available on the free plan.";
   }
   if (code === "cap_reached") return "Out of free usage today.";
   if (code === "model_unavailable" || code === "not_configured") return "No model is configured.";
@@ -307,6 +311,27 @@ export function lintSummaryFromPanel(panel: CapabilityPanel): SkillVersionLintSu
 }
 
 // ---------------------------------------------------------------------------
+// GET · POST /api/safety-review
+
+/** Both verbs answer `{ rating: null | {...} }`; null = the version is unrated. */
+export function decodeSafetyRating(body: unknown): SafetyRatingState | null {
+  if (!isRecord(body) || !("rating" in body)) {
+    throw new Error("Safety rating returned an unexpected response.");
+  }
+  if (body.rating === null) return null;
+  const rating = body.rating;
+  if (
+    !isRecord(rating) ||
+    !isSafetyVerdict(rating.verdict) ||
+    !isSafetyScores(rating.scores) ||
+    !isInsight(rating.insight)
+  ) {
+    throw new Error("Safety rating returned an unexpected response.");
+  }
+  return { verdict: rating.verdict, scores: rating.scores, insight: rating.insight };
+}
+
+// ---------------------------------------------------------------------------
 // POST /api/tool-contract · POST /api/response-schema (equipment checks)
 
 export function decodeEquipmentInsight(body: unknown): LintInsightPanel {
@@ -531,6 +556,25 @@ function isContractChecks(value: unknown): value is ContractCheckPanel[] {
             Array.isArray(call.outputIssues) &&
             call.outputIssues.every((issue) => typeof issue === "string"),
         ),
+    )
+  );
+}
+
+function isSafetyVerdict(value: unknown): value is SafetyRatingState["verdict"] {
+  return value === "passed" || value === "needs-review" || value === "blocked";
+}
+
+function isSafetyScores(value: unknown): value is SafetyRatingState["scores"] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (score) =>
+        isRecord(score) &&
+        (score.class === "injection" ||
+          score.class === "exfiltration" ||
+          score.class === "deception") &&
+        typeof score.score === "number" &&
+        typeof score.rationale === "string",
     )
   );
 }

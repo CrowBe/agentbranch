@@ -14,6 +14,7 @@ export type PublicationId = Brand<string, "PublicationId">;
 export type HarnessVersionId = Brand<string, "HarnessVersionId">;
 export type TestRunId = Brand<string, "TestRunId">;
 export type EvalRunId = Brand<string, "EvalRunId">;
+export type SafetyRatingId = Brand<string, "SafetyRatingId">;
 export type BenchmarkRunId = Brand<string, "BenchmarkRunId">;
 
 export const UserId = (value: string): UserId => value as UserId;
@@ -28,5 +29,7 @@ export const HarnessVersionId = (value: string): HarnessVersionId =>
   value as HarnessVersionId;
 export const TestRunId = (value: string): TestRunId => value as TestRunId;
 export const EvalRunId = (value: string): EvalRunId => value as EvalRunId;
+export const SafetyRatingId = (value: string): SafetyRatingId =>
+  value as SafetyRatingId;
 export const BenchmarkRunId = (value: string): BenchmarkRunId =>
   value as BenchmarkRunId;

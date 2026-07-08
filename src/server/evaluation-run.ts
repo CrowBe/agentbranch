@@ -21,6 +21,12 @@ import {
   type TriggeringResult,
 } from "@/modules/triggering-eval";
 import {
+  safetyReviewCapability,
+  type SafetyRatingRepository,
+  type SafetyReviewInput,
+  type SafetyReviewResult,
+} from "@/modules/safety-review";
+import {
   encodeSse,
   err,
   isErr,
@@ -52,7 +58,7 @@ import { domainErrorResponse } from "./http";
 
 /** The evaluation capabilities the driver can run — a closed set; the compiler
  * checks the record dispatch stays exhaustive as capabilities are added. */
-export type EvaluationRunKind = "test-run" | "triggering-eval";
+export type EvaluationRunKind = "test-run" | "triggering-eval" | "safety-review";
 
 export type EvaluationSurface = "insights" | "breakdown";
 
@@ -82,6 +88,7 @@ export type EvaluationRunDeps = {
   readonly skills: SkillRepository;
   readonly testRuns: TestRunRepository;
   readonly evalRuns: EvalRunRepository;
+  readonly safetyRatings: SafetyRatingRepository;
   readonly currentHarnessVersion: () => Promise<Result<HarnessVersion, DomainError>>;
 };
 
@@ -117,7 +124,7 @@ export async function evaluationResponse(input: {
     return domainErrorResponse(
       domainError(
         "model_unavailable",
-        `"${capabilityName(kind)}" needs a model connection to run. Test runs and triggering evals are unavailable offline.`,
+        `"${capabilityName(kind)}" needs a model connection to run. Evaluation capabilities are unavailable offline.`,
       ),
     );
   }
@@ -148,6 +155,8 @@ export async function runRecordedEvaluation(
       return runEntry(testRunEntry, surface, skill, pin, deps, observer, equipment);
     case "triggering-eval":
       return runEntry(triggeringEvalEntry, surface, skill, pin, deps, observer, equipment);
+    case "safety-review":
+      return runEntry(safetyReviewEntry, surface, skill, pin, deps, observer, equipment);
     default:
       return unreachable(kind);
   }
@@ -248,6 +257,19 @@ const triggeringEvalEntry: EvaluationEntry<Skill, TriggeringResult> = {
       status: artifact.passed ? "passed" : "failed",
       result: artifact,
     }),
+};
+
+const safetyReviewEntry: EvaluationEntry<SafetyReviewInput, SafetyReviewResult> = {
+  capability: safetyReviewCapability,
+  // The rating is opt-in and user-driven here, so it spends the user's own
+  // allowance; the future publication gate passes `platform` instead
+  // (ARCHITECTURE §9.1).
+  input: (skill) => ({
+    skill,
+    tag: { kind: "account", userId: skill.userId, capability: "safety-review" },
+  }),
+  record: (deps, base, artifact) =>
+    deps.safetyRatings.record({ ...base, verdict: artifact.verdict, result: artifact }),
 };
 
 async function runEntry<Input, A extends Artifact>(
@@ -357,6 +379,8 @@ function capabilityName(kind: EvaluationRunKind): string {
       return testRunCapability.name;
     case "triggering-eval":
       return triggeringEvalCapability.name;
+    case "safety-review":
+      return safetyReviewCapability.name;
     default:
       return unreachable(kind);
   }
