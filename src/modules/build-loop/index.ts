@@ -17,5 +17,11 @@ export {
   formatTestRunFeedback,
   formatTriggeringEvalFeedback,
 } from "./feedback-formatters";
+export {
+  getEquipmentPrimitiveAuthoringPlan,
+  renderEquipmentPrimitiveAuthoringPrompt,
+  type EquipmentPrimitiveAuthoringKind,
+  type EquipmentPrimitiveAuthoringPlan,
+} from "./equipment-authoring-prompts";
 export { runBuildLoop } from "./build-loop";
 export { BUILD_LOOP_SYSTEM_PROMPT } from "./system-prompt";
