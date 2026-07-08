@@ -1,48 +1,26 @@
 import { generateObject, generateText, streamText, tool, stepCountIs, jsonSchema } from "ai";
-import type { LanguageModel, ModelMessage, SystemModelMessage, ToolSet } from "ai";
+import type { ModelMessage, SystemModelMessage, ToolSet } from "ai";
 import { z } from "zod";
+import type { TokenUsageBreakdown } from "@/modules/usage";
 import {
-  checkCap,
-  REQUEST_RATE_LIMIT,
-  type RateLimitPolicy,
-  type RequestRateLimiter,
-  type TokenUsageBreakdown,
-  type Tier,
-  type UsageRepository,
-} from "@/modules/usage";
-import type {
-  ModelGateway,
-  ModelProvider,
-  ModelGatewayPrimitive,
-  AccountingTag,
-  GatewayCacheControl,
-  GatewayMessage,
-  GatewaySystemPrompt,
-  GatewayTool,
-  ClassifyInput,
-  RunAgentInput,
-  StreamAgentInput,
-  GenerateInput,
-  Classification,
-  AgentTurn,
-  AgentStep,
-  AgentStreamPart,
+  PROVIDER_CAP_REACHED_MESSAGE,
+  type RawModelCalls,
+  type RawCallResult,
+  type RawClassifyInput,
+  type RawAgentInput,
+  type RawGenerateInput,
+  type RawAgentStream,
+  type RawAgentStreamPart,
+  type GatewayCacheControl,
+  type GatewayMessage,
+  type GatewaySystemPrompt,
+  type GatewayTool,
+  type Classification,
+  type AgentTurn,
+  type AgentStep,
 } from "@/modules/model-gateway";
-import type { ModelRouter } from "@/modules/model-router";
-import type { ModelSelection } from "@/modules/model-router";
-import {
-  ok,
-  err,
-  domainError,
-  isErr,
-  LIMIT_MESSAGES,
-  REQUEST_BYTES_MAX,
-  type Result,
-  type DomainError,
-  type UserId,
-} from "@/shared";
-
-type GatewayModelProviderKind = "anthropic" | "nous";
+import type { ResolvedModel } from "@/modules/model-router";
+import { ok, err, domainError, type Result, type DomainError } from "@/shared";
 
 const OUTPUT_LIMITS = {
   classify: 256,
@@ -59,135 +37,30 @@ const SONNET_EFFORT = {
 type EffortPair = typeof SONNET_EFFORT;
 
 /** Anthropic's effort knob applies only to Sonnet-routed primitives. */
-function effortFor(isAnthropic: boolean, modelId: string | undefined): EffortPair | null {
-  return isAnthropic && modelId?.toLowerCase().includes("sonnet") ? SONNET_EFFORT : null;
+function effortFor(resolved: ResolvedModel): EffortPair | null {
+  return resolved.kind === "anthropic" && resolved.modelId?.toLowerCase().includes("sonnet")
+    ? SONNET_EFFORT
+    : null;
 }
 
-const PROVIDER_CAP_REACHED_MESSAGE = "cap_reached: Out of free usage today.";
-
 /**
- * Real model gateway — Claude via the Vercel AI SDK (NOT the Anthropic SDK
- * directly, ARCHITECTURE §4). The platform's single metered entry to the model
- * (CONTEXT.md → Model gateway). Owns the AI-SDK plumbing; depends on the usage
- * authority for accounting policy. Pure mechanism — no evaluation knowledge.
- *
- * v1 accounting (CONTEXT.md → v1 accounting behaviour): `account` calls run
- * `checkCap` (structural caps) before spending and record tokens after; the
- * paid token-stream and the `platform` cost ledger are deferred — those tags are
- * carried and otherwise no-op.
+ * Raw model-calls adapter — Claude via the Vercel AI SDK (NOT the Anthropic
+ * SDK directly, ARCHITECTURE §4). SDK *translation only* (#160): message/tool
+ * mapping, stream-part mapping, token-usage shape reading, provider cap-error
+ * detection. Admission and recording live above, in the model-gateway module's
+ * accounting shell — nothing here knows a tag, a cap, or a user. The model
+ * arrives already resolved (the shell asks the router), so nothing here
+ * selects a provider either.
  */
-export function createModelGateway(deps: {
-  /**
-   * Provider/model selection. A `router` resolves the model per call (runtime
-   * provider switching, ARCHITECTURE §4 routing); a static `provider` is the
-   * direct path (used by tests). Exactly one is expected — `router` wins.
-   */
-  router?: ModelRouter;
-  provider?: ModelProvider;
-  usage: UsageRepository;
-  providerKind?: GatewayModelProviderKind;
-  modelId?: string;
-  /** Resolves a user's tier. v1 has no paid users, so this is "free" for now. */
-  tierFor?: (userId: UserId) => Promise<Tier>;
-  requestRateLimiter?: RequestRateLimiter;
-  requestRateLimit?: RateLimitPolicy;
-}): ModelGateway {
-  const { router, provider, usage } = deps;
-  const tierFor = deps.tierFor ?? (async () => "free" as Tier);
-  const requestRateLimit = deps.requestRateLimit ?? REQUEST_RATE_LIMIT;
-
-  /** The admitted model plus the (per-call) effort options it routes to. */
-  type Admitted = { readonly model: LanguageModel; readonly effort: EffortPair | null };
-
-  /**
-   * Resolve the model for a primitive — through the router (runtime selection)
-   * when present, else the static provider. Carries enough to decide effort
-   * (Anthropic + Sonnet) per call, since the route can change at runtime.
-   */
-  function resolveModel(
-    primitive: ModelGatewayPrimitive,
-    target?: ModelSelection,
-  ): Result<{ model: LanguageModel; isAnthropic: boolean; modelId: string | undefined }, DomainError> {
-    if (router) {
-      const resolved = router.resolve(primitive, target);
-      if (isErr(resolved)) return resolved;
-      return ok({
-        model: resolved.value.model,
-        isAnthropic: resolved.value.kind === "anthropic",
-        modelId: resolved.value.modelId,
-      });
-    }
-    const model = provider?.models?.[primitive] ?? provider?.model ?? null;
-    if (!model) {
-      return err(domainError("model_unavailable", "No model is configured."));
-    }
-    return ok({ model, isAnthropic: deps.providerKind === "anthropic", modelId: deps.modelId });
-  }
-
-  /**
-   * Gate an `account` call against tier caps before spending. `platform` calls
-   * skip the cap (the platform owns that cost). Returns the model to use (and its
-   * effort options), or a DomainError (`model_unavailable` / `cap_reached`).
-   */
-  async function admit(
-    tag: AccountingTag,
-    primitive: ModelGatewayPrimitive,
-    inputBytes: number,
-    target?: ModelSelection,
-  ): Promise<Result<Admitted, DomainError>> {
-    const resolved = resolveModel(primitive, target);
-    if (isErr(resolved)) return resolved;
-    const { model } = resolved.value;
-    if (inputBytes > REQUEST_BYTES_MAX) {
-      return err(domainError("input_too_large", LIMIT_MESSAGES.requestBytes));
-    }
-    if (tag.kind === "account") {
-      const snapshot = await usage.get(tag.userId);
-      if (isErr(snapshot)) return snapshot;
-      const tier = await tierFor(tag.userId);
-      // The caller declares which capability it is spending on; the cap it must
-      // clear is capability-specific (free allows `test-run` but not
-      // `triggering-eval`, ARCHITECTURE §8). The gateway forwards the tag — it
-      // never names an evaluation kind itself (CONTEXT.md → Model gateway).
-      const decision = checkCap(snapshot.value, tier, tag.capability);
-      if (!decision.allowed) {
-        return err(domainError("cap_reached", decision.reason));
-      }
-      if (deps.requestRateLimiter) {
-        const rate = await deps.requestRateLimiter.consume(
-          tag.userId,
-          tag.capability,
-          requestRateLimit,
-        );
-        if (isErr(rate)) return rate;
-        if (!rate.value.allowed) {
-          return err(domainError("cap_reached", rate.value.reason));
-        }
-      }
-    }
-    return ok({ model, effort: effortFor(resolved.value.isAnthropic, resolved.value.modelId) });
-  }
-
-  /** Record a turn's token cost. `account` → usage stream; `platform`/paid → deferred no-op. */
-  async function record(tag: AccountingTag, modelUsage: TokenUsageBreakdown): Promise<void> {
-    if (tag.kind === "account") {
-      await usage.increment(tag.userId, { usage: modelUsage, turns: 1 });
-    }
-    // platform: deferred cost ledger — tag carried, not yet recorded.
-  }
-
+export function createSdkModelCalls(): RawModelCalls {
   return {
-    get hasModel() {
-      return router ? router.hasModel() : provider?.model != null;
-    },
-
-    async classify(input: ClassifyInput): Promise<Result<Classification, DomainError>> {
-      const admitted = await admit(input.tag, "classify", modelInputBytes([input.prompt]), input.target);
-      if (isErr(admitted)) return admitted;
-
+    async classify(
+      resolved: ResolvedModel,
+      input: RawClassifyInput,
+    ): Promise<Result<RawCallResult<Classification>, DomainError>> {
       try {
-        const { object, usage: u } = await generateObject({
-          model: admitted.value.model,
+        const { object, usage } = await generateObject({
+          model: resolved.model,
           maxOutputTokens: OUTPUT_LIMITS.classify,
           schema: z.object({
             choice: z
@@ -198,77 +71,46 @@ export function createModelGateway(deps: {
           }),
           prompt: classifyPrompt(input.prompt, input.choices),
         });
-        await record(input.tag, readTokenUsage(u));
-
-        // Guard against a hallucinated label outside the allowed set.
-        const choice =
-          object.choice && input.choices.includes(object.choice) ? object.choice : null;
-        return ok({ choice, rationale: object.rationale });
+        return ok({
+          value: { choice: object.choice, rationale: object.rationale },
+          usage: readTokenUsage(usage),
+        });
       } catch (cause) {
         return err(modelCallError("Classification call failed.", cause));
       }
     },
 
-    async runAgent(input: RunAgentInput): Promise<Result<AgentTurn, DomainError>> {
-      const admitted = await admit(
-        input.tag,
-        "runAgent",
-        modelInputBytes([
-          systemPromptContent(input.system),
-          ...input.messages.map((m) => m.content),
-        ]),
-        input.target,
-      );
-      if (isErr(admitted)) return admitted;
-
+    async runAgent(
+      resolved: ResolvedModel,
+      input: RawAgentInput,
+    ): Promise<Result<RawCallResult<AgentTurn>, DomainError>> {
       try {
         const result = await generateText({
-          model: admitted.value.model,
+          model: resolved.model,
           maxOutputTokens: OUTPUT_LIMITS.runAgent,
-          ...admitted.value.effort?.medium,
+          ...effortFor(resolved)?.medium,
           system: toSdkSystem(input.system),
           messages: input.messages.map(toSdkMessage),
           tools: toSdkTools(input.tools),
           stopWhen: stepCountIs(8),
         });
-        await record(input.tag, readTokenUsage(result.usage));
-        return ok({ transcript: transcriptFromSteps(result.steps) });
+        return ok({
+          value: { transcript: transcriptFromSteps(result.steps) },
+          usage: readTokenUsage(result.usage),
+        });
       } catch (cause) {
         return err(modelCallError("Agent turn failed.", cause));
       }
     },
 
-    async streamAgent(
-      input: StreamAgentInput,
-    ): Promise<Result<AsyncGenerator<AgentStreamPart>, DomainError>> {
-      // Admit up front so cap_reached / model_unavailable surface as the outer
-      // Result before any part streams; the model is captured for the generator.
-      const admitted = await admit(
-        input.tag,
-        "streamAgent",
-        modelInputBytes([
-          systemPromptContent(input.system),
-          ...input.messages.map((m) => m.content),
-        ]),
-        input.target,
-      );
-      if (isErr(admitted)) return admitted;
-      const model = admitted.value.model;
-      const { tag } = input;
+    streamAgent(resolved: ResolvedModel, input: RawAgentInput): RawAgentStream {
+      let result: ReturnType<typeof streamText> | undefined;
+      let latestKnownUsage = zeroUsage();
 
-      async function* stream(): AsyncGenerator<AgentStreamPart> {
-        let result: ReturnType<typeof streamText> | undefined;
-        let latestKnownUsage = zeroUsage();
-        let recorded = false;
-        let skipRecording = false;
-        const recordOnce = async () => {
-          if (recorded || skipRecording || !result) return;
-          recorded = true;
-          await record(tag, await readStreamUsage(result, latestKnownUsage));
-        };
+      async function* parts(): AsyncGenerator<RawAgentStreamPart> {
         try {
           result = streamText({
-            model,
+            model: resolved.model,
             maxOutputTokens: OUTPUT_LIMITS.streamAgent,
             system: toSdkSystem(input.system),
             messages: input.messages.map(toSdkMessage),
@@ -299,8 +141,7 @@ export function createModelGateway(deps: {
                 break;
               case "error":
                 if (isProviderCapError(part.error)) {
-                  skipRecording = true;
-                  yield { kind: "error", message: PROVIDER_CAP_REACHED_MESSAGE };
+                  yield { kind: "provider-cap-error" };
                   break;
                 }
                 yield { kind: "error", message: String(part.error ?? "Unknown error") };
@@ -311,57 +152,41 @@ export function createModelGateway(deps: {
           }
         } catch (cause) {
           if (isProviderCapError(cause)) {
-            skipRecording = true;
-            yield { kind: "error", message: PROVIDER_CAP_REACHED_MESSAGE };
+            yield { kind: "provider-cap-error" };
             return;
           }
           throw cause;
-        } finally {
-          // Record once even when the consumer disconnects or the stream throws.
-          // Prefer SDK totals, but fall back to the latest usage attached to a
-          // stream part when the final usage promise is unavailable.
-          await recordOnce();
         }
       }
 
-      return ok(stream());
+      return {
+        parts: parts(),
+        // Prefer SDK totals, but fall back to the latest usage attached to a
+        // stream part when the final usage promise is unavailable (consumer
+        // disconnect, mid-stream throw).
+        usage: async () => (result ? readStreamUsage(result, latestKnownUsage) : latestKnownUsage),
+      };
     },
 
-    async generate<T>(input: GenerateInput<T>): Promise<Result<T, DomainError>> {
-      const admitted = await admit(
-        input.tag,
-        "generate",
-        modelInputBytes([input.system, input.prompt]),
-        input.target,
-      );
-      if (isErr(admitted)) return admitted;
-
+    async generate<T>(
+      resolved: ResolvedModel,
+      input: RawGenerateInput<T>,
+    ): Promise<Result<RawCallResult<T>, DomainError>> {
       try {
-        const { object, usage: u } = await generateObject({
-          model: admitted.value.model,
+        const { object, usage } = await generateObject({
+          model: resolved.model,
           maxOutputTokens: OUTPUT_LIMITS.generate,
-          ...admitted.value.effort?.low,
+          ...effortFor(resolved)?.low,
           schema: input.schema,
           system: input.system,
           prompt: input.prompt,
         });
-        await record(input.tag, readTokenUsage(u));
-        return ok(object);
+        return ok({ value: object, usage: readTokenUsage(usage) });
       } catch (cause) {
         return err(modelCallError("Generation call failed.", cause));
       }
     },
   };
-}
-
-const encoder = new TextEncoder();
-
-function modelInputBytes(parts: readonly string[]): number {
-  return parts.reduce((total, part) => total + encoder.encode(part).byteLength, 0);
-}
-
-function systemPromptContent(system: GatewaySystemPrompt): string {
-  return typeof system === "string" ? system : system.content;
 }
 
 function toAnthropicProviderOptions(cacheControl: GatewayCacheControl | undefined) {
