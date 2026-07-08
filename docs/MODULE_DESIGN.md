@@ -173,11 +173,11 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **triggering-eval** | `triggeringEvalCapability`, `runTriggeringEval`, `runBatteryCases`, `generatePromptBattery`, `distractorLibrary`, `toEvalRunAnalysisRecord` | `EvalRunRepository` | evaluation capability · run + battery generation real · adversarial negative battery · distractor library static v1 seed |
 | **export** | `exportCapability`, manifest types | — | real |
 | **lint** | `lintCapability`, `summarizeLintFindings`, `LintReport`, `LintFinding` | — | real (quality + pure policy rules; `summarizeLintFindings` is the shared scorer every LintReport-shaped artifact uses) |
-| **response-schema** | `responseSchemaCapability`, `parseResponseSchema`, `serializeResponseSchema`, `responseSchemaName`, `schemaShapeFindings`, `validateAgainstSchema`, `exampleValueForSchema` + types | — | real (first equipment primitive: lossless source model + pure lint + offline schema-subset validation) |
+| **response-schema** | `responseSchemaCapability`, `parseResponseSchema`, `serializeResponseSchema`, `applyResponseSchemaEdit`, `responseSchemaName`, `schemaShapeFindings`, `validateAgainstSchema`, `exampleValueForSchema` + types | — | real (first equipment primitive: lossless source model + pure lint + offline schema-subset validation) |
 | **tool-contract** | `toolContractCapability`, `parseToolContract`, `serializeToolContract` + types | — | real (second equipment primitive: lossless source model + pure lint; I/O `$ref`s response schemas) |
 | **skill-import** | `SkillImportFetcher`, `SkillImportFetchError` | `SkillImportFetcher` | port |
 | **portability** | `portabilityCapability`, `runCrossRuntimeValidation`, runtime-target/result types | — | real cross-runtime validation engine |
-| **build-loop** | `runBuildLoop`, `buildTools`, `BuildToolName`, `BuildLoopEvent`, `formatTestRunFeedback`, `formatTriggeringEvalFeedback` | — (consumes `ModelGateway`) | real |
+| **build-loop** | `runBuildLoop`, `buildTools`, `BuildToolName`, `BuildLoopEvent`, `formatTestRunFeedback`, `formatTriggeringEvalFeedback`, `runResponseSchemaLoop`, `responseSchemaTools`, `RESPONSE_SCHEMA_AUTHORING_PROMPT`, `formatResponseSchemaLintFeedback` | — (consumes `ModelGateway`) | real |
 | **model-gateway** | `ModelGateway` (`classify`/`runAgent`/`streamAgent`/`generate`), `createModelGateway` (the accounting shell: admission — tier cap, request rate limit, byte budget — and token recording, resolved per call through the model router), `AccountingTag`, `GatewayTool`, `ModelProvider` | `RawModelCalls` (unmetered per-primitive model calls), `ModelProvider` | real |
 | **model-router** | `ModelRouter` (`resolve`/`snapshot`/`setActive`/`setCredential`/`clearCredential`), `ProviderProfile`, `ModelSelection`, `RouterSnapshot`, selection helpers | `ModelRouter` | real |
 | **usage** | `checkCap`, `applyTurn`, `TIER_LIMITS`, types | `UsageRepository` | real |
@@ -214,6 +214,19 @@ rather than guessing. Lives in `build-loop` (not the eval modules) because "what
 does Claude need to revise this skill?" is a build concern, not an evaluation
 concern (ARCHITECTURE §2 *Eval feedback*, §4 *Eval → build feedback*).
 
+**Equipment authoring (issue #151).** The build loop's shape carries the first
+equipment primitive: `runResponseSchemaLoop` streams a response-schema
+authoring turn through `streamAgent` under `RESPONSE_SCHEMA_AUTHORING_PROMPT`
+— one frozen, cacheable system prompt per primitive — with the
+`write_response_schema`/`edit_response_schema` tool pair mirroring
+`write_skill`/`edit_skill`. The prompt inherits the skill prompt's spine
+(interview-first, readiness checklist gating the first write, "just draft it"
+as a command, building-block right-sizing) specialised to deriving a JSON
+Schema from one real filled-in example. `formatResponseSchemaLintFeedback`
+closes the loop with the primitive's pure lint, exactly as skill lint feedback
+does. Later primitives repeat the pattern — a frozen prompt + tool pair each —
+when they become chat-buildable (ARCHITECTURE §9.2 order).
+
 ### Infra (`src/infra`)
 
 | Adapter | Implements | Notes |
@@ -242,6 +255,11 @@ concern (ARCHITECTURE §2 *Eval feedback*, §4 *Eval → build feedback*).
   `import "server-only"`.
 - `build-stream.ts` — `buildLoopResponse(input, gateway, skills, userId)`: drives
   `runBuildLoop` and encodes events as an SSE `Response`.
+- `response-schema-stream.ts` — `responseSchemaLoopResponse(input, gateway, userId)`:
+  the equipment-authoring driver. Drives `runResponseSchemaLoop`, applies streamed
+  edits to the working draft, follows each write with the primitive's lint feedback,
+  and encodes events as an SSE `Response`. No persistence — equipment is
+  session-kept by the client workspace.
 - `evaluation-run.ts` — `evaluationResponse({kind, surface, sse, skill, pin, deps})`:
   the recorded-evaluation driver both evaluation routes share. Runs the seam's
   `runEvaluation`, then the persistence choreography — resolve the pinned
@@ -268,6 +286,11 @@ concern (ARCHITECTURE §2 *Eval feedback*, §4 *Eval → build feedback*).
   primitives' quality checks: auth → parse the raw document through the
   module's source model → `runCapability` (pure, offline) → Insights or
   Breakdown JSON.
+- `app/api/response-schema/build/route.ts` — the response-schema authoring
+  route (issue #151): auth → parse (messages + optional current draft through
+  the source model) → one call into the equipment-authoring driver
+  (`response-schema-stream.ts`), streaming SSE. The gateway gates the `build`
+  capability, exactly like a skill build turn.
 - `app/api/model-router/route.ts` — **admin-gated** (the selection is
   instance-wide): GET the secret-free router snapshot, POST to switch the active
   provider/model or store/clear a bring-your-own key. With Clerk auth on, only an
@@ -301,10 +324,15 @@ concern (ARCHITECTURE §2 *Eval feedback*, §4 *Eval → build feedback*).
   touchpoint; the app shell is composition/JSX only — no fetch calls, no
   `unknown` guards — and workspace behaviour (choreography, decoding, error
   paths) is tested without rendering React (`workspace.test.ts`).
-  The interaction panel's Equipment mode (side-rail entry) checks pasted
-  response schemas / tool contracts against the two routes above; the workspace
-  keeps them for the session and bundles kept contracts into the next test run,
-  and the breakdown panel shows the per-call contract checks.
+  The interaction panel's Equipment mode (side-rail entry) accepts both kinds
+  of input: a pasted JSON document is checked against the two quality routes
+  above, and a plain-language message drives the response-schema authoring
+  loop (`/api/response-schema/build`) — the workspace streams the
+  conversation, tracks the draft through write/edit events, hands lint
+  feedback back as the next turn, and quality-checks + keeps the finished
+  schema exactly like a pasted one. Kept equipment lives for the session; the
+  workspace bundles kept contracts into the next test run, and the breakdown
+  panel shows the per-call contract checks.
 
 ---
 

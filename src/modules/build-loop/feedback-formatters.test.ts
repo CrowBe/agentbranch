@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import type { TestRunResult } from "@/modules/test-run";
 import type { TriggeringResult } from "@/modules/triggering-eval";
 import type { LintReport } from "@/modules/lint";
+import type { ResponseSchemaLintReport } from "@/modules/response-schema";
 import {
   formatLintFeedback,
+  formatResponseSchemaLintFeedback,
   formatTestRunFeedback,
   formatTriggeringEvalFeedback,
 } from "./feedback-formatters";
@@ -174,5 +176,38 @@ describe("eval feedback formatters", () => {
     };
 
     expect(formatLintFeedback(report)).toBeNull();
+  });
+
+  it("formats response-schema lint findings and skips clean reports", () => {
+    const report: ResponseSchemaLintReport = {
+      kind: "response-schema-lint",
+      summary: {
+        score: 80,
+        grade: "B",
+        counts: { error: 0, warn: 1, info: 0 },
+        rules: ["schema.title.missing"],
+      },
+      findings: [
+        {
+          rule: "schema.title.missing",
+          severity: "warn",
+          message:
+            "The schema has no `title`. Name it so tool contracts and evaluations can reference it.",
+        },
+      ],
+    };
+
+    const feedback = formatResponseSchemaLintFeedback(report);
+    expect(feedback).toContain("Lint - Quality B 80/100");
+    expect(feedback).toContain("issues in the current response schema");
+    expect(feedback).toContain("The schema has no `title`.");
+
+    expect(
+      formatResponseSchemaLintFeedback({
+        kind: "response-schema-lint",
+        summary: { score: 100, grade: "A", counts: { error: 0, warn: 0, info: 0 }, rules: [] },
+        findings: [],
+      }),
+    ).toBeNull();
   });
 });

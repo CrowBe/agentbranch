@@ -23,6 +23,7 @@ export const responseSchemaCapability = defineCapability({
 });
 
 export {
+  applyResponseSchemaEdit,
   parseResponseSchema,
   serializeResponseSchema,
   responseSchemaName,

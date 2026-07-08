@@ -1,6 +1,7 @@
 import { contractCheckIssues, type TestRunResult, type TranscriptStep } from "@/modules/test-run";
 import type { CaseResult, TriggeringResult } from "@/modules/triggering-eval";
 import type { LintFinding, LintReport } from "@/modules/lint";
+import type { ResponseSchemaLintReport } from "@/modules/response-schema";
 
 export function formatTriggeringEvalFeedback(result: TriggeringResult): string {
   const lines = [
@@ -81,6 +82,24 @@ export function formatLintFeedback(report: LintReport): string | null {
     ...formatLintSection("Info:", report.findings, "info"),
     "",
     "Please revise the skill to address these lint findings. Fix errors first, then tighten warnings.",
+  ].join("\n");
+}
+
+export function formatResponseSchemaLintFeedback(report: ResponseSchemaLintReport): string | null {
+  if (report.findings.length === 0) return null;
+
+  return [
+    `Lint - Quality ${report.summary.grade} ${report.summary.score}/100`,
+    "",
+    "The deterministic lint pass found issues in the current response schema.",
+    "",
+    ...formatLintSection("Errors:", report.findings, "error"),
+    "",
+    ...formatLintSection("Warnings:", report.findings, "warn"),
+    "",
+    ...formatLintSection("Info:", report.findings, "info"),
+    "",
+    "Please revise the response schema to address these lint findings. Fix errors first, then tighten warnings.",
   ].join("\n");
 }
 

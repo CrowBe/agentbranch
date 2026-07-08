@@ -363,14 +363,88 @@ describe("workspace choreography", () => {
     expect(workspace.getSnapshot().equipment.contracts).toHaveLength(0);
   });
 
-  it("rejects equipment that is not a JSON document", async () => {
-    const fetchMock = vi.fn();
+  it("routes a plain-language equipment message into the authoring loop and keeps the drafted schema", async () => {
+    const schemaJson = JSON.stringify({
+      title: "invoice-summary",
+      type: "object",
+      required: ["amount"],
+      properties: { amount: { type: "number", description: "Total due in cents." } },
+    });
+    const fetchMock = vi
+      .fn()
+      // Turn 1: the authoring loop writes the schema (no lint findings).
+      .mockResolvedValueOnce(
+        sseResponse([
+          { event: "text", data: { delta: "Drafting the invoice schema." } },
+          { event: "response-schema", data: { source: { document: JSON.parse(schemaJson) as Record<string, unknown> } } },
+          { event: "done", data: { finishReason: "stop" } },
+        ]),
+      )
+      // The finished draft is quality-checked and kept like a pasted schema.
+      .mockResolvedValueOnce(
+        Response.json({ score: 95, grade: "A", summary: "Solid schema.", findings: [], watch: [] }),
+      );
     const workspace = createWorkspace(init, { fetch: fetchMock });
 
-    await workspace.actions.submitEquipment("not json");
+    await workspace.actions.submitEquipment("A schema for my invoice summaries, just draft it");
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(workspace.getSnapshot().status).toBe("Equipment must be a JSON document.");
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/response-schema/build", expect.anything());
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/response-schema", expect.anything());
+    const snapshot = workspace.getSnapshot();
+    expect(snapshot.equipment.schemas).toHaveLength(1);
+    expect(snapshot.equipment.schemas[0]?.name).toBe("invoice-summary");
+    expect(snapshot.capability?.kind).toBe("lint-insights");
+    expect(snapshot.status).toBe(
+      'Response schema "invoice-summary" checked and kept for tool contracts to reference.',
+    );
+    expect(snapshot.entries.map((e) => e.label)).toEqual([
+      "A schema for my invoice summaries, just draft it",
+      "Drafting the invoice schema.",
+      'Response schema "invoice-summary" checked and kept for tool contracts to reference.',
+    ]);
+  });
+
+  it("applies streamed schema edits and hands lint feedback back as the next authoring turn", async () => {
+    const draft = {
+      title: "invoice-summary",
+      type: "object",
+      properties: { amount: { type: "number" } },
+    };
+    const fetchMock = vi
+      .fn()
+      // Turn 1: write with lint findings pending.
+      .mockResolvedValueOnce(
+        sseResponse([
+          { event: "response-schema", data: { source: { document: draft } } },
+          { event: "lint-feedback", data: { feedback: "Lint - Quality B 80/100\n\nName every field." } },
+          { event: "done", data: { finishReason: "stop" } },
+        ]),
+      )
+      // Turn 2 (auto lint feedback): the loop patches the draft with an edit.
+      .mockResolvedValueOnce(
+        sseResponse([
+          { event: "response-schema-edit", data: { oldStr: '"type": "number"', newStr: '"type": "number",\n        "description": "Total due in cents."' } },
+          { event: "done", data: { finishReason: "stop" } },
+        ]),
+      )
+      // The finished draft is checked and kept.
+      .mockResolvedValueOnce(
+        Response.json({ score: 98, grade: "A", summary: "Solid schema.", findings: [], watch: [] }),
+      );
+    const workspace = createWorkspace(init, { fetch: fetchMock });
+
+    await workspace.actions.submitEquipment("A schema for my invoice summaries");
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const secondTurnBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)) as {
+      messages: readonly { content: string }[];
+      current?: string;
+    };
+    expect(secondTurnBody.messages.at(-1)?.content).toContain("Lint - Quality");
+    expect(secondTurnBody.current).toContain('"title": "invoice-summary"');
+
+    const keptRaw = workspace.getSnapshot().equipment.schemas[0]?.raw ?? "";
+    expect(keptRaw).toContain("Total due in cents.");
   });
 
   it("loads history with restorable versions and run entries", async () => {
