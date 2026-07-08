@@ -178,7 +178,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **skill-import** | `SkillImportFetcher`, `SkillImportFetchError` | `SkillImportFetcher` | port |
 | **portability** | `portabilityCapability`, `runCrossRuntimeValidation`, runtime-target/result types | — | real cross-runtime validation engine |
 | **build-loop** | `runBuildLoop`, `buildTools`, `BuildToolName`, `BuildLoopEvent`, `formatTestRunFeedback`, `formatTriggeringEvalFeedback` | — (consumes `ModelGateway`) | real |
-| **model-gateway** | `ModelGateway` (`classify`/`runAgent`/`streamAgent`/`generate`), `AccountingTag`, `GatewayTool`, `ModelProvider` | `ModelProvider` | real |
+| **model-gateway** | `ModelGateway` (`classify`/`runAgent`/`streamAgent`/`generate`), `createModelGateway` (the accounting shell: admission — tier cap, request rate limit, byte budget — and token recording, resolved per call through the model router), `AccountingTag`, `GatewayTool`, `ModelProvider` | `RawModelCalls` (unmetered per-primitive model calls), `ModelProvider` | real |
 | **model-router** | `ModelRouter` (`resolve`/`snapshot`/`setActive`/`setCredential`/`clearCredential`), `ProviderProfile`, `ModelSelection`, `RouterSnapshot`, selection helpers | `ModelRouter` | real |
 | **usage** | `checkCap`, `applyTurn`, `TIER_LIMITS`, types | `UsageRepository` | real |
 | **harness-version** | `currentHarnessManifest`, `hashHarnessManifest`, manifest/version types | `HarnessVersionRepository` | real |
@@ -222,7 +222,7 @@ concern (ARCHITECTURE §2 *Eval feedback*, §4 *Eval → build feedback*).
 | `prisma/client.ts` | — | PrismaClient + `@prisma/adapter-pg` (Prisma 7 driver adapter) |
 | `prisma/{skill,usage,test-run,eval,harness-version,benchmark}.prisma-repository.ts` | `SkillRepository` (+ `SkillRetentionRepository`), `UsageRepository`, `TestRunRepository`, `EvalRunRepository`, `HarnessVersionRepository`, `BenchmarkRunRepository` | real; the eval/test-run analysis reads join `skill_versions.lint_summary_json` |
 | `prisma/user-provisioning-auth.ts` | `AuthPort` | wraps Clerk auth, provisions the `users` row on first sight |
-| `ai/model-gateway.ts` | `ModelGateway` | the metered gateway; resolves a `LanguageModel` per call from a `ModelRouter` (or a static `ModelProvider` in tests); routes accounting through `usage` |
+| `ai/sdk-model-calls.ts` | `RawModelCalls` | SDK translation only: message/tool mapping, stream-part mapping, token-usage shape reading, provider cap-error detection. Admission + recording live above it, in the model-gateway module's accounting shell (`createModelGateway`), so policy holds for every adapter by construction |
 | `ai/model-router.ts` | `ModelRouter` | the provider/model selection authority: builds providers from the registry + server-pool keys, holds the runtime active selection + bring-your-own overrides (process-local), and resolves per primitive. Secret-free snapshot |
 | `ai/anthropic-provider.ts` | `ModelProvider` | Claude via `@ai-sdk/anthropic`; `model: null` when no key |
 | `ai/nous-provider.ts` | `ModelProvider` | Nous Portal via `@ai-sdk/openai-compatible`; `model: null` when no key |

@@ -4,7 +4,7 @@ import type { RequestRateLimiter, Tier, UsageRepository } from "@/modules/usage"
 import type { TestRunRepository } from "@/modules/test-run";
 import type { EvalRunRepository } from "@/modules/triggering-eval";
 import type { AuthPort } from "@/modules/auth";
-import type { ModelGateway } from "@/modules/model-gateway";
+import { createModelGateway, type ModelGateway } from "@/modules/model-gateway";
 import type { ModelRouter } from "@/modules/model-router";
 import type { SkillImportFetcher } from "@/modules/skill-import";
 import type { HarnessVersion, HarnessVersionRepository } from "@/modules/harness-version";
@@ -37,7 +37,7 @@ import { createPrismaHarnessVersionRepository } from "@/infra/prisma/harness-ver
 import { createPrismaBenchmarkRunRepository } from "@/infra/prisma/benchmark.prisma-repository";
 import { createUserProvisioningAuth } from "@/infra/prisma/user-provisioning-auth";
 import { createModelRouter } from "@/infra/ai/model-router";
-import { createModelGateway } from "@/infra/ai/model-gateway";
+import { createSdkModelCalls } from "@/infra/ai/sdk-model-calls";
 import { createClerkAuth } from "@/infra/clerk/clerk-auth";
 import { createStubAuth } from "@/infra/clerk/stub-auth";
 import { createClerkTierResolver } from "@/infra/clerk/tier-resolver";
@@ -99,12 +99,14 @@ export function getContainer(): AppContainer {
     ? createClerkTierResolver(config.clerkProPlanSlug)
     : undefined;
 
-  // The model gateway is the platform's single metered entry to the model. It
-  // resolves through the router, so `hasModel` reflects the active selection and
-  // an unconfigured router fails cleanly with `model_unavailable` (CONTEXT.md →
-  // Model gateway) — no separate offline stub needed.
+  // The model gateway is the platform's single metered entry to the model:
+  // the domain accounting shell over the raw SDK-translation adapter (#160).
+  // It resolves through the router, so `hasModel` reflects the active selection
+  // and an unconfigured router fails cleanly with `model_unavailable`
+  // (CONTEXT.md → Model gateway) — no separate offline stub needed.
   const modelGateway: ModelGateway = createModelGateway({
     router: modelRouter,
+    calls: createSdkModelCalls(),
     usage,
     requestRateLimiter,
     tierFor,
