@@ -10,7 +10,8 @@ export type GatedCapability =
   | "test-run"
   | "triggering-eval"
   | "export"
-  | "import";
+  | "import"
+  | "publish";
 
 /** The running counters for a user (ARCHITECTURE §6). */
 export type TokenUsageBreakdown = {

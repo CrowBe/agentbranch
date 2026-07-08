@@ -10,6 +10,7 @@ import type { SkillImportFetcher } from "@/modules/skill-import";
 import type { HarnessVersion, HarnessVersionRepository } from "@/modules/harness-version";
 import { currentHarnessManifest } from "@/modules/harness-version";
 import type { BenchmarkRunRepository } from "@/modules/regression-benchmark";
+import type { PublicationRepository } from "@/modules/publication";
 import type { DomainError, Result } from "@/shared";
 
 import { readConfig, type AppConfig } from "./config";
@@ -24,6 +25,7 @@ import { createMemoryTestRunRepository } from "@/infra/memory/test-run.memory-re
 import { createMemoryEvalRunRepository } from "@/infra/memory/eval.memory-repository";
 import { createMemoryHarnessVersionRepository } from "@/infra/memory/harness-version.memory-repository";
 import { createMemoryBenchmarkRunRepository } from "@/infra/memory/benchmark.memory-repository";
+import { createMemoryPublicationRepository } from "@/infra/memory/publication.memory-repository";
 import { createPrismaClient } from "@/infra/prisma/client";
 import {
   createPrismaSkillRepository,
@@ -35,6 +37,7 @@ import { createPrismaTestRunRepository } from "@/infra/prisma/test-run.prisma-re
 import { createPrismaEvalRunRepository } from "@/infra/prisma/eval.prisma-repository";
 import { createPrismaHarnessVersionRepository } from "@/infra/prisma/harness-version.prisma-repository";
 import { createPrismaBenchmarkRunRepository } from "@/infra/prisma/benchmark.prisma-repository";
+import { createPrismaPublicationRepository } from "@/infra/prisma/publication.prisma-repository";
 import { createUserProvisioningAuth } from "@/infra/prisma/user-provisioning-auth";
 import { createModelRouter } from "@/infra/ai/model-router";
 import { createSdkModelCalls } from "@/infra/ai/sdk-model-calls";
@@ -71,6 +74,7 @@ export type AppContainer = {
   // Frozen-set scorings pinned per harness version — the admin benchmark
   // route's persistence (ARCHITECTURE §9 harness improvement loop).
   readonly benchmarkRuns: BenchmarkRunRepository;
+  readonly publications: PublicationRepository;
   readonly skillImportFetcher: SkillImportFetcher;
 };
 
@@ -158,6 +162,9 @@ export function getContainer(): AppContainer {
     benchmarkRuns: prisma
       ? createPrismaBenchmarkRunRepository(prisma)
       : createMemoryBenchmarkRunRepository(),
+    publications: prisma
+      ? createPrismaPublicationRepository(prisma)
+      : createMemoryPublicationRepository(memorySkillStore!),
     skillImportFetcher: createGithubSkillImportFetcher(),
   };
   return cached;
