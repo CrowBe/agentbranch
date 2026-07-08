@@ -30,6 +30,7 @@ export const TIER_LIMITS: Readonly<Record<Tier, TierLimits>> = {
       "triggering-eval",
       "export",
       "import",
+      "publish",
     ]),
   },
 };
