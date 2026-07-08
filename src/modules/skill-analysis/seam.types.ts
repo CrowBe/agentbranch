@@ -24,6 +24,7 @@ export type ArtifactKind =
   | "test-run"
   | "triggering-eval"
   | "cross-runtime-validation"
+  | "safety-review"
   | "harness-recommendation";
 
 /**

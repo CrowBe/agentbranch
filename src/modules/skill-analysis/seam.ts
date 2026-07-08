@@ -90,7 +90,7 @@ export async function runEvaluation<
     return err(
       domainError(
         "model_unavailable",
-        `"${capability.name}" needs a model connection to run. Test runs and triggering evals are unavailable offline.`,
+        `"${capability.name}" needs a model connection to run. Evaluation capabilities are unavailable offline.`,
       ),
     );
   }
