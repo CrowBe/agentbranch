@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { runCapability } from "@/modules/skill-analysis";
 import { unwrap, isErr } from "@/shared";
 import {
+  applyResponseSchemaEdit,
   createResponseSchemaLintReport,
   exampleValueForSchema,
   parseResponseSchema,
@@ -38,6 +39,25 @@ describe("response-schema source model", () => {
     expect(isErr(parseResponseSchema("{nope"))).toBe(true);
     const list = parseResponseSchema("[1,2]");
     expect(isErr(list) && list.error.tag === "not_an_object").toBe(true);
+  });
+
+  it("applies an exact string edit to the serialized document", () => {
+    const source = unwrap(parseResponseSchema(JSON.stringify(INVOICE_SCHEMA)));
+    const edited = unwrap(applyResponseSchemaEdit(source, '"type": "number"', '"type": "integer"'));
+    expect(edited.document.properties).toMatchObject({ amount: { type: "integer" } });
+  });
+
+  it("fails an edit whose target is empty, absent, or breaks the JSON", () => {
+    const source = unwrap(parseResponseSchema(JSON.stringify(INVOICE_SCHEMA)));
+
+    const empty = applyResponseSchemaEdit(source, "", "x");
+    expect(isErr(empty) && empty.error.tag === "edit_no_match").toBe(true);
+
+    const missing = applyResponseSchemaEdit(source, "no-such-text", "x");
+    expect(isErr(missing) && missing.error.tag === "edit_no_match").toBe(true);
+
+    const broken = applyResponseSchemaEdit(source, '"type": "object"', '"type": "object"}}');
+    expect(isErr(broken) && broken.error.tag === "invalid_json").toBe(true);
   });
 });
 

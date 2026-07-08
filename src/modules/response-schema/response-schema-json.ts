@@ -36,3 +36,34 @@ export function responseSchemaName(source: ResponseSchemaSource): string {
   const title = source.document.title;
   return typeof title === "string" ? title.trim() : "";
 }
+
+/**
+ * Apply an exact string replacement to the serialized document and re-parse —
+ * the edit_response_schema revision path, mirroring `applySkillEdit` on the
+ * skill aggregate. Fails when the target text is empty or absent, or when the
+ * replacement breaks the document as JSON.
+ */
+export function applyResponseSchemaEdit(
+  source: ResponseSchemaSource,
+  oldStr: string,
+  newStr: string,
+): Result<ResponseSchemaSource, ResponseSchemaError> {
+  if (oldStr.length === 0) {
+    return err({
+      tag: "edit_no_match",
+      message: "Could not apply the streamed edit because the target text was empty.",
+    });
+  }
+
+  const raw = serializeResponseSchema(source);
+  const start = raw.indexOf(oldStr);
+  if (start === -1) {
+    return err({
+      tag: "edit_no_match",
+      message: "Could not apply the streamed edit because the target text was not found.",
+    });
+  }
+
+  const nextRaw = `${raw.slice(0, start)}${newStr}${raw.slice(start + oldStr.length)}`;
+  return parseResponseSchema(nextRaw);
+}

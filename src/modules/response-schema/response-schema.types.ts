@@ -12,10 +12,11 @@ export type ResponseSchemaSource = {
   readonly document: Readonly<Record<string, unknown>>;
 };
 
-/** Failure modes when reading a response-schema document. */
+/** Failure modes when reading or editing a response-schema document. */
 export type ResponseSchemaError =
   | { readonly tag: "invalid_json"; readonly message: string }
-  | { readonly tag: "not_an_object"; readonly message: string };
+  | { readonly tag: "not_an_object"; readonly message: string }
+  | { readonly tag: "edit_no_match"; readonly message: string };
 
 /**
  * The response-schema quality artifact — LintReport-shaped (same summary and

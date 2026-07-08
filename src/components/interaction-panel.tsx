@@ -118,11 +118,11 @@ function copyForMode(mode: InteractionMode): {
     return {
       title: "Equipment",
       empty:
-        "Paste a response schema (a JSON Schema document) or a tool contract to quality-check it. Checked tool contracts run with your next test run.",
-      placeholder:
-        '{\n  "name": "send_invoice_reminder",\n  "description": "Send a payment reminder.",\n  "input": { "type": "object" }\n}',
-      button: "Check equipment",
-      busy: "Checking...",
+        "Describe the output you want — the authoring agent asks a few questions, then drafts the response schema with you. Or paste a response schema or tool contract to quality-check it. Checked tool contracts run with your next test run.",
+      hint: 'Say "just draft it" if you don\'t want any questions before the first draft.',
+      placeholder: "e.g. A schema for the invoice summaries my billing skill returns",
+      button: "Send",
+      busy: "Working...",
     };
   }
   if (mode === "import") {

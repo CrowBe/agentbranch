@@ -1,9 +1,19 @@
 import { readSseEvents, type EvaluationEvent } from "@/shared";
-import type { BuildLoopEvent, BuildMessage } from "@/modules/build-loop";
+import type {
+  BuildLoopEvent,
+  BuildMessage,
+  ResponseSchemaLoopEvent,
+} from "@/modules/build-loop";
 import {
   formatTestRunFeedback,
   formatTriggeringEvalFeedback,
 } from "@/modules/build-loop/feedback-formatters";
+import {
+  applyResponseSchemaEdit,
+  responseSchemaName,
+  serializeResponseSchema,
+  type ResponseSchemaSource,
+} from "@/modules/response-schema";
 import {
   createHeroArtifact,
   renderedRenderer,
@@ -84,6 +94,10 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
   // The build conversation so far — protocol state the UI never renders
   // directly (the entries carry the visible log), so it stays off the snapshot.
   let messages: readonly BuildMessage[] = [];
+  // The response-schema authoring conversation and its working draft
+  // (ARCHITECTURE §9.2, issue #151) — same protocol-state split.
+  let equipmentMessages: readonly BuildMessage[] = [];
+  let equipmentDraft: ResponseSchemaSource | null = null;
   let entrySeq = 0;
 
   const listeners = new Set<() => void>();
@@ -292,7 +306,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       status:
         snapshot.equipment.contracts.length + snapshot.equipment.schemas.length > 0
           ? "Equipment ready — tool contracts run with your next test run."
-          : "Paste a response schema or tool contract to check it.",
+          : "Describe the output you want to build a response schema, or paste equipment to check it.",
     });
     refreshEquipmentEntries(snapshot.equipment);
   }
@@ -496,7 +510,9 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     if (snapshot.equipmentBusy) return;
     const detected = detectEquipmentKind(raw);
     if (!detected.ok) {
-      fail(detected.error);
+      // Not a JSON document — a chat turn for the response-schema authoring
+      // loop (issue #151): the agent interviews, then drafts the schema.
+      await sendEquipmentAuthoring(raw, true);
       return;
     }
 
@@ -506,28 +522,9 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       status: isContract ? "Checking tool contract..." : "Checking response schema...",
     });
     try {
-      const res = await fetchImpl(isContract ? "/api/tool-contract" : "/api/response-schema", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ document: raw, surface: "insights" }),
-      });
-      const body = (await res.json().catch(() => null)) as unknown;
-      if (!res.ok) {
-        fail(errorMessage(body, res.status));
-        return;
-      }
-      const insight = decodeEquipmentInsight(body);
-
-      const next = storeEquipment(snapshot.equipment, detected.kind, detected.name, raw);
-      patch({
-        capability: {
-          kind: "lint-insights",
-          title: isContract ? "Tool contract quality" : "Response schema quality",
-          insight,
-        },
-        equipment: next,
-      });
-      refreshEquipmentEntries(next);
+      const kept = await checkAndKeepEquipment(detected.kind, detected.name, raw);
+      if (!kept) return;
+      refreshEquipmentEntries(snapshot.equipment);
       patch({
         status: isContract
           ? `Tool contract "${detected.name}" checked — it runs with your next test run.`
@@ -537,6 +534,153 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       fail(friendlyError(String(cause)));
     } finally {
       patch({ equipmentBusy: false });
+    }
+  }
+
+  /** Quality-check a document through its primitive's route and keep it for
+   * the session. Shared by the paste path and the authoring loop's finished
+   * draft — an authored schema is kept exactly like a pasted one. */
+  async function checkAndKeepEquipment(
+    kind: EquipmentKind,
+    name: string,
+    raw: string,
+  ): Promise<boolean> {
+    const isContract = kind === "tool-contract";
+    const res = await fetchImpl(isContract ? "/api/tool-contract" : "/api/response-schema", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ document: raw, surface: "insights" }),
+    });
+    const body = (await res.json().catch(() => null)) as unknown;
+    if (!res.ok) {
+      fail(errorMessage(body, res.status));
+      return false;
+    }
+    const insight = decodeEquipmentInsight(body);
+
+    const next = storeEquipment(snapshot.equipment, kind, name, raw);
+    patch({
+      capability: {
+        kind: "lint-insights",
+        title: isContract ? "Tool contract quality" : "Response schema quality",
+        insight,
+      },
+      equipment: next,
+    });
+    return true;
+  }
+
+  /** One turn of the response-schema authoring loop (issue #151): stream the
+   * conversation, track the draft the write/edit tools produce, and on a
+   * completed draft quality-check + keep it like a pasted schema. */
+  async function sendEquipmentAuthoring(
+    message: string,
+    allowLintAutoFeedback: boolean,
+  ): Promise<void> {
+    const nextMessages: readonly BuildMessage[] = [
+      ...equipmentMessages,
+      { role: "user", content: message },
+    ];
+    equipmentMessages = nextMessages;
+    patch({
+      entries: [...snapshot.entries, entry(message)],
+      status: "Building response schema...",
+      equipmentBusy: true,
+      capability: null,
+    });
+
+    let assistantText = "";
+    let pendingLintFeedback: string | null = null;
+    let completed = false;
+
+    try {
+      const res = await fetchImpl("/api/response-schema/build", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: nextMessages,
+          current: equipmentDraft ? serializeResponseSchema(equipmentDraft) : undefined,
+        }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        fail(friendlyError(body?.error ?? `Request failed (${res.status}).`));
+        return;
+      }
+      if (!res.body) {
+        patch({ status: "Authoring stream did not open." });
+        return;
+      }
+
+      for await (const event of readSseEvents<ResponseSchemaLoopEvent>(res.body)) {
+        if (event.event === "text") {
+          assistantText += event.data.delta;
+          patch({ entries: upsertAssistant(snapshot.entries, assistantText) });
+        } else if (event.event === "tool") {
+          patch({
+            status:
+              event.data.phase === "call" ? `Running ${event.data.name}...` : "Updating draft...",
+          });
+        } else if (event.event === "response-schema") {
+          equipmentDraft = event.data.source;
+        } else if (event.event === "response-schema-edit") {
+          if (!equipmentDraft) {
+            appendEntry(entry("No draft exists to edit yet.", "error"));
+            continue;
+          }
+          const edited = applyResponseSchemaEdit(
+            equipmentDraft,
+            event.data.oldStr,
+            event.data.newStr,
+          );
+          if (!edited.ok) {
+            appendEntry(entry(edited.error.message, "error"));
+            continue;
+          }
+          equipmentDraft = edited.value;
+        } else if (event.event === "lint-feedback") {
+          pendingLintFeedback = event.data.feedback;
+        } else if (event.event === "error") {
+          patch({ status: friendlyError(event.data.message) });
+          appendEntry(entry(friendlyError(event.data.message), "error"));
+        } else if (event.event === "done") {
+          completed = true;
+        }
+      }
+
+      if (assistantText.trim()) {
+        equipmentMessages = [...nextMessages, { role: "assistant", content: assistantText.trim() }];
+      }
+    } catch (cause) {
+      fail(friendlyError(String(cause)));
+      return;
+    } finally {
+      patch({ equipmentBusy: false });
+    }
+
+    if (completed && pendingLintFeedback && allowLintAutoFeedback && !isLintFeedbackMessage(message)) {
+      // Closeable with eval feedback, like the skill loop: hand the lint
+      // findings straight back as the next turn, once.
+      await sendEquipmentAuthoring(pendingLintFeedback, false);
+      return;
+    }
+
+    if (completed && equipmentDraft) {
+      const raw = serializeResponseSchema(equipmentDraft);
+      const name = responseSchemaName(equipmentDraft) || "untitled schema";
+      patch({ equipmentBusy: true, status: "Checking response schema..." });
+      try {
+        const kept = await checkAndKeepEquipment("response-schema", name, raw);
+        if (kept) {
+          const done = `Response schema "${name}" checked and kept for tool contracts to reference.`;
+          appendEntry(entry(done, "muted"));
+          patch({ status: done });
+        }
+      } catch (cause) {
+        fail(friendlyError(String(cause)));
+      } finally {
+        patch({ equipmentBusy: false });
+      }
     }
   }
 

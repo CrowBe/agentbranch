@@ -5,6 +5,10 @@
  * only through the **model gateway** (`streamAgent`) — the platform's single
  * metered entry — so its turns are gated + accounted like every other model
  * call. It never touches the raw model, the key, or token accounting.
+ *
+ * The same loop shape authors the first equipment primitive (issue #151):
+ * `runResponseSchemaLoop` drives write_response_schema/edit_response_schema
+ * under its own frozen cacheable prompt, one prompt + tool pair per primitive.
  */
 export type {
   BuildMessage,
@@ -14,14 +18,16 @@ export type {
 export { buildTools, type BuildToolName } from "./tools";
 export {
   formatLintFeedback,
+  formatResponseSchemaLintFeedback,
   formatTestRunFeedback,
   formatTriggeringEvalFeedback,
 } from "./feedback-formatters";
-export {
-  getEquipmentPrimitiveAuthoringPlan,
-  renderEquipmentPrimitiveAuthoringPrompt,
-  type EquipmentPrimitiveAuthoringKind,
-  type EquipmentPrimitiveAuthoringPlan,
-} from "./equipment-authoring-prompts";
 export { runBuildLoop } from "./build-loop";
 export { BUILD_LOOP_SYSTEM_PROMPT } from "./system-prompt";
+export {
+  runResponseSchemaLoop,
+  type ResponseSchemaLoopEvent,
+  type ResponseSchemaLoopInput,
+} from "./response-schema-loop";
+export { responseSchemaTools, type ResponseSchemaToolName } from "./response-schema-tools";
+export { RESPONSE_SCHEMA_AUTHORING_PROMPT } from "./response-schema-prompt";
