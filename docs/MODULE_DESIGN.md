@@ -172,7 +172,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **test-run** | `testRunCapability`, `executeSkill`, `createMockToolRegistry`, `defaultMockToolRegistry`, `emailMockTool`, `registryFromContracts`, `computeContractChecks`, `contractCheckIssues`, `toTestRunAnalysisRecord` | `TestRunRepository` | evaluation capability over a `TestRunInput` bundle · run + world generation real · contract-driven mocks + per-call validation real · email mock = offline fallback |
 | **triggering-eval** | `triggeringEvalCapability`, `runTriggeringEval`, `runBatteryCases`, `generatePromptBattery`, `distractorLibrary`, `toEvalRunAnalysisRecord` | `EvalRunRepository` | evaluation capability · run + battery generation real · adversarial negative battery · distractor library static v1 seed |
 | **safety-review** | `safetyReviewCapability`, `runSafetyReview`, `SafetyRating` + verdict/score types | `SafetyRatingRepository` | evaluation capability · LLM-judge over a full skill folder as structurally untrusted data · caller-tagged (opt-in rating = `account`, publication gate = `platform`) · records persist as safety ratings pinned to the reviewed version |
-| **publication** | `publishSkillVersion`, `renderTapMarketplace`, `Publication`, `PublicationRepository` + types | `PublicationRepository` | real (pins a Skill version + content hash + slug + tier + gate binding; rate-limited publish service; pure tap marketplace renderer for `.claude-plugin/marketplace.json`) |
+| **publication** | `publishSkillVersion`, `renderTapMarketplace`, `renderSkillLibrary`, `Publication`, `SkillLibraryEntry/View`, `PublicationRepository` + types | `PublicationRepository` | real (pins a Skill version + content hash + slug + tier + gate binding; rate-limited publish service; pure tap marketplace renderer for `.claude-plugin/marketplace.json`; pure Skill-library read model — reviewed tier surfaced, community tier link-reachable with the not-human-reviewed trust label) |
 | **export** | `exportCapability`, manifest types | — | real |
 | **lint** | `lintCapability`, `summarizeLintFindings`, `LintReport`, `LintFinding` | — | real (quality + pure policy rules; `summarizeLintFindings` is the shared scorer every LintReport-shaped artifact uses) |
 | **response-schema** | `responseSchemaCapability`, `parseResponseSchema`, `serializeResponseSchema`, `applyResponseSchemaEdit`, `responseSchemaName`, `schemaShapeFindings`, `validateAgainstSchema`, `exampleValueForSchema` + types | — | real (first equipment primitive: lossless source model + pure lint + offline schema-subset validation) |
@@ -304,6 +304,12 @@ when they become chat-buildable (ARCHITECTURE §9.2 order).
   the source model) → one call into the equipment-authoring driver
   (`response-schema-stream.ts`), streaming SSE. The gateway gates the `build`
   capability, exactly like a skill build turn.
+- `app/api/skill-library/route.ts` — the publication-backed Skill library feed
+  (ARCHITECTURE §9.1): GET renders `renderSkillLibrary` over the visible
+  publications — `?surface=templates` is the Templates view over the reviewed
+  tier, `?q=` searches surfaced entries, `?slug=` looks up one publication
+  (community entries resolve by slug with their trust label). Pure read;
+  offline-safe.
 - `app/api/model-router/route.ts` — **admin-gated** (the selection is
   instance-wide): GET the secret-free router snapshot, POST to switch the active
   provider/model or store/clear a bring-your-own key. With Clerk auth on, only an
