@@ -53,6 +53,14 @@ export function createMemoryPublicationRepository(store: MemorySkillStore): Publ
       return ok([...publications.values()].find((publication) => publication.slug === slug) ?? null);
     },
 
+    async listVisible() {
+      return ok(
+        [...publications.values()].filter(
+          (publication) => publication.tier === "community" || publication.tier === "reviewed",
+        ),
+      );
+    },
+
     async listByPublisher(publisherId: UserId) {
       return ok([...publications.values()].filter((publication) => publication.publisherId === publisherId));
     },

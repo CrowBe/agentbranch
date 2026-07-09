@@ -12,6 +12,9 @@ export interface PublicationRepository {
 
   findBySlug(slug: string): Promise<Result<Publication | null, DomainError>>;
 
+  /** Community + reviewed publications that are installable from the tap. */
+  listVisible(): Promise<Result<readonly Publication[], DomainError>>;
+
   listByPublisher(publisherId: UserId): Promise<Result<readonly Publication[], DomainError>>;
 
   listByVersion(skillVersionId: SkillVersionId): Promise<Result<readonly Publication[], DomainError>>;
