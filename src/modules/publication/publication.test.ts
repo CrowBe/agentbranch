@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PublicationRepository } from "./publication.repository";
 import { publishSkillVersion } from "./publish-skill-version";
+import { renderSkillLibrary } from "./skill-library";
 import { renderTapMarketplace } from "./tap-marketplace";
 import type { Publication } from "./publication.types";
 import { HarnessVersionId, PublicationId, SkillId, SkillVersionId, UserId, ok } from "@/shared";
@@ -37,6 +38,7 @@ function repo(): PublicationRepository {
     ),
     findById: vi.fn(),
     findBySlug: vi.fn(),
+    listVisible: vi.fn(),
     listByPublisher: vi.fn(),
     listByVersion: vi.fn(),
   };
@@ -157,6 +159,63 @@ describe("renderTapMarketplace", () => {
             path: "skills/zara/calendar-cleanup",
           },
         },
+      ],
+    });
+  });
+});
+
+describe("renderSkillLibrary", () => {
+  it("renders reviewed publications for Skill library surfaces and keeps community entries link-reachable", () => {
+    const gate = {
+      verdict: "passed" as const,
+      gateRunId: "gate_1",
+      harnessVersionId: HarnessVersionId("harness_1"),
+    };
+    const publications = [
+      {
+        id: PublicationId("pub_community"),
+        publisherId: UserId("user_1"),
+        skillId: SkillId("skill_community"),
+        skillVersionId: SkillVersionId("version_community"),
+        slug: "ben/community-helper",
+        tier: "community" as const,
+        contentHash: "sha256:community",
+        gate,
+        createdAt: new Date("2026-07-09T00:00:00Z"),
+      },
+      {
+        id: PublicationId("pub_reviewed"),
+        publisherId: UserId("user_1"),
+        skillId: SkillId("skill_reviewed"),
+        skillVersionId: SkillVersionId("version_reviewed"),
+        slug: "ben/inbox-triage",
+        tier: "reviewed" as const,
+        contentHash: "sha256:reviewed",
+        gate,
+        createdAt: new Date("2026-07-09T00:00:00Z"),
+      },
+    ] satisfies readonly Publication[];
+
+    expect(renderSkillLibrary(publications, { surface: "templates" })).toEqual({
+      surface: "templates",
+      entries: [
+        expect.objectContaining({
+          slug: "ben/inbox-triage",
+          tier: "reviewed",
+          surfaced: true,
+          trustLabel: "reviewed skill - human-reviewed",
+        }),
+      ],
+    });
+    expect(renderSkillLibrary(publications, { slug: "ben/community-helper" })).toEqual({
+      surface: "library",
+      entries: [
+        expect.objectContaining({
+          slug: "ben/community-helper",
+          tier: "community",
+          surfaced: false,
+          trustLabel: "community skill - automated checks passed, not human-reviewed",
+        }),
       ],
     });
   });

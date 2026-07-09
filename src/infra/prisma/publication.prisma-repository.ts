@@ -86,6 +86,14 @@ export function createPrismaPublicationRepository(prisma: PrismaClient): Publica
       return ok(row ? toPublication(row as PublicationRow) : null);
     },
 
+    async listVisible() {
+      const rows = await prisma.publication.findMany({
+        where: { tier: { in: ["community", "reviewed"] } },
+        orderBy: { slug: "asc" },
+      });
+      return ok(rows.map((row) => toPublication(row as PublicationRow)));
+    },
+
     async listByPublisher(publisherId) {
       const rows = await prisma.publication.findMany({ where: { publisherId }, orderBy: { createdAt: "desc" } });
       return ok(rows.map((row) => toPublication(row as PublicationRow)));

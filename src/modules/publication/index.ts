@@ -18,3 +18,5 @@ export type {
 export type { PublicationRepository } from "./publication.repository";
 export { publishSkillVersion, renderPublicationSlug } from "./publish-skill-version";
 export { renderTapMarketplace } from "./tap-marketplace";
+export { renderSkillLibrary } from "./skill-library";
+export type { SkillLibraryEntry, SkillLibrarySurface, SkillLibraryView } from "./skill-library";
