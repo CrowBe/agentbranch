@@ -31,6 +31,30 @@ export type Publication = {
   readonly createdAt: Date;
 };
 
+/** One entry in the public tap's `.claude-plugin/marketplace.json`. */
+export type TapMarketplaceSkill = {
+  /** Install-by-name identity, matching the publication slug's skill name. */
+  readonly name: string;
+  /** Publisher namespace from the stable `owner/name` address. */
+  readonly owner: string;
+  readonly slug: string;
+  readonly tier: PublicationTier;
+  readonly contentHash: string;
+  readonly gate: PublicationGateBinding;
+  /** Skills install from the tap repository at HEAD; takedown is a revert. */
+  readonly source: {
+    readonly type: "git";
+    readonly ref: "HEAD";
+    readonly path: string;
+  };
+};
+
+/** The tap repository marketplace file shape. */
+export type TapMarketplaceManifest = {
+  readonly version: 1;
+  readonly skills: readonly TapMarketplaceSkill[];
+};
+
 export type PublishSkillVersionInput = {
   readonly publisherId: UserId;
   readonly skillId: SkillId;
