@@ -510,6 +510,56 @@ describe("workspace choreography", () => {
     ]);
   });
 
+  it("routes a plain-language tool-contract message into its authoring loop and keeps the drafted contract", async () => {
+    const contractSource = {
+      name: "send_invoice_reminder",
+      description: "Send a payment reminder email for one overdue invoice.",
+      input: {
+        kind: "inline",
+        schema: {
+          type: "object",
+          required: ["invoiceId"],
+          properties: { invoiceId: { type: "string", description: "The invoice id." } },
+        },
+      },
+      output: { kind: "schema-ref", ref: "invoice-summary" },
+      examples: [{ input: { invoiceId: "INV-1" } }],
+      failureModes: ["invoice not found"],
+      safetyNotes: ["Confirm before sending email."],
+      extra: {},
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        sseResponse([
+          { event: "text", data: { delta: "Drafting the tool contract." } },
+          { event: "tool-contract", data: { source: contractSource } },
+          { event: "done", data: { finishReason: "stop" } },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ score: 94, grade: "A", summary: "Solid contract.", findings: [], watch: [] }),
+      );
+    const workspace = createWorkspace(init, { fetch: fetchMock });
+
+    await workspace.actions.submitEquipment("A tool contract for invoice reminders, just draft it");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/tool-contract/build", expect.anything());
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/tool-contract", expect.anything());
+    const snapshot = workspace.getSnapshot();
+    expect(snapshot.equipment.contracts).toHaveLength(1);
+    expect(snapshot.equipment.contracts[0]?.name).toBe("send_invoice_reminder");
+    expect(snapshot.equipment.contracts[0]?.raw).toContain('"$ref": "invoice-summary"');
+    expect(snapshot.status).toBe(
+      'Tool contract "send_invoice_reminder" checked — it runs with your next test run.',
+    );
+    expect(snapshot.entries.map((e) => e.label)).toEqual([
+      "A tool contract for invoice reminders, just draft it",
+      "Drafting the tool contract.",
+      'Tool contract "send_invoice_reminder" checked — it runs with your next test run.',
+    ]);
+  });
+
   it("applies streamed schema edits and hands lint feedback back as the next authoring turn", async () => {
     const draft = {
       title: "invoice-summary",
