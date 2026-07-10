@@ -3,6 +3,7 @@ import type {
   BuildLoopEvent,
   BuildMessage,
   ResponseSchemaLoopEvent,
+  ToolContractLoopEvent,
 } from "@/modules/build-loop";
 import {
   formatTestRunFeedback,
@@ -14,6 +15,11 @@ import {
   serializeResponseSchema,
   type ResponseSchemaSource,
 } from "@/modules/response-schema";
+import {
+  applyToolContractEdit,
+  serializeToolContract,
+  type ToolContractSource,
+} from "@/modules/tool-contract";
 import {
   createHeroArtifact,
   renderedRenderer,
@@ -99,10 +105,11 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
   // The build conversation so far — protocol state the UI never renders
   // directly (the entries carry the visible log), so it stays off the snapshot.
   let messages: readonly BuildMessage[] = [];
-  // The response-schema authoring conversation and its working draft
-  // (ARCHITECTURE §9.2, issue #151) — same protocol-state split.
+  // The equipment authoring conversation and working drafts (ARCHITECTURE
+  // §9.2) — same protocol-state split.
   let equipmentMessages: readonly BuildMessage[] = [];
-  let equipmentDraft: ResponseSchemaSource | null = null;
+  let responseSchemaDraft: ResponseSchemaSource | null = null;
+  let toolContractDraft: ToolContractSource | null = null;
   let entrySeq = 0;
 
   const listeners = new Set<() => void>();
@@ -568,9 +575,9 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     if (snapshot.equipmentBusy) return;
     const detected = detectEquipmentKind(raw);
     if (!detected.ok) {
-      // Not a JSON document — a chat turn for the response-schema authoring
-      // loop (issue #151): the agent interviews, then drafts the schema.
-      await sendEquipmentAuthoring(raw, true);
+      // Not a JSON document — a chat turn for an equipment authoring loop:
+      // the agent interviews, then drafts the requested primitive.
+      await sendEquipmentAuthoring(selectEquipmentAuthoringKind(raw), raw, true);
       return;
     }
 
@@ -628,10 +635,11 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     return true;
   }
 
-  /** One turn of the response-schema authoring loop (issue #151): stream the
-   * conversation, track the draft the write/edit tools produce, and on a
-   * completed draft quality-check + keep it like a pasted schema. */
+  /** One turn of an equipment authoring loop: stream the conversation, track
+   * the draft the write/edit tools produce, and on a completed draft
+   * quality-check + keep it like a pasted document. */
   async function sendEquipmentAuthoring(
+    kind: EquipmentKind,
     message: string,
     allowLintAutoFeedback: boolean,
   ): Promise<void> {
@@ -640,9 +648,10 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       { role: "user", content: message },
     ];
     equipmentMessages = nextMessages;
+    const isContract = kind === "tool-contract";
     patch({
       entries: [...snapshot.entries, entry(message)],
-      status: "Building response schema...",
+      status: isContract ? "Building tool contract..." : "Building response schema...",
       equipmentBusy: true,
       capability: null,
     });
@@ -652,14 +661,23 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     let completed = false;
 
     try {
-      const res = await fetchImpl("/api/response-schema/build", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: nextMessages,
-          current: equipmentDraft ? serializeResponseSchema(equipmentDraft) : undefined,
-        }),
-      });
+      const res = await fetchImpl(
+        isContract ? "/api/tool-contract/build" : "/api/response-schema/build",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: nextMessages,
+            current: isContract
+              ? toolContractDraft
+                ? serializeToolContract(toolContractDraft)
+                : undefined
+              : responseSchemaDraft
+                ? serializeResponseSchema(responseSchemaDraft)
+                : undefined,
+          }),
+        },
+      );
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
         fail(friendlyError(body?.error ?? `Request failed (${res.status}).`));
@@ -670,7 +688,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
         return;
       }
 
-      for await (const event of readSseEvents<ResponseSchemaLoopEvent>(res.body)) {
+      for await (const event of readSseEvents<ResponseSchemaLoopEvent | ToolContractLoopEvent>(res.body)) {
         if (event.event === "text") {
           assistantText += event.data.delta;
           patch({ entries: upsertAssistant(snapshot.entries, assistantText) });
@@ -680,14 +698,14 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
               event.data.phase === "call" ? `Running ${event.data.name}...` : "Updating draft...",
           });
         } else if (event.event === "response-schema") {
-          equipmentDraft = event.data.source;
+          responseSchemaDraft = event.data.source;
         } else if (event.event === "response-schema-edit") {
-          if (!equipmentDraft) {
+          if (!responseSchemaDraft) {
             appendEntry(entry("No draft exists to edit yet.", "error"));
             continue;
           }
           const edited = applyResponseSchemaEdit(
-            equipmentDraft,
+            responseSchemaDraft,
             event.data.oldStr,
             event.data.newStr,
           );
@@ -695,7 +713,24 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
             appendEntry(entry(edited.error.message, "error"));
             continue;
           }
-          equipmentDraft = edited.value;
+          responseSchemaDraft = edited.value;
+        } else if (event.event === "tool-contract") {
+          toolContractDraft = event.data.source;
+        } else if (event.event === "tool-contract-edit") {
+          if (!toolContractDraft) {
+            appendEntry(entry("No draft exists to edit yet.", "error"));
+            continue;
+          }
+          const edited = applyToolContractEdit(
+            toolContractDraft,
+            event.data.oldStr,
+            event.data.newStr,
+          );
+          if (!edited.ok) {
+            appendEntry(entry(edited.error.message, "error"));
+            continue;
+          }
+          toolContractDraft = edited.value;
         } else if (event.event === "lint-feedback") {
           pendingLintFeedback = event.data.feedback;
         } else if (event.event === "error") {
@@ -719,18 +754,33 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     if (completed && pendingLintFeedback && allowLintAutoFeedback && !isLintFeedbackMessage(message)) {
       // Closeable with eval feedback, like the skill loop: hand the lint
       // findings straight back as the next turn, once.
-      await sendEquipmentAuthoring(pendingLintFeedback, false);
+      await sendEquipmentAuthoring(kind, pendingLintFeedback, false);
       return;
     }
 
-    if (completed && equipmentDraft) {
-      const raw = serializeResponseSchema(equipmentDraft);
-      const name = responseSchemaName(equipmentDraft) || "untitled schema";
-      patch({ equipmentBusy: true, status: "Checking response schema..." });
+    const finishedRaw = isContract
+      ? toolContractDraft
+        ? serializeToolContract(toolContractDraft)
+        : null
+      : responseSchemaDraft
+        ? serializeResponseSchema(responseSchemaDraft)
+        : null;
+    if (completed && finishedRaw) {
+      const name = isContract
+        ? toolContractDraft?.name || "untitled contract"
+        : responseSchemaDraft
+          ? responseSchemaName(responseSchemaDraft) || "untitled schema"
+          : "untitled schema";
+      patch({
+        equipmentBusy: true,
+        status: isContract ? "Checking tool contract..." : "Checking response schema...",
+      });
       try {
-        const kept = await checkAndKeepEquipment("response-schema", name, raw);
+        const kept = await checkAndKeepEquipment(kind, name, finishedRaw);
         if (kept) {
-          const done = `Response schema "${name}" checked and kept for tool contracts to reference.`;
+          const done = isContract
+            ? `Tool contract "${name}" checked — it runs with your next test run.`
+            : `Response schema "${name}" checked and kept for tool contracts to reference.`;
           appendEntry(entry(done, "muted"));
           patch({ status: done });
         }
@@ -1308,6 +1358,14 @@ function appendProgressCase(
  * that parses as a JSON object is treated as a response schema (a JSON Schema
  * document). The server re-parses through the real source models either way.
  */
+function selectEquipmentAuthoringKind(message: string): EquipmentKind {
+  return /\b(tool|contract|input|output|failure mode|confirmation boundary|confirm before)\b/i.test(
+    message,
+  )
+    ? "tool-contract"
+    : "response-schema";
+}
+
 function detectEquipmentKind(raw: string):
   | { readonly ok: true; readonly kind: EquipmentKind; readonly name: string }
   | { readonly ok: false; readonly error: string } {
