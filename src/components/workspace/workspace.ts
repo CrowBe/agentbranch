@@ -32,6 +32,7 @@ import {
   decodeRunHistory,
   decodeSafetyRating,
   decodeSkillDetail,
+  decodeSkillLibrary,
   decodeSkillList,
   errorMessage,
   friendlyError,
@@ -52,6 +53,7 @@ import type {
   HeroDocs,
   InteractionEntry,
   SafetyRatingState,
+  SkillLibraryEntryPanel,
   ToolAction,
   TriggeringCaseProgressPanel,
   Workspace,
@@ -367,6 +369,52 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       patch({
         status: nextEntries.length > 0 ? "History loaded." : "No saved history yet.",
         entries: nextEntries,
+      });
+    } catch (cause) {
+      const error = friendlyError(String(cause));
+      patch({ status: error, entries: [entry(error, "error")] });
+    }
+  }
+
+  async function showTemplates(query = ""): Promise<void> {
+    if (snapshot.busy) return;
+    const trimmed = query.trim();
+    const directSlug = trimmed.includes("/") ? trimmed : "";
+    const params = directSlug
+      ? new URLSearchParams({ slug: directSlug })
+      : new URLSearchParams({ surface: "templates" });
+    if (trimmed && !directSlug) params.set("q", trimmed);
+    patch({
+      mode: "templates",
+      capability: null,
+      activeTool: null,
+      status: "Loading Templates...",
+      entries: [],
+    });
+
+    try {
+      const res = await fetchImpl(`/api/skill-library?${params.toString()}`);
+      const body = (await res.json().catch(() => null)) as unknown;
+      if (!res.ok) {
+        const error = errorMessage(body, res.status);
+        patch({ status: error, entries: [entry(error, "error")] });
+        return;
+      }
+      const items = decodeSkillLibrary(body);
+      patch({
+        status:
+          items.length > 0
+            ? directSlug
+              ? "Skill library entry loaded."
+              : trimmed
+              ? "Templates search loaded."
+              : "Templates loaded."
+            : directSlug
+              ? "No Skill library entry found."
+              : trimmed
+              ? "No matching Templates."
+              : "No Templates yet.",
+        entries: items.map(templateEntry),
       });
     } catch (cause) {
       const error = friendlyError(String(cause));
@@ -1111,6 +1159,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     showSkills,
     showEquipment,
     showHistory,
+    showTemplates,
     send,
     importSkill,
     submitEquipment,
@@ -1178,6 +1227,24 @@ function safetyVerdictLabel(verdict: SafetyRatingState["verdict"]): string {
   if (verdict === "passed") return "passed";
   if (verdict === "needs-review") return "needs review";
   return "blocked";
+}
+
+function templateEntry(item: SkillLibraryEntryPanel): InteractionEntry {
+  const footprint = `Source ${item.source.path} at ${item.source.ref}; no bundled runnable code.`;
+  const details = [
+    `${item.name} by ${item.owner}`,
+    `${item.safety.label}. ${item.trustLabel}.`,
+    `Hash ${item.contentHash}. ${footprint}`,
+    "Presentation is guidance, not a guarantee.",
+  ].join(" ");
+  return {
+    id: `template-${item.slug}`,
+    label: details,
+    actionLabel: "Open details",
+    onAction: () => {
+      window.open(`/api/skill-library?slug=${encodeURIComponent(item.slug)}`, "_blank", "noopener,noreferrer");
+    },
+  };
 }
 
 function apiPath(action: ToolAction): string {

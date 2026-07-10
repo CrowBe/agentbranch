@@ -335,7 +335,7 @@ when they become chat-buildable (ARCHITECTURE §9.2 order).
   ([#159](https://github.com/CrowBe/agentbranch/issues/159)): a framework-free
   store owning the HTTP protocol and the request choreography behind a small
   interface — actions (build turn, import, open skill, restore, draft/promote/
-  discard, run tool, lint, equipment) over one immutable snapshot. Every route
+  discard, run tool, lint, equipment, Templates search) over one immutable snapshot. Every route
   response is decoded once, in `workspace/decoders.ts`, against the domain
   modules' exported types — shape drift breaks there, loudly, not in scattered
   guards. The build loop's SSE stream and the evaluation streams are consumed
@@ -352,6 +352,10 @@ when they become chat-buildable (ARCHITECTURE §9.2 order).
   schema exactly like a pasted one. Kept equipment lives for the session; the
   workspace bundles kept contracts into the next test run, and the breakdown
   panel shows the per-call contract checks.
+  The Templates mode consumes `/api/skill-library?surface=templates` through
+  the same decoder/action pattern, with search over reviewed entries and
+  badge/flag, trust tier, content hash, and footprint copy surfaced before a
+  user follows the install details.
 
 ---
 
