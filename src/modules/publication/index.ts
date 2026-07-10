@@ -1,14 +1,14 @@
 /**
- * publication — public address records for validated Skill versions.
+ * publication — public address records for published Skill versions.
  *
  * A Publication pins one append-only Skill version, its content hash, a
- * publisher-owned slug, trust tier, and the gate run that allowed it
- * (ARCHITECTURE §9.1). Distribution surfaces build on this later.
+ * publisher-owned slug, and trust tier (ARCHITECTURE §9.1). Badge/flag state
+ * is rendered from the version's safety rating.
  */
 export type {
   Publication,
-  PublicationGateBinding,
-  PublicationGateVerdict,
+  PublicationSafetyRating,
+  PublicationSafetyState,
   PublicationSlug,
   PublicationTier,
   PublishSkillVersionInput,

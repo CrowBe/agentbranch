@@ -4,7 +4,7 @@ import { publishSkillVersion } from "./publish-skill-version";
 import { renderSkillLibrary } from "./skill-library";
 import { renderTapMarketplace } from "./tap-marketplace";
 import type { Publication } from "./publication.types";
-import { HarnessVersionId, PublicationId, SkillId, SkillVersionId, UserId, ok } from "@/shared";
+import { PublicationId, SafetyRatingId, SkillId, SkillVersionId, UserId, ok } from "@/shared";
 import type { RequestRateLimiter } from "@/modules/usage";
 
 const baseInput = {
@@ -12,13 +12,8 @@ const baseInput = {
   skillId: SkillId("skill_1"),
   skillVersionId: SkillVersionId("version_1"),
   slug: { owner: "Ben", name: "Invoice-Triage" },
-  tier: "community" as const,
+  tier: "published" as const,
   contentHash: "sha256:abc123",
-  gate: {
-    verdict: "passed" as const,
-    gateRunId: "gate_1",
-    harnessVersionId: HarnessVersionId("harness_1"),
-  },
 };
 
 function repo(): PublicationRepository {
@@ -32,7 +27,6 @@ function repo(): PublicationRepository {
         slug: `${input.slug.owner}/${input.slug.name}`,
         tier: input.tier,
         contentHash: input.contentHash,
-        gate: input.gate,
         createdAt: new Date("2026-07-09T00:00:00Z"),
       } satisfies Publication),
     ),
@@ -53,7 +47,7 @@ function limiter(allowed = true): RequestRateLimiter {
 }
 
 describe("publishSkillVersion", () => {
-  it("normalizes the owner/name slug and records a passed community publication", async () => {
+  it("normalizes the owner/name slug and records a published publication without requiring safety analysis", async () => {
     const publications = repo();
     const result = await publishSkillVersion({ publications, requestRateLimiter: limiter() }, baseInput);
 
@@ -65,16 +59,15 @@ describe("publishSkillVersion", () => {
     }}));
   });
 
-  it("blocks amplified tiers when the automated gate did not pass", async () => {
+  it("allows reviewed publications without requiring a safety rating first", async () => {
     const publications = repo();
     const result = await publishSkillVersion(
       { publications, requestRateLimiter: limiter() },
-      { ...baseInput, gate: { ...baseInput.gate, verdict: "failed" } },
+      { ...baseInput, tier: "reviewed" },
     );
 
-    expect(result.ok).toBe(false);
-    expect(result.ok ? null : result.error.tag).toBe("invalid_operation");
-    expect(publications.create).not.toHaveBeenCalled();
+    expect(result.ok).toBe(true);
+    expect(publications.create).toHaveBeenCalled();
   });
 
   it("spends the publish rate-limit window before recording", async () => {
@@ -88,12 +81,7 @@ describe("publishSkillVersion", () => {
 });
 
 describe("renderTapMarketplace", () => {
-  it("renders community and reviewed publications into a deterministic HEAD marketplace index", () => {
-    const gate = {
-      verdict: "passed" as const,
-      gateRunId: "gate_1",
-      harnessVersionId: HarnessVersionId("harness_1"),
-    };
+  it("renders published and reviewed publications into a deterministic HEAD marketplace index with badge state", () => {
     const publications = [
       {
         id: PublicationId("pub_2"),
@@ -103,7 +91,6 @@ describe("renderTapMarketplace", () => {
         slug: "zara/calendar-cleanup",
         tier: "reviewed" as const,
         contentHash: "sha256:def456",
-        gate,
         createdAt: new Date("2026-07-09T00:00:00Z"),
       },
       {
@@ -114,7 +101,6 @@ describe("renderTapMarketplace", () => {
         slug: "ben/private-draft",
         tier: "private" as const,
         contentHash: "sha256:private",
-        gate,
         createdAt: new Date("2026-07-09T00:00:00Z"),
       },
       {
@@ -123,23 +109,32 @@ describe("renderTapMarketplace", () => {
         skillId: SkillId("skill_1"),
         skillVersionId: SkillVersionId("version_1"),
         slug: "ben/invoice-triage",
-        tier: "community" as const,
+        tier: "published" as const,
         contentHash: "sha256:abc123",
-        gate,
         createdAt: new Date("2026-07-09T00:00:00Z"),
       },
     ] satisfies readonly Publication[];
 
-    expect(renderTapMarketplace(publications)).toEqual({
+    expect(renderTapMarketplace(publications, [
+      {
+        skillVersionId: SkillVersionId("version_2"),
+        verdict: "passed",
+        ratingId: SafetyRatingId("rating_2"),
+      },
+    ])).toEqual({
       version: 1,
       skills: [
         {
           name: "invoice-triage",
           owner: "ben",
           slug: "ben/invoice-triage",
-          tier: "community",
+          tier: "published",
           contentHash: "sha256:abc123",
-          gate,
+          safety: {
+            status: "potentially-unsafe",
+            label: "potentially unsafe — not validated",
+            ratingId: null,
+          },
           source: {
             type: "git",
             ref: "HEAD",
@@ -152,7 +147,11 @@ describe("renderTapMarketplace", () => {
           slug: "zara/calendar-cleanup",
           tier: "reviewed",
           contentHash: "sha256:def456",
-          gate,
+          safety: {
+            status: "safety-badge",
+            label: "safety badge",
+            ratingId: SafetyRatingId("rating_2"),
+          },
           source: {
             type: "git",
             ref: "HEAD",
@@ -165,22 +164,16 @@ describe("renderTapMarketplace", () => {
 });
 
 describe("renderSkillLibrary", () => {
-  it("renders reviewed publications for Skill library surfaces and keeps community entries link-reachable", () => {
-    const gate = {
-      verdict: "passed" as const,
-      gateRunId: "gate_1",
-      harnessVersionId: HarnessVersionId("harness_1"),
-    };
+  it("renders reviewed publications for Skill library surfaces and keeps published entries link-reachable", () => {
     const publications = [
       {
-        id: PublicationId("pub_community"),
+        id: PublicationId("pub_published"),
         publisherId: UserId("user_1"),
-        skillId: SkillId("skill_community"),
-        skillVersionId: SkillVersionId("version_community"),
-        slug: "ben/community-helper",
-        tier: "community" as const,
-        contentHash: "sha256:community",
-        gate,
+        skillId: SkillId("skill_published"),
+        skillVersionId: SkillVersionId("version_published"),
+        slug: "ben/published-helper",
+        tier: "published" as const,
+        contentHash: "sha256:published",
         createdAt: new Date("2026-07-09T00:00:00Z"),
       },
       {
@@ -191,12 +184,19 @@ describe("renderSkillLibrary", () => {
         slug: "ben/inbox-triage",
         tier: "reviewed" as const,
         contentHash: "sha256:reviewed",
-        gate,
         createdAt: new Date("2026-07-09T00:00:00Z"),
       },
     ] satisfies readonly Publication[];
 
-    expect(renderSkillLibrary(publications, { surface: "templates" })).toEqual({
+    const safetyRatings = [
+      {
+        skillVersionId: SkillVersionId("version_reviewed"),
+        verdict: "passed" as const,
+        ratingId: SafetyRatingId("rating_reviewed"),
+      },
+    ];
+
+    expect(renderSkillLibrary(publications, { surface: "templates", safetyRatings })).toEqual({
       surface: "templates",
       entries: [
         expect.objectContaining({
@@ -204,17 +204,27 @@ describe("renderSkillLibrary", () => {
           tier: "reviewed",
           surfaced: true,
           trustLabel: "reviewed skill - human-reviewed",
+          safety: {
+            status: "safety-badge",
+            label: "safety badge",
+            ratingId: SafetyRatingId("rating_reviewed"),
+          },
         }),
       ],
     });
-    expect(renderSkillLibrary(publications, { slug: "ben/community-helper" })).toEqual({
+    expect(renderSkillLibrary(publications, { slug: "ben/published-helper", safetyRatings })).toEqual({
       surface: "library",
       entries: [
         expect.objectContaining({
-          slug: "ben/community-helper",
-          tier: "community",
+          slug: "ben/published-helper",
+          tier: "published",
           surfaced: false,
-          trustLabel: "community skill - automated checks passed, not human-reviewed",
+          trustLabel: "published skill",
+          safety: {
+            status: "potentially-unsafe",
+            label: "potentially unsafe — not validated",
+            ratingId: null,
+          },
         }),
       ],
     });

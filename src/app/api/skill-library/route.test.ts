@@ -1,21 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Publication } from "@/modules/publication";
-import { HarnessVersionId, ok, PublicationId, SkillId, SkillVersionId, UserId } from "@/shared";
+import { ok, PublicationId, SafetyRatingId, SkillId, SkillVersionId, UserId } from "@/shared";
 import { GET } from "./route";
 
 const listVisible = vi.fn();
+const latestForVersion = vi.fn();
 
 vi.mock("@/server/container", () => ({
   getContainer: () => ({
     publications: { listVisible },
+    safetyRatings: { latestForVersion },
   }),
 }));
-
-const gate = {
-  verdict: "passed",
-  gateRunId: "gate-1",
-  harnessVersionId: HarnessVersionId("harness-1"),
-} as const;
 
 function publication(input: Pick<Publication, "slug" | "tier" | "contentHash">): Publication {
   return {
@@ -26,7 +22,6 @@ function publication(input: Pick<Publication, "slug" | "tier" | "contentHash">):
     slug: input.slug,
     tier: input.tier,
     contentHash: input.contentHash,
-    gate,
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
   };
 }
@@ -34,10 +29,26 @@ function publication(input: Pick<Publication, "slug" | "tier" | "contentHash">):
 describe("GET /api/skill-library", () => {
   beforeEach(() => {
     listVisible.mockReset();
+    latestForVersion.mockReset();
     listVisible.mockResolvedValue(ok([
       publication({ slug: "ben/inbox-triage", tier: "reviewed", contentHash: "sha256:reviewed" }),
-      publication({ slug: "ben/community-helper", tier: "community", contentHash: "sha256:community" }),
+      publication({ slug: "ben/published-helper", tier: "published", contentHash: "sha256:published" }),
     ]));
+    latestForVersion.mockImplementation(async (_skillId, _userId, skillVersionId) => {
+      if (skillVersionId === SkillVersionId("version-ben/inbox-triage")) {
+        return ok({
+          id: SafetyRatingId("rating-reviewed"),
+          skillId: SkillId("skill-ben/inbox-triage"),
+          skillVersionId,
+          harnessVersionId: null,
+          userId: UserId("user-1"),
+          verdict: "passed",
+          result: {},
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        });
+      }
+      return ok(null);
+    });
   });
 
   it("surfaces reviewed publications for the Skill library", async () => {
@@ -53,9 +64,13 @@ describe("GET /api/skill-library", () => {
           slug: "ben/inbox-triage",
           tier: "reviewed",
           trustLabel: "reviewed skill - human-reviewed",
+          safety: {
+            status: "safety-badge",
+            label: "safety badge",
+            ratingId: SafetyRatingId("rating-reviewed"),
+          },
           surfaced: true,
           contentHash: "sha256:reviewed",
-          gate,
           source: {
             type: "git",
             ref: "HEAD",
@@ -76,20 +91,25 @@ describe("GET /api/skill-library", () => {
     });
   });
 
-  it("returns community publications only by direct link with the not-human-reviewed label", async () => {
+  it("returns published publications only by direct link with the potentially-unsafe label", async () => {
     const response = await GET(
-      new Request("https://example.test/api/skill-library?slug=ben/community-helper"),
+      new Request("https://example.test/api/skill-library?slug=ben/published-helper"),
     );
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       entries: [
         {
-          slug: "ben/community-helper",
-          tier: "community",
+          slug: "ben/published-helper",
+          tier: "published",
           surfaced: false,
-          trustLabel: "community skill - automated checks passed, not human-reviewed",
-          contentHash: "sha256:community",
+          trustLabel: "published skill",
+          safety: {
+            status: "potentially-unsafe",
+            label: "potentially unsafe — not validated",
+            ratingId: null,
+          },
+          contentHash: "sha256:published",
         },
       ],
     });

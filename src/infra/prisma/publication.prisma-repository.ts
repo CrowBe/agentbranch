@@ -4,7 +4,6 @@ import {
   domainError,
   err,
   ok,
-  HarnessVersionId,
   PublicationId,
   SkillId,
   SkillVersionId,
@@ -19,9 +18,6 @@ type PublicationRow = {
   slug: string;
   tier: string;
   contentHash: string;
-  gateVerdict: string;
-  gateRunId: string;
-  harnessVersionId: string;
   createdAt: Date;
 };
 
@@ -32,13 +28,8 @@ function toPublication(row: PublicationRow): Publication {
     skillId: SkillId(row.skillId),
     skillVersionId: SkillVersionId(row.skillVersionId),
     slug: row.slug,
-    tier: row.tier === "reviewed" ? "reviewed" : row.tier === "community" ? "community" : "private",
+    tier: row.tier === "reviewed" ? "reviewed" : row.tier === "published" ? "published" : "private",
     contentHash: row.contentHash,
-    gate: {
-      verdict: row.gateVerdict === "passed" ? "passed" : "failed",
-      gateRunId: row.gateRunId,
-      harnessVersionId: HarnessVersionId(row.harnessVersionId),
-    },
     createdAt: row.createdAt,
   };
 }
@@ -68,9 +59,6 @@ export function createPrismaPublicationRepository(prisma: PrismaClient): Publica
           slug,
           tier: input.tier,
           contentHash: input.contentHash,
-          gateVerdict: input.gate.verdict,
-          gateRunId: input.gate.gateRunId,
-          harnessVersionId: input.gate.harnessVersionId,
         },
       });
       return ok(toPublication(row as PublicationRow));
@@ -88,7 +76,7 @@ export function createPrismaPublicationRepository(prisma: PrismaClient): Publica
 
     async listVisible() {
       const rows = await prisma.publication.findMany({
-        where: { tier: { in: ["community", "reviewed"] } },
+        where: { tier: { in: ["published", "reviewed"] } },
         orderBy: { slug: "asc" },
       });
       return ok(rows.map((row) => toPublication(row as PublicationRow)));

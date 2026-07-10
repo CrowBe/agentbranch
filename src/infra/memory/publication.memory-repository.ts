@@ -38,7 +38,6 @@ export function createMemoryPublicationRepository(store: MemorySkillStore): Publ
         slug,
         tier: input.tier,
         contentHash: input.contentHash,
-        gate: input.gate,
         createdAt: new Date(),
       };
       publications.set(publication.id, publication);
@@ -56,7 +55,7 @@ export function createMemoryPublicationRepository(store: MemorySkillStore): Publ
     async listVisible() {
       return ok(
         [...publications.values()].filter(
-          (publication) => publication.tier === "community" || publication.tier === "reviewed",
+          (publication) => publication.tier === "published" || publication.tier === "reviewed",
         ),
       );
     },

@@ -45,7 +45,6 @@ model HarnessVersion {
   evalRuns      EvalRun[]
   safetyRatings SafetyRating[]
   benchmarkRuns BenchmarkRun[]
-  publications  Publication[]
 
   @@map("harness_versions")
 }
@@ -153,9 +152,10 @@ model SkillVersion {
   @@map("skill_versions")
 }
 
-/// Public address for a validated skill version (ARCHITECTURE §9.1). A
-/// publication pins the append-only version + content hash, records the gate run
-/// that reviewed it, and carries the trust tier surfaced later by the tap.
+/// Public address for a skill version (ARCHITECTURE §9.1). Publishing is open:
+/// a publication pins the append-only version + content hash and carries the
+/// trust tier surfaced later by the tap. Safety badge state is derived from the
+/// version's safety rating, not stored here.
 model Publication {
   id               String   @id @default(cuid())
   publisherId      String   @map("publisher_id")
@@ -164,19 +164,14 @@ model Publication {
   slug             String   @unique
   tier             String
   contentHash      String   @map("content_hash")
-  gateVerdict      String   @map("gate_verdict")
-  gateRunId        String   @map("gate_run_id")
-  harnessVersionId String   @map("harness_version_id")
   createdAt        DateTime @default(now()) @map("created_at")
 
   publisher      User           @relation(fields: [publisherId], references: [id], onDelete: Cascade)
   skill          Skill          @relation(fields: [skillId], references: [id], onDelete: Cascade)
   skillVersion   SkillVersion   @relation(fields: [skillVersionId], references: [id], onDelete: Cascade)
-  harnessVersion HarnessVersion @relation(fields: [harnessVersionId], references: [id], onDelete: Restrict)
 
   @@index([publisherId])
   @@index([skillVersionId])
-  @@index([harnessVersionId])
   @@map("publications")
 }
 
