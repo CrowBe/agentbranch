@@ -94,6 +94,37 @@ export function serializeToolContract(source: ToolContractSource): string {
   return JSON.stringify(document, null, 2);
 }
 
+/**
+ * Apply an exact string replacement to the serialized contract and re-parse —
+ * the edit_tool_contract revision path, mirroring `applyResponseSchemaEdit`.
+ * Fails when the target text is empty or absent, or when the replacement breaks
+ * the document as JSON or as a valid tool contract.
+ */
+export function applyToolContractEdit(
+  source: ToolContractSource,
+  oldStr: string,
+  newStr: string,
+): Result<ToolContractSource, ToolContractError> {
+  if (oldStr.length === 0) {
+    return err({
+      tag: "edit_no_match",
+      message: "Could not apply the streamed edit because the target text was empty.",
+    });
+  }
+
+  const raw = serializeToolContract(source);
+  const start = raw.indexOf(oldStr);
+  if (start === -1) {
+    return err({
+      tag: "edit_no_match",
+      message: "Could not apply the streamed edit because the target text was not found.",
+    });
+  }
+
+  const nextRaw = `${raw.slice(0, start)}${newStr}${raw.slice(start + oldStr.length)}`;
+  return parseToolContract(nextRaw);
+}
+
 function parseIo(
   value: unknown,
   side: "input" | "output",

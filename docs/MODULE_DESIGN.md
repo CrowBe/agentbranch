@@ -217,17 +217,19 @@ does Claude need to revise this skill?" is a build concern, not an evaluation
 concern (ARCHITECTURE §2 *Eval feedback*, §4 *Eval → build feedback*).
 
 **Equipment authoring (issue #151).** The build loop's shape carries the first
-equipment primitive: `runResponseSchemaLoop` streams a response-schema
-authoring turn through `streamAgent` under `RESPONSE_SCHEMA_AUTHORING_PROMPT`
-— one frozen, cacheable system prompt per primitive — with the
-`write_response_schema`/`edit_response_schema` tool pair mirroring
-`write_skill`/`edit_skill`. The prompt inherits the skill prompt's spine
-(interview-first, readiness checklist gating the first write, "just draft it"
-as a command, building-block right-sizing) specialised to deriving a JSON
-Schema from one real filled-in example. `formatResponseSchemaLintFeedback`
-closes the loop with the primitive's pure lint, exactly as skill lint feedback
-does. Later primitives repeat the pattern — a frozen prompt + tool pair each —
-when they become chat-buildable (ARCHITECTURE §9.2 order).
+two equipment primitives through one pattern: one frozen, cacheable system
+prompt per primitive, a `write_*`/`edit_*` tool pair mirroring
+`write_skill`/`edit_skill`, and lint feedback after a write. Response schemas
+use `runResponseSchemaLoop` with `RESPONSE_SCHEMA_AUTHORING_PROMPT` and the
+`write_response_schema`/`edit_response_schema` tools; tool contracts use
+`runToolContractLoop` with `TOOL_CONTRACT_AUTHORING_PROMPT` and the
+`write_tool_contract`/`edit_tool_contract` tools. Both prompts inherit the
+skill prompt's spine (interview-first, readiness checklist gating the first
+write, "just draft it" as a command, building-block right-sizing) specialised
+to their primitive. `formatResponseSchemaLintFeedback` and
+`formatToolContractLintFeedback` close each loop with the primitive's pure lint,
+exactly as skill lint feedback does. Later primitives repeat the pattern when
+they become chat-buildable (ARCHITECTURE §9.2 order).
 
 ### Infra (`src/infra`)
 
@@ -304,6 +306,10 @@ when they become chat-buildable (ARCHITECTURE §9.2 order).
   the source model) → one call into the equipment-authoring driver
   (`response-schema-stream.ts`), streaming SSE. The gateway gates the `build`
   capability, exactly like a skill build turn.
+- `app/api/tool-contract/build/route.ts` — the tool-contract authoring route:
+  the same equipment-authoring route shape, with the optional current draft
+  parsed through the tool-contract source model and streamed through
+  `tool-contract-stream.ts`.
 - `app/api/skill-library/route.ts` — the publication-backed Skill library feed
   (ARCHITECTURE §9.1): GET renders `renderSkillLibrary` over the visible
   publications — `?surface=templates` is the Templates view over the reviewed

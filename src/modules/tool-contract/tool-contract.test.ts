@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { runCapability } from "@/modules/skill-analysis";
 import { unwrap, isErr } from "@/shared";
 import {
+  applyToolContractEdit,
   createToolContractLintReport,
   parseToolContract,
   serializeToolContract,
@@ -54,6 +55,31 @@ describe("tool-contract source model", () => {
         parseToolContract(JSON.stringify({ name: "t", description: "d", failureModes: [1] })),
       ),
     ).toBe(true);
+  });
+
+  it("applies an exact string edit to the serialized contract", () => {
+    const source = unwrap(parseToolContract(JSON.stringify(SEND_INVOICE)));
+    const edited = unwrap(
+      applyToolContractEdit(source, '"email bounce"', '"email bounce",\n    "invoice already paid"'),
+    );
+    expect(edited.failureModes).toEqual([
+      "invoice not found",
+      "email bounce",
+      "invoice already paid",
+    ]);
+  });
+
+  it("fails an edit whose target is empty, absent, or breaks the contract", () => {
+    const source = unwrap(parseToolContract(JSON.stringify(SEND_INVOICE)));
+
+    const empty = applyToolContractEdit(source, "", "x");
+    expect(isErr(empty) && empty.error.tag === "edit_no_match").toBe(true);
+
+    const missing = applyToolContractEdit(source, "no-such-text", "x");
+    expect(isErr(missing) && missing.error.tag === "edit_no_match").toBe(true);
+
+    const broken = applyToolContractEdit(source, '"name": "send_invoice_reminder"', '"name": ""');
+    expect(isErr(broken) && broken.error.tag === "invalid_contract").toBe(true);
   });
 });
 

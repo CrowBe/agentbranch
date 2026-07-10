@@ -19,6 +19,7 @@ export { buildTools, type BuildToolName } from "./tools";
 export {
   formatLintFeedback,
   formatResponseSchemaLintFeedback,
+  formatToolContractLintFeedback,
   formatTestRunFeedback,
   formatTriggeringEvalFeedback,
 } from "./feedback-formatters";
@@ -31,3 +32,10 @@ export {
 } from "./response-schema-loop";
 export { responseSchemaTools, type ResponseSchemaToolName } from "./response-schema-tools";
 export { RESPONSE_SCHEMA_AUTHORING_PROMPT } from "./response-schema-prompt";
+export {
+  runToolContractLoop,
+  type ToolContractLoopEvent,
+  type ToolContractLoopInput,
+} from "./tool-contract-loop";
+export { toolContractTools, type ToolContractToolName } from "./tool-contract-tools";
+export { TOOL_CONTRACT_AUTHORING_PROMPT } from "./tool-contract-prompt";

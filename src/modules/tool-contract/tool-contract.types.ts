@@ -36,10 +36,11 @@ export type ToolContractSource = {
   readonly extra: Readonly<Record<string, unknown>>;
 };
 
-/** Failure modes when reading a tool-contract document. */
+/** Failure modes when reading or editing a tool-contract document. */
 export type ToolContractError =
   | { readonly tag: "invalid_json"; readonly message: string }
-  | { readonly tag: "invalid_contract"; readonly message: string };
+  | { readonly tag: "invalid_contract"; readonly message: string }
+  | { readonly tag: "edit_no_match"; readonly message: string };
 
 /**
  * The tool-contract quality artifact — LintReport-shaped, like every quality

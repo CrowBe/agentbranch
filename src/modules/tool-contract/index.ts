@@ -21,7 +21,7 @@ export const toolContractCapability = defineCapability({
   },
 });
 
-export { parseToolContract, serializeToolContract } from "./tool-contract-json";
+export { applyToolContractEdit, parseToolContract, serializeToolContract } from "./tool-contract-json";
 export {
   createToolContractLintReport,
   toolContractLintAnalyzer,
