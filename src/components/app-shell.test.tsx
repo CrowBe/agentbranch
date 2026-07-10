@@ -161,6 +161,48 @@ describe("AppShell capability chips", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Import complete.");
   });
 
+  it("opens Templates from the rail and searches the Skill library feed", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          surface: "templates",
+          entries: [
+            {
+              name: "inbox-triage",
+              owner: "ben",
+              slug: "ben/inbox-triage",
+              tier: "reviewed",
+              trustLabel: "reviewed skill - human-reviewed",
+              safety: { status: "potentially-unsafe", label: "potentially unsafe — not validated", ratingId: null },
+              surfaced: true,
+              contentHash: "sha256:template",
+              source: { type: "git", ref: "HEAD", path: "skills/ben/inbox-triage" },
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(Response.json({ surface: "templates", entries: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AppShell rendered={rendered} source={source} initialSkill={skill} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Templates" }));
+
+    expect(await screen.findByRole("heading", { name: "Templates" })).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith("/api/skill-library?surface=templates");
+    expect(await screen.findByText("potentially unsafe — not validated", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("Hash sha256:template", { exact: false })).toBeInTheDocument();
+
+    await userEvent.type(screen.getByRole("textbox"), "calendar");
+    await userEvent.click(screen.getByRole("button", { name: "Search" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenLastCalledWith("/api/skill-library?surface=templates&q=calendar");
+    });
+    expect(screen.getByRole("status")).toHaveTextContent("No matching Templates.");
+  });
+
   it("auto-injects lint feedback after a written skill with findings", async () => {
     const writtenSkill: SkillSource = {
       frontmatter: {

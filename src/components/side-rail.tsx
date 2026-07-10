@@ -23,6 +23,7 @@ export function SideRail({
   onSkills,
   onEquipment,
   onHistory,
+  onTemplates,
   onModels,
 }: {
   expanded: boolean;
@@ -32,6 +33,7 @@ export function SideRail({
   onSkills?: () => void;
   onEquipment?: () => void;
   onHistory?: () => void;
+  onTemplates?: () => void;
   onModels?: () => void;
 }) {
   return (
@@ -51,6 +53,7 @@ export function SideRail({
                 onSkills,
                 onEquipment,
                 onHistory,
+                onTemplates,
                 onModels,
               })}
               className={`flex w-full items-center gap-3 rounded-[var(--radius-md)] px-2.5 py-2 text-left ${
@@ -92,6 +95,7 @@ function handlerFor(
     readonly onSkills?: () => void;
     readonly onEquipment?: () => void;
     readonly onHistory?: () => void;
+    readonly onTemplates?: () => void;
     readonly onModels?: () => void;
   },
 ) {
@@ -100,6 +104,7 @@ function handlerFor(
   if (key === "skills") return handlers.onSkills;
   if (key === "equipment") return handlers.onEquipment;
   if (key === "history") return handlers.onHistory;
+  if (key === "templates") return handlers.onTemplates;
   if (key === "models") return handlers.onModels;
   return undefined;
 }

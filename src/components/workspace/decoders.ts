@@ -14,6 +14,7 @@ import type {
   LintInsightPanel,
   InsightPanel,
   SafetyRatingState,
+  SkillLibraryEntryPanel,
   ToolAction,
 } from "./workspace.types";
 
@@ -230,6 +231,21 @@ export function decodeRunHistory(body: unknown): RunHistory {
       return { status: run.status, summary };
     }),
   };
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/skill-library?surface=templates
+
+export function decodeSkillLibrary(body: unknown): readonly SkillLibraryEntryPanel[] {
+  if (!isRecord(body) || !Array.isArray(body.entries)) {
+    throw new Error("Skill library returned an unexpected response.");
+  }
+  return body.entries.map((item) => {
+    if (!isSkillLibraryEntry(item)) {
+      throw new Error("Skill library returned an unexpected response.");
+    }
+    return item;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -478,6 +494,27 @@ function isInsight(value: unknown): value is InsightPanel {
     value.findings.every((item) => typeof item === "string") &&
     Array.isArray(value.watch) &&
     value.watch.every((item) => typeof item === "string")
+  );
+}
+
+function isSkillLibraryEntry(value: unknown): value is SkillLibraryEntryPanel {
+  return (
+    isRecord(value) &&
+    typeof value.name === "string" &&
+    typeof value.owner === "string" &&
+    typeof value.slug === "string" &&
+    (value.tier === "published" || value.tier === "reviewed") &&
+    typeof value.trustLabel === "string" &&
+    isRecord(value.safety) &&
+    (value.safety.status === "safety-badge" ||
+      value.safety.status === "potentially-unsafe") &&
+    typeof value.safety.label === "string" &&
+    (typeof value.safety.ratingId === "string" || value.safety.ratingId === null) &&
+    typeof value.contentHash === "string" &&
+    isRecord(value.source) &&
+    value.source.type === "git" &&
+    value.source.ref === "HEAD" &&
+    typeof value.source.path === "string"
   );
 }
 

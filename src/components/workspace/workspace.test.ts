@@ -593,6 +593,48 @@ describe("workspace choreography", () => {
     expect(snapshot.entries[1]?.onAction).toBeUndefined();
   });
 
+  it("loads Templates from the Skill library feed and exposes install-boundary details", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({
+        surface: "templates",
+        entries: [
+          {
+            name: "inbox-triage",
+            owner: "ben",
+            slug: "ben/inbox-triage",
+            tier: "reviewed",
+            trustLabel: "reviewed skill - human-reviewed",
+            safety: { status: "safety-badge", label: "safety badge", ratingId: "rating-1" },
+            surfaced: true,
+            contentHash: "sha256:reviewed",
+            source: { type: "git", ref: "HEAD", path: "skills/ben/inbox-triage" },
+          },
+        ],
+      }),
+    );
+    const workspace = createWorkspace(init, { fetch: fetchMock });
+
+    await workspace.actions.showTemplates();
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/skill-library?surface=templates");
+    expect(workspace.getSnapshot().mode).toBe("templates");
+    expect(workspace.getSnapshot().status).toBe("Templates loaded.");
+    expect(workspace.getSnapshot().entries[0]).toMatchObject({
+      id: "template-ben/inbox-triage",
+      actionLabel: "Open details",
+    });
+    expect(workspace.getSnapshot().entries[0]?.label).toContain("safety badge");
+    expect(workspace.getSnapshot().entries[0]?.label).toContain("reviewed skill - human-reviewed");
+    expect(workspace.getSnapshot().entries[0]?.label).toContain("Hash sha256:reviewed");
+    expect(workspace.getSnapshot().entries[0]?.label).toContain("Presentation is guidance, not a guarantee.");
+
+    await workspace.actions.showTemplates("inbox");
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/skill-library?surface=templates&q=inbox");
+
+    await workspace.actions.showTemplates("ben/published-helper");
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/skill-library?slug=ben%2Fpublished-helper");
+  });
+
   it("asks to open a saved skill before showing history", async () => {
     const fetchMock = vi.fn();
     const workspace = createWorkspace(init, { fetch: fetchMock });

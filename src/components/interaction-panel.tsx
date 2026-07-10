@@ -16,6 +16,7 @@ export function InteractionPanel({
   onSend,
   onImport,
   onEquipment,
+  onTemplates,
 }: {
   entries: readonly InteractionEntry[];
   busy?: boolean;
@@ -23,6 +24,7 @@ export function InteractionPanel({
   onSend: (message: string) => void;
   onImport?: (raw: string) => void;
   onEquipment?: (raw: string) => void;
+  onTemplates?: (query: string) => void;
 }) {
   const [value, setValue] = useState("");
 
@@ -34,6 +36,8 @@ export function InteractionPanel({
       onImport?.(trimmed);
     } else if (mode === "equipment") {
       onEquipment?.(trimmed);
+    } else if (mode === "templates") {
+      onTemplates?.(trimmed);
     } else {
       onSend(trimmed);
     }
@@ -41,7 +45,8 @@ export function InteractionPanel({
   };
 
   const copy = copyForMode(mode);
-  const acceptsInput = mode === "build" || mode === "import" || mode === "equipment";
+  const acceptsInput =
+    mode === "build" || mode === "import" || mode === "equipment" || mode === "templates";
 
   return (
     <aside
@@ -150,6 +155,16 @@ function copyForMode(mode: InteractionMode): {
       placeholder: "",
       button: "",
       busy: "",
+    };
+  }
+  if (mode === "templates") {
+    return {
+      title: "Templates",
+      empty: "No Templates yet.",
+      hint: "Reviewed skills show here. Direct Skill library links can still open published skills.",
+      placeholder: "Search by name, owner, or slug",
+      button: "Search",
+      busy: "Searching...",
     };
   }
   return {

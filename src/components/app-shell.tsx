@@ -46,6 +46,7 @@ export function AppShell({
           onSkills={() => void actions.showSkills()}
           onEquipment={actions.showEquipment}
           onHistory={() => void actions.showHistory()}
+          onTemplates={() => void actions.showTemplates()}
         />
         <main className="min-w-0 flex-1 overflow-hidden">
           <HeroPanel
@@ -93,6 +94,7 @@ export function AppShell({
           onSend={(message) => void actions.send(message)}
           onImport={(raw) => void actions.importSkill(raw)}
           onEquipment={(raw) => void actions.submitEquipment(raw)}
+          onTemplates={(query) => void actions.showTemplates(query)}
         />
       </div>
       {consoleOpen && <ModelConsole onClose={() => setConsoleOpen(false)} />}

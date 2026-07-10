@@ -11,7 +11,7 @@ import type { TriggeringResult } from "@/modules/triggering-eval";
  * Everything here is plain data — no React.
  */
 
-export type InteractionMode = "build" | "import" | "skills" | "equipment" | "history";
+export type InteractionMode = "build" | "import" | "skills" | "equipment" | "history" | "templates";
 
 /** The tool surfaces reachable from the hero's chips. */
 export type ToolAction =
@@ -50,6 +50,25 @@ export type EquipmentState = {
 };
 
 export type EquipmentKind = "tool-contract" | "response-schema";
+
+export type SkillLibraryEntryPanel = {
+  readonly name: string;
+  readonly owner: string;
+  readonly slug: string;
+  readonly tier: "published" | "reviewed";
+  readonly trustLabel: string;
+  readonly safety: {
+    readonly status: "safety-badge" | "potentially-unsafe";
+    readonly label: string;
+    readonly ratingId: string | null;
+  };
+  readonly contentHash: string;
+  readonly source: {
+    readonly type: "git";
+    readonly ref: "HEAD";
+    readonly path: string;
+  };
+};
 
 /**
  * The safety rating held for the version on the hero (ARCHITECTURE §9.1).
@@ -214,6 +233,7 @@ export type WorkspaceActions = {
   readonly showSkills: () => Promise<void>;
   readonly showEquipment: () => void;
   readonly showHistory: () => Promise<void>;
+  readonly showTemplates: (query?: string) => Promise<void>;
   readonly send: (message: string) => Promise<void>;
   readonly importSkill: (raw: string) => Promise<void>;
   readonly submitEquipment: (raw: string) => Promise<void>;
