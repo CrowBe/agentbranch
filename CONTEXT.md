@@ -136,9 +136,13 @@ _Avoid_: package, kit, workspace (all name other things), input set
 The v1 validation — does the skill *fire* on the right prompts and *stay silent* on the wrong ones? Run against a **distractor library** + a positive/negative **prompt battery**.
 _Avoid_: trigger test, firing test, selection eval
 
-**Safety rating** (moderation, §9.1):
-*User-facing term* for the persisted result of a **safety review** run — verdict (passed / needs review / blocked) + per-class risk scores + Insight, pinned to the skill version it reviewed. **Opt-in and manual, never automatic**: offered any time for an unrated version and as an optional, non-gating step of "Set as main version". The capability/internal term is **safety review** (`safetyReviewCapability`).
-_Avoid_: scan (vague), safety check / safety gate (the publication gate is a different thing), moderation score, audit
+**Safety rating** (§9.1):
+*User-facing term* for the persisted result of a **safety review** run — verdict (passed / needs review / blocked) + per-class risk scores + Insight, pinned to the skill version it reviewed. **Opt-in and manual, never automatic**: offered any time for an unrated version and as an optional, non-gating step of "Set as main version". Nothing is ever gated on it — publishing included. The capability/internal term is **safety review** (`safetyReviewCapability`).
+_Avoid_: scan (vague), safety check / safety gate (nothing gates on it), moderation score, audit
+
+**Safety badge** (§9.1):
+The mark a published skill version carries when a **passing safety rating** is pinned to its exact content hash. A published version without one is labelled **"potentially unsafe — not validated"** — that exact register: blunt about the absence of validation, never implying a guarantee when present. A new version is unbadged until re-analysed.
+_Avoid_: verified / certified (overclaims), trust score, safety seal, approved
 
 **Scenario**:
 The situation a test run runs against — `{ prompt, seedData }`, one per run in v1. Built by the test-run evaluator itself (generated to stress the skill), not handed in.
