@@ -1,4 +1,9 @@
-import type { Publication, PublicationGateBinding, PublicationTier } from "./publication.types";
+import type {
+  Publication,
+  PublicationSafetyRating,
+  PublicationSafetyState,
+  PublicationTier,
+} from "./publication.types";
 
 export type SkillLibrarySurface = "library" | "templates";
 
@@ -8,9 +13,9 @@ export type SkillLibraryEntry = {
   readonly slug: string;
   readonly tier: PublicationTier;
   readonly trustLabel: string;
+  readonly safety: PublicationSafetyState;
   readonly surfaced: boolean;
   readonly contentHash: string;
-  readonly gate: PublicationGateBinding;
   readonly source: {
     readonly type: "git";
     readonly ref: "HEAD";
@@ -29,6 +34,7 @@ export function renderSkillLibrary(
     readonly surface?: SkillLibrarySurface;
     readonly query?: string;
     readonly slug?: string;
+    readonly safetyRatings?: readonly PublicationSafetyRating[];
   } = {},
 ): SkillLibraryView {
   const surface = options.surface ?? "library";
@@ -36,8 +42,8 @@ export function renderSkillLibrary(
   const slug = options.slug?.trim().toLowerCase();
 
   const entries = publications
-    .filter((publication) => publication.tier === "community" || publication.tier === "reviewed")
-    .map(renderSkillLibraryEntry)
+    .filter((publication) => publication.tier === "published" || publication.tier === "reviewed")
+    .map((publication) => renderSkillLibraryEntry(publication, safetyFor(publication, options.safetyRatings ?? [])))
     .filter((entry) => {
       if (slug) return entry.slug.toLowerCase() === slug;
       if (!entry.surfaced) return false;
@@ -49,7 +55,7 @@ export function renderSkillLibrary(
   return { surface, entries };
 }
 
-function renderSkillLibraryEntry(publication: Publication): SkillLibraryEntry {
+function renderSkillLibraryEntry(publication: Publication, safety: PublicationSafetyState): SkillLibraryEntry {
   const [owner, name] = splitSlug(publication.slug);
   return {
     name,
@@ -57,9 +63,9 @@ function renderSkillLibraryEntry(publication: Publication): SkillLibraryEntry {
     slug: publication.slug,
     tier: publication.tier,
     trustLabel: trustLabel(publication.tier),
+    safety,
     surfaced: publication.tier === "reviewed",
     contentHash: publication.contentHash,
-    gate: publication.gate,
     source: {
       type: "git",
       ref: "HEAD",
@@ -69,11 +75,32 @@ function renderSkillLibraryEntry(publication: Publication): SkillLibraryEntry {
 }
 
 function trustLabel(tier: PublicationTier): string {
-  if (tier === "community") {
-    return "community skill - automated checks passed, not human-reviewed";
-  }
+  if (tier === "published") return "published skill";
   if (tier === "reviewed") return "reviewed skill - human-reviewed";
   return "private skill";
+}
+
+function safetyFor(
+  publication: Publication,
+  ratings: readonly PublicationSafetyRating[],
+): PublicationSafetyState {
+  const rating = ratings.find(
+    (candidate) =>
+      candidate.skillVersionId === publication.skillVersionId &&
+      candidate.verdict === "passed",
+  );
+  if (!rating) {
+    return {
+      status: "potentially-unsafe",
+      label: "potentially unsafe — not validated",
+      ratingId: null,
+    };
+  }
+  return {
+    status: "safety-badge",
+    label: "safety badge",
+    ratingId: rating.ratingId,
+  };
 }
 
 function splitSlug(slug: string): [owner: string, name: string] {

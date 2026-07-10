@@ -20,9 +20,6 @@ export async function publishSkillVersion(
   if (input.contentHash.trim().length === 0) {
     return err(domainError("invalid_operation", "Publication content hash is required."));
   }
-  if (input.tier !== "private" && input.gate.verdict !== "passed") {
-    return err(domainError("invalid_operation", "Community or reviewed publication requires a passed gate run."));
-  }
 
   const rate = await deps.requestRateLimiter.consume(input.publisherId, "publish", REQUEST_RATE_LIMIT);
   if (isErr(rate)) return rate;

@@ -1,16 +1,24 @@
-import type { HarnessVersionId, PublicationId, SkillId, SkillVersionId, UserId } from "@/shared";
+import type { PublicationId, SafetyRatingId, SkillId, SkillVersionId, UserId } from "@/shared";
 
 /** Visibility tier for a published skill version (ARCHITECTURE §9.1). */
-export type PublicationTier = "private" | "community" | "reviewed";
+export type PublicationTier = "private" | "published" | "reviewed";
 
-export type PublicationGateVerdict = "passed" | "failed";
+export type PublicationSafetyState =
+  | {
+      readonly status: "safety-badge";
+      readonly label: "safety badge";
+      readonly ratingId: SafetyRatingId;
+    }
+  | {
+      readonly status: "potentially-unsafe";
+      readonly label: "potentially unsafe — not validated";
+      readonly ratingId: null;
+    };
 
-export type PublicationGateBinding = {
-  readonly verdict: PublicationGateVerdict;
-  /** The recorded automated gate run that reviewed this exact version. */
-  readonly gateRunId: string;
-  /** The validation harness identity that produced the verdict. */
-  readonly harnessVersionId: HarnessVersionId;
+export type PublicationSafetyRating = {
+  readonly skillVersionId: SkillVersionId | null;
+  readonly verdict: "passed" | "needs-review" | "blocked";
+  readonly ratingId: SafetyRatingId;
 };
 
 export type PublicationSlug = {
@@ -27,7 +35,6 @@ export type Publication = {
   readonly slug: string;
   readonly tier: PublicationTier;
   readonly contentHash: string;
-  readonly gate: PublicationGateBinding;
   readonly createdAt: Date;
 };
 
@@ -40,7 +47,7 @@ export type TapMarketplaceSkill = {
   readonly slug: string;
   readonly tier: PublicationTier;
   readonly contentHash: string;
-  readonly gate: PublicationGateBinding;
+  readonly safety: PublicationSafetyState;
   /** Skills install from the tap repository at HEAD; takedown is a revert. */
   readonly source: {
     readonly type: "git";
@@ -62,5 +69,4 @@ export type PublishSkillVersionInput = {
   readonly slug: PublicationSlug;
   readonly tier: PublicationTier;
   readonly contentHash: string;
-  readonly gate: PublicationGateBinding;
 };
