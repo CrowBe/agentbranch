@@ -236,10 +236,10 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
 | Adapter | Implements | Notes |
 |---|---|---|
 | `memory/{skill,usage,test-run,eval,safety-rating,harness-version,benchmark}.memory-repository.ts` | the seven repos + `SkillRetentionRepository` | **offline default**, tested; skill repo + retention share one store; the eval/test-run adapters take an optional lint-summary resolver over that store for the analysis reads |
-| `memory/publication.memory-repository.ts` | `PublicationRepository` | offline default; shares the skill store to enforce publisher ownership of the pinned version |
+| `memory/publication.memory-repository.ts` | `PublicationRepository` | offline default; shares the skill store to enforce publisher ownership of the pinned version and to read pinned Skill version sources for tap repository rendering |
 | `prisma/client.ts` | — | PrismaClient + `@prisma/adapter-pg` (Prisma 7 driver adapter) |
 | `prisma/{skill,usage,test-run,eval,safety-rating,harness-version,benchmark}.prisma-repository.ts` | `SkillRepository` (+ `SkillRetentionRepository`), `UsageRepository`, `TestRunRepository`, `EvalRunRepository`, `SafetyRatingRepository`, `HarnessVersionRepository`, `BenchmarkRunRepository` | real; the eval/test-run analysis reads join `skill_versions.lint_summary_json` |
-| `prisma/publication.prisma-repository.ts` | `PublicationRepository` | real; writes only when the version belongs to the publisher and the slug is unused |
+| `prisma/publication.prisma-repository.ts` | `PublicationRepository` | real; writes only when the version belongs to the publisher and the slug is unused; joins the pinned Skill version source for tap repository rendering |
 | `prisma/user-provisioning-auth.ts` | `AuthPort` | wraps Clerk auth, provisions the `users` row on first sight |
 | `ai/sdk-model-calls.ts` | `RawModelCalls` | SDK translation only: message/tool mapping, stream-part mapping, token-usage shape reading, provider cap-error detection. Admission + recording live above it, in the model-gateway module's accounting shell (`createModelGateway`), so policy holds for every adapter by construction |
 | `ai/model-router.ts` | `ModelRouter` | the provider/model selection authority: builds providers from the registry + server-pool keys, holds the runtime active selection + bring-your-own overrides (process-local), and resolves per primitive. Secret-free snapshot |
@@ -316,6 +316,12 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
   tier, `?q=` searches surfaced entries, `?slug=` looks up one publication
   (published entries resolve by slug with their safety badge or potentially-unsafe
   label). Pure read; offline-safe.
+- `app/api/tap-repository/route.ts` — the public tap repository snapshot
+  (ARCHITECTURE §9.1): GET renders the exact file set the bot PR writes —
+  `.claude-plugin/marketplace.json` plus `skills/<owner>/<name>/SKILL.md` —
+  from visible publications, their pinned Skill version sources, and the latest
+  safety ratings. Hash mismatches return a domain error before any file content
+  is emitted.
 - `app/api/publications/route.ts` — the open publish write surface
   (ARCHITECTURE §9.1): POST authenticates, resolves the user's main version,
   pins its `SKILL.md` content hash, and invokes `publishSkillVersion` as a

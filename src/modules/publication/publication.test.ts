@@ -36,6 +36,7 @@ function repo(): PublicationRepository {
     findById: vi.fn(),
     findBySlug: vi.fn(),
     listVisible: vi.fn(),
+    listTapRepositorySkills: vi.fn(),
     listByPublisher: vi.fn(),
     listByVersion: vi.fn(),
   };
