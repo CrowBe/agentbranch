@@ -14,9 +14,12 @@ export type {
   PublishSkillVersionInput,
   TapMarketplaceManifest,
   TapMarketplaceSkill,
+  TapRepositoryFile,
+  TapRepositorySkill,
 } from "./publication.types";
 export type { PublicationRepository } from "./publication.repository";
 export { publishSkillVersion, renderPublicationSlug } from "./publish-skill-version";
 export { renderTapMarketplace } from "./tap-marketplace";
+export { renderTapRepositoryFiles } from "./tap-repository";
 export { renderSkillLibrary } from "./skill-library";
 export type { SkillLibraryEntry, SkillLibrarySurface, SkillLibraryView } from "./skill-library";
