@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
-import type { Publication, PublicationRepository } from "@/modules/publication";
+import type { Publication, PublicationRepository, TapRepositorySkill } from "@/modules/publication";
 import {
   domainError,
   err,
@@ -21,6 +21,15 @@ type PublicationRow = {
   createdAt: Date;
 };
 
+type TapRepositoryPublicationRow = PublicationRow & {
+  skillVersion: {
+    name: string;
+    description: string;
+    body: string;
+    frontmatterJson: unknown;
+  };
+};
+
 function toPublication(row: PublicationRow): Publication {
   return {
     id: PublicationId(row.id),
@@ -31,6 +40,20 @@ function toPublication(row: PublicationRow): Publication {
     tier: row.tier === "reviewed" ? "reviewed" : row.tier === "published" ? "published" : "private",
     contentHash: row.contentHash,
     createdAt: row.createdAt,
+  };
+}
+
+function toTapRepositorySkill(row: TapRepositoryPublicationRow): TapRepositorySkill {
+  return {
+    publication: toPublication(row),
+    source: {
+      frontmatter: {
+        name: row.skillVersion.name,
+        description: row.skillVersion.description,
+        extra: (row.skillVersion.frontmatterJson as Record<string, unknown>) ?? {},
+      },
+      body: row.skillVersion.body,
+    },
   };
 }
 
@@ -80,6 +103,24 @@ export function createPrismaPublicationRepository(prisma: PrismaClient): Publica
         orderBy: { slug: "asc" },
       });
       return ok(rows.map((row) => toPublication(row as PublicationRow)));
+    },
+
+    async listTapRepositorySkills() {
+      const rows = await prisma.publication.findMany({
+        where: { tier: { in: ["published", "reviewed"] } },
+        include: {
+          skillVersion: {
+            select: {
+              name: true,
+              description: true,
+              body: true,
+              frontmatterJson: true,
+            },
+          },
+        },
+        orderBy: { slug: "asc" },
+      });
+      return ok(rows.map((row) => toTapRepositorySkill(row as TapRepositoryPublicationRow)));
     },
 
     async listByPublisher(publisherId) {

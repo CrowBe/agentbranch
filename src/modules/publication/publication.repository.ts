@@ -1,5 +1,5 @@
 import type { DomainError, PublicationId, Result, SkillVersionId, UserId } from "@/shared";
-import type { Publication, PublishSkillVersionInput } from "./publication.types";
+import type { Publication, PublishSkillVersionInput, TapRepositorySkill } from "./publication.types";
 
 /**
  * Persistence port for the publication domain. Adapters enforce ownership at
@@ -12,8 +12,15 @@ export interface PublicationRepository {
 
   findBySlug(slug: string): Promise<Result<Publication | null, DomainError>>;
 
-  /** Community + reviewed publications that are installable from the tap. */
+  /** Published + reviewed publications that are installable from the tap. */
   listVisible(): Promise<Result<readonly Publication[], DomainError>>;
+
+  /**
+   * Visible publications with their pinned Skill version source, ready for the
+   * public tap repository renderer. This is the read the bot publish pipeline
+   * needs before opening its PR.
+   */
+  listTapRepositorySkills(): Promise<Result<readonly TapRepositorySkill[], DomainError>>;
 
   listByPublisher(publisherId: UserId): Promise<Result<readonly Publication[], DomainError>>;
 

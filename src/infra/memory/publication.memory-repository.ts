@@ -60,6 +60,20 @@ export function createMemoryPublicationRepository(store: MemorySkillStore): Publ
       );
     },
 
+    async listTapRepositorySkills() {
+      const visible = [...publications.values()].filter(
+        (publication) => publication.tier === "published" || publication.tier === "reviewed",
+      );
+      return ok(
+        visible.flatMap((publication) => {
+          const source = (store.versions.get(publication.skillId) ?? []).find(
+            (version) => version.id === publication.skillVersionId,
+          )?.source;
+          return source ? [{ publication, source }] : [];
+        }),
+      );
+    },
+
     async listByPublisher(publisherId: UserId) {
       return ok([...publications.values()].filter((publication) => publication.publisherId === publisherId));
     },
