@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check:docs": "node scripts/check-doc-drift.mjs",
+    "tap:apply-snapshot": "node scripts/apply-tap-repository-snapshot.mjs",
     "prepare": "git config core.hooksPath .githooks || true",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",

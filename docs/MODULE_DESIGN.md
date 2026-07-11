@@ -453,6 +453,11 @@ npm run db:generate / db:push / db:migrate # Prisma (needs DATABASE_URL)
   `skills`, `skill_branches`, `skill_versions` (append-only), `usage`,
   `publications`, `harness_versions`, `test_runs`, `eval_runs`,
   `safety_ratings`, `benchmark_runs`. Migrations under `prisma/migrations/`.
+- `npm run tap:apply-snapshot -- --snapshot <url-or-file> --repo <tap-checkout>`
+  applies the `/api/tap-repository` file set to a public tap repo checkout. It
+  manages only `.claude-plugin/marketplace.json` and `skills/**`, rejects paths
+  outside those roots, and leaves the surrounding bot PR/merge wiring to the
+  tap repo automation.
 
 ---
 
