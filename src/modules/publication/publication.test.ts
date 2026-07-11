@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
 import type { PublicationRepository } from "./publication.repository";
+import { serializeSkillMd, type SkillSource } from "@/modules/skill";
 import { publishSkillVersion } from "./publish-skill-version";
 import { renderSkillLibrary } from "./skill-library";
 import { renderTapMarketplace } from "./tap-marketplace";
+import { renderTapRepositoryFiles } from "./tap-repository";
 import type { Publication } from "./publication.types";
 import { PublicationId, SafetyRatingId, SkillId, SkillVersionId, UserId, ok } from "@/shared";
 import type { RequestRateLimiter } from "@/modules/usage";
@@ -44,6 +47,21 @@ function limiter(allowed = true): RequestRateLimiter {
       ok(allowed ? ({ allowed: true } as const) : ({ allowed: false, reason: "Too fast." } as const)),
     ),
   };
+}
+
+function skillSource(name = "invoice-triage"): SkillSource {
+  return {
+    frontmatter: {
+      name,
+      description: "Use when invoices need triage before bookkeeping.",
+      extra: {},
+    },
+    body: "Review the invoice and identify the next bookkeeping action.\n",
+  };
+}
+
+function contentHashFor(source: SkillSource): string {
+  return `sha256:${createHash("sha256").update(serializeSkillMd(source)).digest("hex")}`;
 }
 
 describe("publishSkillVersion", () => {
@@ -160,6 +178,66 @@ describe("renderTapMarketplace", () => {
         },
       ],
     });
+  });
+});
+
+describe("renderTapRepositoryFiles", () => {
+  it("renders the tap marketplace and standard skill folders pinned to content hash", () => {
+    const source = skillSource();
+    const publication = {
+      id: PublicationId("pub_1"),
+      publisherId: UserId("user_1"),
+      skillId: SkillId("skill_1"),
+      skillVersionId: SkillVersionId("version_1"),
+      slug: "ben/invoice-triage",
+      tier: "published" as const,
+      contentHash: contentHashFor(source),
+      createdAt: new Date("2026-07-09T00:00:00Z"),
+    } satisfies Publication;
+
+    const files = renderTapRepositoryFiles([{ publication, source }], [
+      {
+        skillVersionId: SkillVersionId("version_1"),
+        verdict: "passed",
+        ratingId: SafetyRatingId("rating_1"),
+      },
+    ]);
+
+    expect(files.ok).toBe(true);
+    expect(files.ok && files.value).toEqual([
+      {
+        path: ".claude-plugin/marketplace.json",
+        content: expect.stringContaining('"path": "skills/ben/invoice-triage"'),
+      },
+      {
+        path: "skills/ben/invoice-triage/SKILL.md",
+        content: serializeSkillMd(source),
+      },
+    ]);
+    expect(files.ok && files.value[0]?.content).toContain('"status": "safety-badge"');
+    expect(files.ok && files.value[0]?.content.endsWith("\n")).toBe(true);
+  });
+
+  it("refuses to render when the pinned publication hash does not match the SKILL.md bytes", () => {
+    const source = skillSource();
+    const files = renderTapRepositoryFiles([
+      {
+        publication: {
+          id: PublicationId("pub_1"),
+          publisherId: UserId("user_1"),
+          skillId: SkillId("skill_1"),
+          skillVersionId: SkillVersionId("version_1"),
+          slug: "ben/invoice-triage",
+          tier: "published",
+          contentHash: "sha256:stale",
+          createdAt: new Date("2026-07-09T00:00:00Z"),
+        },
+        source,
+      },
+    ]);
+
+    expect(files.ok).toBe(false);
+    expect(files.ok ? null : files.error.tag).toBe("invalid_operation");
   });
 });
 

@@ -1,4 +1,5 @@
 import type { PublicationId, SafetyRatingId, SkillId, SkillVersionId, UserId } from "@/shared";
+import type { SkillSource } from "@/modules/skill";
 
 /** Visibility tier for a published skill version (ARCHITECTURE §9.1). */
 export type PublicationTier = "private" | "published" | "reviewed";
@@ -60,6 +61,16 @@ export type TapMarketplaceSkill = {
 export type TapMarketplaceManifest = {
   readonly version: 1;
   readonly skills: readonly TapMarketplaceSkill[];
+};
+
+export type TapRepositorySkill = {
+  readonly publication: Publication;
+  readonly source: SkillSource;
+};
+
+export type TapRepositoryFile = {
+  readonly path: string;
+  readonly content: string;
 };
 
 export type PublishSkillVersionInput = {
