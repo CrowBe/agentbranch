@@ -316,6 +316,11 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
   tier, `?q=` searches surfaced entries, `?slug=` looks up one publication
   (published entries resolve by slug with their safety badge or potentially-unsafe
   label). Pure read; offline-safe.
+- `app/api/publications/route.ts` — the open publish write surface
+  (ARCHITECTURE §9.1): POST authenticates, resolves the user's main version,
+  pins its `SKILL.md` content hash, and invokes `publishSkillVersion` as a
+  `published` publication. Safety ratings are badge data only; this route never
+  requires or runs one.
 - `app/api/model-router/route.ts` — **admin-gated** (the selection is
   instance-wide): GET the secret-free router snapshot, POST to switch the active
   provider/model or store/clear a bring-your-own key. With Clerk auth on, only an
