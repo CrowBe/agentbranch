@@ -6,9 +6,9 @@ import { parseSkillMd, serializeSkillMd } from "@/modules/skill";
 import { unwrap } from "@/shared";
 
 describe("baseline skill corpus", () => {
-  it("ships a complete v1-sized corpus with stable hashes and prompt batteries", () => {
-    expect(baselineSkillCorpus).toHaveLength(10);
-    expect(new Set(baselineSkillCorpus.map((entry) => entry.id))).toHaveLength(10);
+  it("ships the curated corpus with stable hashes and prompt batteries", () => {
+    expect(baselineSkillCorpus).toHaveLength(20);
+    expect(new Set(baselineSkillCorpus.map((entry) => entry.id))).toHaveLength(20);
 
     for (const entry of baselineSkillCorpus) {
       expect(entry.version).toBe(1);
