@@ -20,6 +20,10 @@ _Avoid_: spec, config, manifest
 A persisted skill in our DB — `SKILL.md` source plus identity and timestamps. Everything else is derived from it.
 _Avoid_: skill row, skill entity, document
 
+**Skill metadata**:
+A skill's discovery metadata — one **category** from the closed taxonomy (`SKILL_CATEGORIES`) plus up to 8 kebab-case **tags** — living in `SKILL.md` frontmatter so it travels with the artifact and is pinned by its content hash. Suggested by the **metadata-suggest** capability; written only by the author (build-loop frontmatter edits / `withSkillMetadata`).
+_Avoid_: labels, keywords (too generic), taxonomy (that's the category list, not a skill's values), SEO fields
+
 **Draft** (branching iteration, §9.3):
 *User-facing term* for a working lineage of skill revisions that accumulates without moving the **main version** — the safe space to iterate and evaluate before committing. A skill may have several open at once. The internal/code term is `branch`.
 _Avoid_: branch (code-only — never user copy), working copy, fork, sandbox

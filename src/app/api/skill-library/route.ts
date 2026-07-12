@@ -10,10 +10,15 @@ export async function GET(request: Request): Promise<Response> {
   const surface = parseSurface(url.searchParams.get("surface"));
   const query = url.searchParams.get("q") ?? undefined;
   const slug = url.searchParams.get("slug") ?? undefined;
+  const category = url.searchParams.get("category") ?? undefined;
+  const tag = url.searchParams.get("tag") ?? undefined;
   const container = getContainer();
 
   const publications = await container.publications.listVisible();
   if (isErr(publications)) return domainErrorResponse(publications.error);
+
+  const sources = await container.publications.listTapRepositorySkills();
+  if (isErr(sources)) return domainErrorResponse(sources.error);
 
   const safetyRatingResults = await Promise.all(
     publications.value.map(async (publication) => {
@@ -44,6 +49,9 @@ export async function GET(request: Request): Promise<Response> {
       surface,
       query,
       slug,
+      category,
+      tag,
+      sources: sources.value,
       safetyRatings: safetyRatings
         .filter((rating): rating is {
           readonly skillVersionId: SkillVersionId;

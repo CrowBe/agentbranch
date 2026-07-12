@@ -31,27 +31,29 @@ describe("in-memory adapters", () => {
     const versions = unwrap(await repo.listVersions(created.id, created.userId));
     expect(versions.map((version) => version.lintSummary)).toEqual([
       {
-        score: 58,
+        score: 55,
         grade: "D",
-        counts: { error: 0, warn: 3, info: 2 },
+        counts: { error: 0, warn: 3, info: 3 },
         rules: [
           "body.examples.missing",
           "body.negative-scope.missing",
           "body.structure.headings",
           "frontmatter.description.too-short",
           "frontmatter.description.trigger-vocabulary",
+          "metadata.category.missing",
         ],
       },
       {
-        score: 58,
+        score: 55,
         grade: "D",
-        counts: { error: 0, warn: 3, info: 2 },
+        counts: { error: 0, warn: 3, info: 3 },
         rules: [
           "body.examples.missing",
           "body.negative-scope.missing",
           "body.structure.headings",
           "frontmatter.description.too-short",
           "frontmatter.description.trigger-vocabulary",
+          "metadata.category.missing",
         ],
       },
     ]);
@@ -136,15 +138,16 @@ describe("in-memory adapters", () => {
     expect(versions.map((version) => version.revision)).toEqual([3, 2, 1]);
     expect(versions[0]?.source).toEqual(v1);
     expect(versions[0]?.lintSummary).toEqual({
-      score: 58,
+      score: 55,
       grade: "D",
-      counts: { error: 0, warn: 3, info: 2 },
+      counts: { error: 0, warn: 3, info: 3 },
       rules: [
         "body.examples.missing",
         "body.negative-scope.missing",
         "body.structure.headings",
         "frontmatter.description.too-short",
         "frontmatter.description.trigger-vocabulary",
+        "metadata.category.missing",
       ],
     });
   });

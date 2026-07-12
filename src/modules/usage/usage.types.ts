@@ -7,6 +7,7 @@ export type Tier = "free" | "pro";
 export type GatedCapability =
   | "build"
   | "visualise"
+  | "metadata-suggest"
   | "test-run"
   | "triggering-eval"
   | "safety-review"

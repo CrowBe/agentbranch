@@ -23,3 +23,5 @@ export { renderTapMarketplace } from "./tap-marketplace";
 export { renderTapRepositoryFiles } from "./tap-repository";
 export { renderSkillLibrary } from "./skill-library";
 export type { SkillLibraryEntry, SkillLibrarySurface, SkillLibraryView } from "./skill-library";
+export { renderSkillProfile } from "./skill-profile";
+export type { SkillProfileView } from "./skill-profile";

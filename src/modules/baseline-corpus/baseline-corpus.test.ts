@@ -2,13 +2,19 @@ import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import { baselineDistractors, baselineSkillCorpus } from "./index";
 import { createLintReportForSource } from "@/modules/lint";
-import { parseSkillMd, serializeSkillMd } from "@/modules/skill";
+import {
+  isNormalizedSkillTag,
+  isSkillCategory,
+  parseSkillMd,
+  serializeSkillMd,
+  skillMetadata,
+} from "@/modules/skill";
 import { unwrap } from "@/shared";
 
 describe("baseline skill corpus", () => {
-  it("ships a complete v1-sized corpus with stable hashes and prompt batteries", () => {
-    expect(baselineSkillCorpus).toHaveLength(10);
-    expect(new Set(baselineSkillCorpus.map((entry) => entry.id))).toHaveLength(10);
+  it("ships the curated corpus with stable hashes and prompt batteries", () => {
+    expect(baselineSkillCorpus).toHaveLength(20);
+    expect(new Set(baselineSkillCorpus.map((entry) => entry.id))).toHaveLength(20);
 
     for (const entry of baselineSkillCorpus) {
       expect(entry.version).toBe(1);
@@ -30,6 +36,15 @@ describe("baseline skill corpus", () => {
       const report = createLintReportForSource(source);
       expect(report.summary.counts.error).toBe(0);
       expect(report.summary.counts.warn).toBe(0);
+    }
+  });
+
+  it("files every corpus skill under a taxonomy category with normalized tags", () => {
+    for (const entry of baselineSkillCorpus) {
+      const metadata = skillMetadata(unwrap(parseSkillMd(entry.source)));
+      expect(isSkillCategory(metadata.category)).toBe(true);
+      expect(metadata.tags.length).toBeGreaterThan(0);
+      expect(metadata.tags.every((tag) => isNormalizedSkillTag(tag))).toBe(true);
     }
   });
 

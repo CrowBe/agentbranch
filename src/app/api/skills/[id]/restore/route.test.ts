@@ -50,13 +50,14 @@ describe("POST /api/skills/:id/restore", () => {
         },
         latestRevision: 3,
         lintSummary: {
-          score: 73,
+          score: 70,
           grade: "C",
-          counts: { error: 0, warn: 2, info: 1 },
+          counts: { error: 0, warn: 2, info: 2 },
           rules: [
             "body.examples.missing",
             "body.negative-scope.missing",
             "frontmatter.description.too-short",
+            "metadata.category.missing",
           ],
         },
         latestVersionId: "version-3",
