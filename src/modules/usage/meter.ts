@@ -18,7 +18,7 @@ export const TIER_LIMITS: Readonly<Record<Tier, TierLimits>> = {
   free: {
     maxTurns: 25,
     maxTokens: 200_000,
-    allowed: new Set<GatedCapability>(["build", "visualise", "test-run", "export", "import"]),
+    allowed: new Set<GatedCapability>(["build", "visualise", "metadata-suggest", "test-run", "export", "import"]),
   },
   pro: {
     maxTurns: 1_000,
@@ -26,6 +26,7 @@ export const TIER_LIMITS: Readonly<Record<Tier, TierLimits>> = {
     allowed: new Set<GatedCapability>([
       "build",
       "visualise",
+      "metadata-suggest",
       "test-run",
       "triggering-eval",
       "safety-review",

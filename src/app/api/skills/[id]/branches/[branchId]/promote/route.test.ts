@@ -41,13 +41,14 @@ describe("POST /api/skills/:id/branches/:branchId/promote", () => {
         source: { frontmatter: { name: "inbox-triage", description: "Sort mail.", extra: {} }, body: "# Goal" },
         latestRevision: 2,
         lintSummary: {
-          score: 73,
+          score: 70,
           grade: "C",
-          counts: { error: 0, warn: 2, info: 1 },
+          counts: { error: 0, warn: 2, info: 2 },
           rules: [
             "body.examples.missing",
             "body.negative-scope.missing",
             "frontmatter.description.too-short",
+            "metadata.category.missing",
           ],
         },
         latestVersionId: "version-9",

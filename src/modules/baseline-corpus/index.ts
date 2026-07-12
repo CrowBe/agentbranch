@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { SkillCategory } from "@/modules/skill";
 
 export type BaselinePromptCase = {
   readonly prompt: string;
@@ -33,6 +34,8 @@ const seeds = [
     id: "inbox-triage",
     name: "inbox-triage",
     description: "Triage unread business email into reply, delegate, schedule, archive, or urgent follow-up.",
+    category: "email",
+    tags: ["triage", "inbox", "prioritisation"],
     sourcePrompt: "Create an inbox triage skill for an SMB owner handling unread email.",
     body: [
       "## When to use",
@@ -65,6 +68,8 @@ const seeds = [
     id: "meeting-scheduler",
     name: "meeting-scheduler",
     description: "Find suitable meeting times, prepare scheduling options, and draft concise calendar invitations.",
+    category: "calendar",
+    tags: ["scheduling", "meetings", "availability"],
     sourcePrompt: "Create a meeting scheduling skill for a busy small-business operator.",
     body: [
       "## When to use",
@@ -97,6 +102,8 @@ const seeds = [
     id: "receipt-expense-logger",
     name: "receipt-expense-logger",
     description: "Turn receipt details into expense records with category, tax, reimbursement, and review flags.",
+    category: "finance",
+    tags: ["expenses", "receipts", "bookkeeping"],
     sourcePrompt: "Create a receipt expense logging skill for SMB bookkeeping.",
     body: [
       "## When to use",
@@ -129,6 +136,8 @@ const seeds = [
     id: "invoice-drafter",
     name: "invoice-drafter",
     description: "Draft invoice line items from billable work, rates, dates, terms, and client details.",
+    category: "finance",
+    tags: ["invoicing", "billing", "payment-terms"],
     sourcePrompt: "Create an invoice drafting skill for service businesses.",
     body: [
       "## When to use",
@@ -161,6 +170,8 @@ const seeds = [
     id: "policy-summariser",
     name: "policy-summariser",
     description: "Summarize policy or procedure documents into obligations, deadlines, owners, and open questions.",
+    category: "documents",
+    tags: ["summarisation", "policies", "compliance"],
     sourcePrompt: "Create a document summarisation skill for business policies and procedures.",
     body: [
       "## When to use",
@@ -193,6 +204,8 @@ const seeds = [
     id: "customer-follow-up",
     name: "customer-follow-up",
     description: "Draft customer follow-up messages from context, desired outcome, tone, and timing.",
+    category: "sales",
+    tags: ["follow-up", "customers", "outreach"],
     sourcePrompt: "Create a customer follow-up drafting skill for sales and support.",
     body: [
       "## When to use",
@@ -225,6 +238,8 @@ const seeds = [
     id: "data-extraction-brief",
     name: "data-extraction-brief",
     description: "Define fields, examples, validation rules, and edge cases for extracting data from messy documents.",
+    category: "analysis",
+    tags: ["data-extraction", "schemas", "documents"],
     sourcePrompt: "Create a data extraction brief skill for forms, PDFs, and emails.",
     body: [
       "## When to use",
@@ -257,6 +272,8 @@ const seeds = [
     id: "job-posting-drafter",
     name: "job-posting-drafter",
     description: "Draft practical job postings from role outcomes, must-haves, schedule, location, and hiring constraints.",
+    category: "hiring",
+    tags: ["job-postings", "recruitment"],
     sourcePrompt: "Create a hiring job-post drafting skill for a small team.",
     body: [
       "## When to use",
@@ -289,6 +306,8 @@ const seeds = [
     id: "brand-social-drafter",
     name: "brand-social-drafter",
     description: "Draft short social posts from campaign context, audience, channel, offer, and brand voice notes.",
+    category: "marketing",
+    tags: ["social-media", "copywriting", "campaigns"],
     sourcePrompt: "Create a social post drafting skill for small-business marketing.",
     body: [
       "## When to use",
@@ -321,6 +340,8 @@ const seeds = [
     id: "contract-risk-spotter",
     name: "contract-risk-spotter",
     description: "Spot practical business risks in a contract excerpt and prepare questions for professional review.",
+    category: "legal",
+    tags: ["contracts", "risk-review"],
     sourcePrompt: "Create a contract risk spotting skill for non-lawyer business users.",
     body: [
       "## When to use",
@@ -353,6 +374,8 @@ const seeds = [
     id: "calendar-week-planner",
     name: "calendar-week-planner",
     description: "Plan a working week from tasks, priorities, appointments, and deadlines into a realistic day-by-day schedule.",
+    category: "calendar",
+    tags: ["planning", "prioritisation", "time-management"],
     sourcePrompt: "Create a weekly calendar planning skill for a busy small-business owner.",
     authoredAt: EXPANSION_AUTHORED_AT,
     body: [
@@ -386,6 +409,8 @@ const seeds = [
     id: "meeting-notes-actions",
     name: "meeting-notes-actions",
     description: "Convert meeting notes or transcripts into minutes, decisions, and owned action items with due dates.",
+    category: "meetings",
+    tags: ["minutes", "action-items", "transcripts"],
     sourcePrompt: "Create a meeting notes skill that turns raw notes into minutes and action items.",
     authoredAt: EXPANSION_AUTHORED_AT,
     body: [
@@ -419,6 +444,8 @@ const seeds = [
     id: "travel-itinerary-planner",
     name: "travel-itinerary-planner",
     description: "Plan a business trip itinerary from destination, dates, meetings, budget, and traveller preferences.",
+    category: "travel",
+    tags: ["itineraries", "business-travel", "trip-planning"],
     sourcePrompt: "Create a business travel itinerary planning skill.",
     authoredAt: EXPANSION_AUTHORED_AT,
     body: [
@@ -452,6 +479,8 @@ const seeds = [
     id: "status-report-drafter",
     name: "status-report-drafter",
     description: "Draft weekly status updates and progress reports from working notes, task lists, and metrics.",
+    category: "writing",
+    tags: ["status-updates", "progress-reports", "reporting"],
     sourcePrompt: "Create a status report drafting skill for teams and client updates.",
     authoredAt: EXPANSION_AUTHORED_AT,
     body: [
@@ -485,6 +514,8 @@ const seeds = [
     id: "procedure-writer",
     name: "procedure-writer",
     description: "Draft a step-by-step procedure from how-we-do-it notes so staff can follow it without supervision.",
+    category: "operations",
+    tags: ["procedures", "sops", "checklists"],
     sourcePrompt: "Create a standard-operating-procedure writing skill for small teams.",
     authoredAt: EXPANSION_AUTHORED_AT,
     body: [
@@ -518,6 +549,8 @@ const seeds = [
     id: "customer-feedback-themes",
     name: "customer-feedback-themes",
     description: "Analyze customer reviews, survey responses, and support messages into recurring themes and next actions.",
+    category: "analysis",
+    tags: ["customer-feedback", "reviews", "surveys"],
     sourcePrompt: "Create a customer feedback analysis skill for reviews and surveys.",
     authoredAt: EXPANSION_AUTHORED_AT,
     body: [
@@ -551,6 +584,8 @@ const seeds = [
     id: "vendor-comparison",
     name: "vendor-comparison",
     description: "Review competing vendor quotes or product options into a side-by-side comparison and a recommendation.",
+    category: "operations",
+    tags: ["vendors", "quotes", "purchasing"],
     sourcePrompt: "Create a vendor and quote comparison skill for purchasing decisions.",
     authoredAt: EXPANSION_AUTHORED_AT,
     body: [
@@ -584,6 +619,8 @@ const seeds = [
     id: "proofread-polish",
     name: "proofread-polish",
     description: "Edit business writing for clarity, tone, grammar, and structure while preserving the original meaning.",
+    category: "writing",
+    tags: ["editing", "proofreading", "clarity"],
     sourcePrompt: "Create a proofreading and editing skill for everyday business writing.",
     authoredAt: EXPANSION_AUTHORED_AT,
     body: [
@@ -617,6 +654,8 @@ const seeds = [
     id: "onboarding-plan-builder",
     name: "onboarding-plan-builder",
     description: "Create a first-weeks onboarding plan for a new hire with ordered tasks, owners, and checkpoints.",
+    category: "hiring",
+    tags: ["onboarding", "new-hires", "training"],
     sourcePrompt: "Create a new-hire onboarding planning skill for small teams.",
     authoredAt: EXPANSION_AUTHORED_AT,
     body: [
@@ -650,6 +689,8 @@ const seeds = [
     id: "faq-drafter",
     name: "faq-drafter",
     description: "Draft FAQ entries and reusable answers from recurring customer questions and existing business detail.",
+    category: "customer-support",
+    tags: ["faq", "canned-answers", "self-service"],
     sourcePrompt: "Create an FAQ drafting skill built from recurring customer questions.",
     authoredAt: EXPANSION_AUTHORED_AT,
     body: [
@@ -695,6 +736,8 @@ function skill(input: {
   readonly id: string;
   readonly name: string;
   readonly description: string;
+  readonly category: SkillCategory;
+  readonly tags: readonly string[];
   readonly sourcePrompt: string;
   readonly authoredAt?: string;
   readonly body: readonly string[];
@@ -706,7 +749,7 @@ function skill(input: {
     version: 1,
     name: input.name,
     description: input.description,
-    source: `---\nname: ${input.name}\ndescription: ${input.description}\n---\n\n${input.body.join("\n")}\n`,
+    source: `---\nname: ${input.name}\ndescription: ${input.description}\ncategory: ${input.category}\ntags:\n${input.tags.map((tag) => `  - ${tag}`).join("\n")}\n---\n\n${input.body.join("\n")}\n`,
     promptBattery: [
       ...input.positives.map((prompt) => ({ prompt, expected: "fire" as const })),
       ...input.negatives.map((prompt) => ({ prompt, expected: "silent" as const })),

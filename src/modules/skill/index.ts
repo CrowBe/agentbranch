@@ -18,6 +18,17 @@ export type {
 } from "./skill.types";
 export { applySkillEdit, parseSkillMd, serializeSkillMd } from "./skill-md";
 export {
+  SKILL_CATEGORIES,
+  SKILL_TAGS_MAX,
+  isSkillCategory,
+  isNormalizedSkillTag,
+  normalizeSkillTag,
+  normalizeSkillTags,
+  skillMetadata,
+  withSkillMetadata,
+} from "./skill-metadata";
+export type { SkillCategory, SkillMetadata } from "./skill-metadata";
+export {
   makeSkill,
   reviseSkill,
   skillName,

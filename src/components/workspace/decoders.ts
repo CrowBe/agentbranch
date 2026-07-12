@@ -511,6 +511,10 @@ function isSkillLibraryEntry(value: unknown): value is SkillLibraryEntryPanel {
     typeof value.safety.label === "string" &&
     (typeof value.safety.ratingId === "string" || value.safety.ratingId === null) &&
     typeof value.contentHash === "string" &&
+    (typeof value.description === "string" || value.description === null) &&
+    (typeof value.category === "string" || value.category === null) &&
+    Array.isArray(value.tags) &&
+    value.tags.every((tag) => typeof tag === "string") &&
     isRecord(value.source) &&
     value.source.type === "git" &&
     value.source.ref === "HEAD" &&

@@ -4,6 +4,7 @@ import type { PublicationRepository } from "./publication.repository";
 import { serializeSkillMd, type SkillSource } from "@/modules/skill";
 import { publishSkillVersion } from "./publish-skill-version";
 import { renderSkillLibrary } from "./skill-library";
+import { renderSkillProfile } from "./skill-profile";
 import { renderTapMarketplace } from "./tap-marketplace";
 import { renderTapRepositoryFiles } from "./tap-repository";
 import type { Publication } from "./publication.types";
@@ -308,4 +309,106 @@ describe("renderSkillLibrary", () => {
       ],
     });
   });
+
+  it("enriches entries with pinned-version metadata and filters by category, tag, and search", () => {
+    const emailSource: SkillSource = {
+      frontmatter: {
+        name: "inbox-triage",
+        description: "Triage unread email into priority buckets.",
+        extra: { category: "email", tags: ["triage", "inbox"] },
+      },
+      body: "Sort the inbox.\n",
+    };
+    const financeSource: SkillSource = {
+      frontmatter: {
+        name: "invoice-drafter",
+        description: "Draft invoices from billable work notes.",
+        extra: { category: "finance", tags: ["invoicing"] },
+      },
+      body: "Draft the invoice.\n",
+    };
+    const publications = [
+      publicationFixture("pub_email", "ben/inbox-triage", "reviewed"),
+      publicationFixture("pub_finance", "ben/invoice-drafter", "reviewed"),
+    ];
+    const sources = [
+      { publication: publications[0]!, source: emailSource },
+      { publication: publications[1]!, source: financeSource },
+    ];
+
+    const all = renderSkillLibrary(publications, { sources });
+    expect(all.entries.map((entry) => entry.category)).toEqual(["email", "finance"]);
+    expect(all.entries[0]).toMatchObject({
+      description: "Triage unread email into priority buckets.",
+      tags: ["triage", "inbox"],
+    });
+
+    const byCategory = renderSkillLibrary(publications, { sources, category: "finance" });
+    expect(byCategory.entries.map((entry) => entry.slug)).toEqual(["ben/invoice-drafter"]);
+
+    const byTag = renderSkillLibrary(publications, { sources, tag: "Inbox" });
+    expect(byTag.entries.map((entry) => entry.slug)).toEqual(["ben/inbox-triage"]);
+
+    const byQuery = renderSkillLibrary(publications, { sources, query: "invoicing" });
+    expect(byQuery.entries.map((entry) => entry.slug)).toEqual(["ben/invoice-drafter"]);
+  });
 });
+
+describe("renderSkillProfile", () => {
+  it("renders the public profile view from the pinned version and safety state", () => {
+    const source: SkillSource = {
+      frontmatter: {
+        name: "inbox-triage",
+        description: "Triage unread email into priority buckets.",
+        extra: { category: "email", tags: ["triage", "inbox"] },
+      },
+      body: "Sort the inbox.\n",
+    };
+    const publication = publicationFixture("pub_email", "ben/inbox-triage", "reviewed");
+
+    const profile = renderSkillProfile(
+      { publication, source },
+      {
+        safetyRatings: [
+          {
+            skillVersionId: publication.skillVersionId,
+            verdict: "passed",
+            ratingId: SafetyRatingId("rating_1"),
+          },
+        ],
+      },
+    );
+
+    expect(profile).toEqual({
+      name: "inbox-triage",
+      owner: "ben",
+      slug: "ben/inbox-triage",
+      tier: "reviewed",
+      trustLabel: "reviewed skill - human-reviewed",
+      safety: { status: "safety-badge", label: "safety badge", ratingId: SafetyRatingId("rating_1") },
+      contentHash: publication.contentHash,
+      description: "Triage unread email into priority buckets.",
+      category: "email",
+      tags: ["triage", "inbox"],
+      publishedAt: "2026-07-09T00:00:00.000Z",
+      install: { type: "git", ref: "HEAD", path: "skills/ben/inbox-triage" },
+    });
+  });
+});
+
+function publicationFixture(
+  id: string,
+  slug: string,
+  tier: Publication["tier"],
+): Publication {
+  return {
+    id: PublicationId(id),
+    publisherId: UserId("user_1"),
+    skillId: SkillId(`skill_${id}`),
+    skillVersionId: SkillVersionId(`version_${id}`),
+    slug,
+    tier,
+    contentHash: `sha256:${id}`,
+    createdAt: new Date("2026-07-09T00:00:00Z"),
+  };
+}

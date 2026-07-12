@@ -1,4 +1,13 @@
-import { serializeSkillMd, type Skill, type SkillSource } from "@/modules/skill";
+import {
+  SKILL_CATEGORIES,
+  SKILL_TAGS_MAX,
+  isNormalizedSkillTag,
+  isSkillCategory,
+  serializeSkillMd,
+  skillMetadata,
+  type Skill,
+  type SkillSource,
+} from "@/modules/skill";
 import type { AnalysisContext, AnalysisReferenceFile, Analyzer } from "@/modules/skill-analysis";
 import { ok, SKILL_BODY_MAX, SKILL_DESCRIPTION_MAX, SKILL_NAME_MAX } from "@/shared";
 import type { LintFinding, LintReport, LintSeverity, LintSummary } from "./lint.types";
@@ -116,6 +125,8 @@ const POLICY_RULES = [
 
 export const LINT_RULESET_VERSION = {
   skillNamePattern: SKILL_NAME_PATTERN.source,
+  metadataCategories: SKILL_CATEGORIES,
+  metadataTagsMax: SKILL_TAGS_MAX,
   descriptionMin: DESCRIPTION_MIN,
   descriptionSoftMax: DESCRIPTION_SOFT_MAX,
   bodyTokenWarn: BODY_TOKEN_WARN,
@@ -164,12 +175,15 @@ export function createLintReportForSource(
   findings.push(...validateDescriptionQuality(raw, name, description, body));
 
   for (const key of Object.keys(source.frontmatter.extra).sort()) {
+    if (METADATA_KEYS.has(key)) continue;
     addFinding(findings, raw, `${key}:`, {
       rule: "frontmatter.unknown-key",
       severity: "info",
       message: `Extra frontmatter key \`${key}\` will be preserved, but agent.branch does not use it yet.`,
     });
   }
+
+  findings.push(...validateMetadata(raw, source));
 
   addFinding(findings, raw, body.trimStart().slice(0, 40), validateBody(body));
   findings.push(...validateBodyQuality(raw, body));
@@ -276,6 +290,52 @@ function validateReferenceLinks(
       severity: "info",
       message: `Local reference link \`${href}\` does not match a known skill file.`,
       sourceSpan: start === -1 ? undefined : { start, end: start + href.length },
+    });
+  }
+
+  return findings;
+}
+
+/** The frontmatter keys the metadata system owns (`skillMetadata`, @/modules/skill). */
+const METADATA_KEYS = new Set(["category", "tags"]);
+
+function validateMetadata(raw: string, source: SkillSource): LintFinding[] {
+  const findings: LintFinding[] = [];
+  const metadata = skillMetadata(source);
+
+  if (metadata.category === null) {
+    findings.push({
+      rule: "metadata.category.missing",
+      severity: "info",
+      message:
+        "No category set. Try: add a `category:` frontmatter key so the skill can be filed, filtered, and found.",
+      sourceSpan: spanOf(raw, "description:"),
+    });
+  } else if (!isSkillCategory(metadata.category)) {
+    findings.push({
+      rule: "metadata.category.unknown",
+      severity: "warn",
+      message: `\`${metadata.category}\` is not a known category. Use one of: ${SKILL_CATEGORIES.join(", ")}.`,
+      sourceSpan: spanOf(raw, "category:"),
+    });
+  }
+
+  const roughTag = metadata.tags.find((tag) => !isNormalizedSkillTag(tag));
+  if (roughTag !== undefined) {
+    findings.push({
+      rule: "metadata.tags.format",
+      severity: "info",
+      message: `Tag \`${roughTag}\` is not lowercase hyphen-case. Portable tags use lowercase letters, numbers, and hyphens.`,
+      sourceSpan: spanOf(raw, "tags:"),
+    });
+  }
+
+  if (metadata.tags.length > SKILL_TAGS_MAX) {
+    findings.push({
+      rule: "metadata.tags.too-many",
+      severity: "info",
+      message: `The skill carries ${metadata.tags.length} tags. Keep at most ${SKILL_TAGS_MAX} so each one stays meaningful for search.`,
+      sourceSpan: spanOf(raw, "tags:"),
     });
   }
 

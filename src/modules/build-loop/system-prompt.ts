@@ -1,3 +1,4 @@
+import { SKILL_CATEGORIES } from "@/modules/skill";
 import type { GatewaySystemPrompt } from "@/modules/model-gateway";
 
 const CACHE_CONTROL = { type: "ephemeral", ttl: "5m" } as const;
@@ -90,7 +91,10 @@ Frontmatter rules:
 - name should be short, memorable, and action-oriented when possible.
 - description is the primary trigger. Include what the skill does and when to use it.
 - put all trigger conditions in description, not in a "when to use" body section.
-- do not include extra frontmatter fields unless the user explicitly requires them for a known runtime.
+- include a category field with exactly one of: ${SKILL_CATEGORIES.join(", ")}. Pick the closest fit; it files the skill for search and filtering.
+- include a tags field: a YAML list of 3 to 6 lowercase hyphen-case terms a user would search for. Name the workflow, artifact, or domain, never generic words like assistant or helper.
+- category and tags are the author's to change: apply their edits verbatim when they name a category or tags, and mention once — when first drafting — that they can change them.
+- do not include other extra frontmatter fields unless the user explicitly requires them for a known runtime.
 - do not quote description unless YAML requires it.
 - keep the description specific enough to avoid accidental activation.
 

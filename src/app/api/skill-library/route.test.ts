@@ -4,11 +4,12 @@ import { ok, PublicationId, SafetyRatingId, SkillId, SkillVersionId, UserId } fr
 import { GET } from "./route";
 
 const listVisible = vi.fn();
+const listTapRepositorySkills = vi.fn();
 const latestForVersion = vi.fn();
 
 vi.mock("@/server/container", () => ({
   getContainer: () => ({
-    publications: { listVisible },
+    publications: { listVisible, listTapRepositorySkills },
     safetyRatings: { latestForVersion },
   }),
 }));
@@ -29,10 +30,23 @@ function publication(input: Pick<Publication, "slug" | "tier" | "contentHash">):
 describe("GET /api/skill-library", () => {
   beforeEach(() => {
     listVisible.mockReset();
+    listTapRepositorySkills.mockReset();
     latestForVersion.mockReset();
-    listVisible.mockResolvedValue(ok([
-      publication({ slug: "ben/inbox-triage", tier: "reviewed", contentHash: "sha256:reviewed" }),
-      publication({ slug: "ben/published-helper", tier: "published", contentHash: "sha256:published" }),
+    const reviewed = publication({ slug: "ben/inbox-triage", tier: "reviewed", contentHash: "sha256:reviewed" });
+    const published = publication({ slug: "ben/published-helper", tier: "published", contentHash: "sha256:published" });
+    listVisible.mockResolvedValue(ok([reviewed, published]));
+    listTapRepositorySkills.mockResolvedValue(ok([
+      {
+        publication: reviewed,
+        source: {
+          frontmatter: {
+            name: "inbox-triage",
+            description: "Triage unread email into priority buckets.",
+            extra: { category: "email", tags: ["triage", "inbox"] },
+          },
+          body: "Sort the inbox.\n",
+        },
+      },
     ]));
     latestForVersion.mockImplementation(async (_skillId, _userId, skillVersionId) => {
       if (skillVersionId === SkillVersionId("version-ben/inbox-triage")) {
@@ -71,6 +85,9 @@ describe("GET /api/skill-library", () => {
           },
           surfaced: true,
           contentHash: "sha256:reviewed",
+          description: "Triage unread email into priority buckets.",
+          category: "email",
+          tags: ["triage", "inbox"],
           source: {
             type: "git",
             ref: "HEAD",

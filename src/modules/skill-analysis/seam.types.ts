@@ -17,6 +17,7 @@ export type SourceSpan = { readonly start: number; readonly end: number };
 export type ArtifactKind =
   | "hero"
   | "skill-ir"
+  | "skill-metadata"
   | "export"
   | "lint"
   | "response-schema-lint"

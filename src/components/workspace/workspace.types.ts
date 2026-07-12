@@ -63,6 +63,9 @@ export type SkillLibraryEntryPanel = {
     readonly ratingId: string | null;
   };
   readonly contentHash: string;
+  readonly description: string | null;
+  readonly category: string | null;
+  readonly tags: readonly string[];
   readonly source: {
     readonly type: "git";
     readonly ref: "HEAD";

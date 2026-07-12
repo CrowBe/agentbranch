@@ -99,7 +99,7 @@ most capabilities read a `Skill`, the equipment primitives (`response-schema`,
 `tool-contract`) read their own source models, and the test run reads a
 `TestRunInput` bundle (ARCHITECTURE §9.2).
 
-- **`ArtifactKind`** — closed union of valid kind strings (`"hero" | "skill-ir" | "export" | "lint" | "response-schema-lint" | "tool-contract-lint" | "test-run" | "triggering-eval" | "cross-runtime-validation" | "harness-recommendation"`). Add a new member here when a new capability needs its own artifact type. Free-string kinds are a compile error.
+- **`ArtifactKind`** — closed union of valid kind strings (`"hero" | "skill-ir" | "skill-metadata" | "export" | "lint" | "response-schema-lint" | "tool-contract-lint" | "test-run" | "triggering-eval" | "cross-runtime-validation" | "harness-recommendation"`). Add a new member here when a new capability needs its own artifact type. Free-string kinds are a compile error.
 - **`Artifact<K>`** — the base artifact type; `K` must be an `ArtifactKind`. Each capability extends this with its own fields.
 - **`Analyzer<Input, A>`** — read an input, emit a structured artifact. Async +
   `Result` (some analyzers call the model).
@@ -131,6 +131,7 @@ most capabilities read a `Skill`, the equipment primitives (`response-schema`,
 |---|---|---|---|---|---|
 | Hero | analysis | `hero` | hero (sections + spans) | `rendered`, `source` | real |
 | Visualise | analysis | `visualise` | IR extraction | `mermaid` | extraction model-backed (deterministic offline fallback); render real |
+| Metadata suggest | analysis | `metadata-suggest` | category + tag recommendation over the taxonomy | `suggestions` | model-backed (deterministic keyword fallback); the "LLM recommended" leg of metadata authoring |
 | Export | analysis | `export` | instruction intent | `claude` (manifest) | real |
 | Lint | analysis | `lint` | frontmatter + body + refs quality rules + static policy rules | `insights`, `breakdown` | real |
 | Response schema quality | analysis | `response-schema` | JSON Schema structure + smell rules (pure, zero tokens) | `insights`, `breakdown` | real |
@@ -165,14 +166,15 @@ interface (marked `STUB` in-file) · **port** = interface only.
 
 | Module | Public surface (`index.ts`) | Port(s) it declares | Status |
 |---|---|---|---|
-| **skill** | `parseSkillMd`, `serializeSkillMd`, `makeSkill`, `reviseSkill`, `skillName/Description`, `SkillBranch`/`RetentionReport` + types | `SkillRepository`, `SkillRetentionRepository` | real |
+| **skill** | `parseSkillMd`, `serializeSkillMd`, `makeSkill`, `reviseSkill`, `skillName/Description`, `SKILL_CATEGORIES`, `skillMetadata`, `withSkillMetadata`, `SkillBranch`/`RetentionReport` + types | `SkillRepository`, `SkillRetentionRepository` | real (discovery metadata — `category` + `tags` — lives in frontmatter extra keys, so it travels with the standard-native artifact and is pinned by the same content hash) |
 | **skill-analysis** | `defineCapability`, `runCapability`, `Analyzer/Renderer/Capability/SourceSpan/Artifact` | — | real |
 | **hero** | `heroCapability`, `HeroView`, doc types | — | real |
 | **visualise** | `visualiseCapability`, IR + Mermaid types | — | extraction model-backed · deterministic offline fallback · render real |
+| **metadata-suggest** | `metadataSuggestCapability`, `SkillMetadataSuggestion/View` | — | analysis capability · model-backed with deterministic keyword fallback (the visualise posture) · suggests category + tags from the `skill` module's taxonomy; writing stays with the author (`withSkillMetadata` / build-loop frontmatter edits) |
 | **test-run** | `testRunCapability`, `executeSkill`, `createMockToolRegistry`, `defaultMockToolRegistry`, `emailMockTool`, `registryFromContracts`, `computeContractChecks`, `contractCheckIssues`, `toTestRunAnalysisRecord` | `TestRunRepository` | evaluation capability over a `TestRunInput` bundle · run + world generation real · contract-driven mocks + per-call validation real · email mock = offline fallback |
 | **triggering-eval** | `triggeringEvalCapability`, `runTriggeringEval`, `runBatteryCases`, `generatePromptBattery`, `distractorLibrary`, `toEvalRunAnalysisRecord` | `EvalRunRepository` | evaluation capability · run + battery generation real · adversarial negative battery · distractor library static v1 seed |
 | **safety-review** | `safetyReviewCapability`, `runSafetyReview`, `SafetyRating` + verdict/score types | `SafetyRatingRepository` | evaluation capability · LLM-judge over a full skill folder as structurally untrusted data · caller-tagged (opt-in rating = `account`; a platform-initiated review would tag `platform`) · records persist as safety ratings pinned to the reviewed version — the pin that earns a published version its safety badge (ARCHITECTURE §9.1) |
-| **publication** | `publishSkillVersion`, `renderTapMarketplace`, `renderTapRepositoryFiles`, `renderSkillLibrary`, `Publication`, `SkillLibraryEntry/View`, `PublicationRepository` + types | `PublicationRepository` | real (pins a Skill version + content hash + slug + tier; rate-limited open publish service; pure tap marketplace + tap repository file renderers for `.claude-plugin/marketplace.json` and `skills/<owner>/<name>/SKILL.md`; pure Skill-library read model — reviewed tier surfaced, published tier link-reachable with safety badge / potentially-unsafe labelling derived from safety ratings) |
+| **publication** | `publishSkillVersion`, `renderTapMarketplace`, `renderTapRepositoryFiles`, `renderSkillLibrary`, `renderSkillProfile`, `Publication`, `SkillLibraryEntry/View`, `SkillProfileView`, `PublicationRepository` + types | `PublicationRepository` | real (pins a Skill version + content hash + slug + tier; rate-limited open publish service; pure tap marketplace + tap repository file renderers for `.claude-plugin/marketplace.json` and `skills/<owner>/<name>/SKILL.md`; pure Skill-library read model — reviewed tier surfaced, published tier link-reachable, entries enriched with pinned-frontmatter description/category/tags for filtering + search; pure skill-profile read model behind the public profile page) |
 | **export** | `exportCapability`, manifest types | — | real |
 | **lint** | `lintCapability`, `summarizeLintFindings`, `LintReport`, `LintFinding` | — | real (quality + pure policy rules; `summarizeLintFindings` is the shared scorer every LintReport-shaped artifact uses) |
 | **response-schema** | `responseSchemaCapability`, `parseResponseSchema`, `serializeResponseSchema`, `applyResponseSchemaEdit`, `responseSchemaName`, `schemaShapeFindings`, `validateAgainstSchema`, `exampleValueForSchema` + types | — | real (first equipment primitive: lossless source model + pure lint + offline schema-subset validation) |
@@ -312,10 +314,23 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
   `tool-contract-stream.ts`.
 - `app/api/skill-library/route.ts` — the publication-backed Skill library feed
   (ARCHITECTURE §9.1): GET renders `renderSkillLibrary` over the visible
-  publications — `?surface=templates` is the Templates view over the reviewed
-  tier, `?q=` searches surfaced entries, `?slug=` looks up one publication
+  publications joined with their pinned version sources — `?surface=templates`
+  is the Templates view over the reviewed tier, `?q=` searches surfaced entries
+  (name, owner, slug, description, category, tags), `?category=` / `?tag=`
+  filter on the pinned frontmatter metadata, `?slug=` looks up one publication
   (published entries resolve by slug with their safety badge or potentially-unsafe
   label). Pure read; offline-safe.
+- `app/api/metadata-suggest/route.ts` — discovery-metadata suggestions for the
+  skill in the request: auth → parse → `runCapability(metadataSuggestCapability)`
+  with the gateway + an `account` tag (`metadata-suggest` capability, free +
+  pro). Model-backed when configured, deterministic keyword fallback offline;
+  returns a suggestion, never writes.
+- `app/skills/[owner]/[name]/page.tsx` — the public skill profile page
+  (ARCHITECTURE §9.1): server-rendered, force-dynamic (a takedown revert or new
+  rating must be visible immediately). Resolves the visible publication by
+  slug, renders `renderSkillProfile` (identity, trust tier, badge/flag,
+  category + tags, content hash, install source) plus the pinned source through
+  the hero capability's `rendered` view. 404 for missing or private slugs.
 - `app/api/tap-repository/route.ts` — the public tap repository snapshot
   (ARCHITECTURE §9.1): GET renders the exact file set the bot PR writes —
   `.claude-plugin/marketplace.json` plus `skills/<owner>/<name>/SKILL.md` —
