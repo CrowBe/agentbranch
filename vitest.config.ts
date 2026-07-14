@@ -14,6 +14,8 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    // The visual suite needs a real browser — vitest.visual.config.ts owns it.
+    exclude: ["**/node_modules/**", "src/**/*.visual.test.tsx"],
     coverage: {
       provider: "v8",
       include: ["src/modules/**/*.ts"],

@@ -34,7 +34,7 @@ export function ToolChips({
           disabled={busy}
           onClick={() => onSelect?.(chip.id)}
         >
-          {active === chip.id && busy ? "Running..." : chip.label}
+          {active === chip.id && busy ? "Running…" : chip.label}
         </Chip>
       ))}
     </div>

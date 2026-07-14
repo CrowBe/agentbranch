@@ -155,7 +155,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     patch({
       mode: "build",
       entries: [...snapshot.entries, entry(message)],
-      status: "Building...",
+      status: "Building…",
       busy: true,
       capability: null,
       activeTool: null,
@@ -197,7 +197,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
           patch({ entries: upsertAssistant(snapshot.entries, assistantText) });
         } else if (event.event === "tool") {
           patch({
-            status: event.data.phase === "call" ? `Running ${event.data.name}...` : "Updating preview...",
+            status: event.data.phase === "call" ? `Running ${event.data.name}…` : "Updating preview…",
           });
         } else if (event.event === "skill") {
           latestSource = event.data.source;
@@ -285,7 +285,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
 
   async function showSkills(): Promise<void> {
     if (snapshot.busy) return;
-    patch({ mode: "skills", capability: null, activeTool: null, status: "Loading skills...", entries: [] });
+    patch({ mode: "skills", capability: null, activeTool: null, status: "Loading skills…", entries: [] });
 
     try {
       const res = await fetchImpl("/api/skills");
@@ -338,7 +338,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       return;
     }
 
-    patch({ status: "Loading history..." });
+    patch({ status: "Loading history…" });
     try {
       const [runsRes, skillRes] = await Promise.all([
         fetchImpl(`/api/skills/${encodeURIComponent(skillId)}/runs`),
@@ -395,7 +395,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       mode: "templates",
       capability: null,
       activeTool: null,
-      status: "Loading Templates...",
+      status: "Loading Templates…",
       entries: [],
     });
 
@@ -441,7 +441,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       activeTool: null,
       branchId: null,
       openDrafts: [],
-      status: "Importing...",
+      status: "Importing…",
       entries: [entry(isUrlImport ? "Importing GitHub SKILL.md." : "Importing pasted SKILL.md.", "muted")],
     });
 
@@ -479,7 +479,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
 
   async function openSkill(id: string): Promise<void> {
     if (snapshot.busy) return;
-    patch({ status: "Opening skill..." });
+    patch({ status: "Opening skill…" });
 
     try {
       const res = await fetchImpl(`/api/skills/${encodeURIComponent(id)}`);
@@ -514,7 +514,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     const confirmed = confirmImpl(`Restore revision ${revision} as the current skill?`);
     if (!confirmed) return;
 
-    patch({ busy: true, status: "Restoring..." });
+    patch({ busy: true, status: "Restoring…" });
     try {
       const res = await fetchImpl(`/api/skills/${encodeURIComponent(id)}/restore`, {
         method: "POST",
@@ -584,7 +584,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     const isContract = detected.kind === "tool-contract";
     patch({
       equipmentBusy: true,
-      status: isContract ? "Checking tool contract..." : "Checking response schema...",
+      status: isContract ? "Checking tool contract…" : "Checking response schema…",
     });
     try {
       const kept = await checkAndKeepEquipment(detected.kind, detected.name, raw);
@@ -651,7 +651,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     const isContract = kind === "tool-contract";
     patch({
       entries: [...snapshot.entries, entry(message)],
-      status: isContract ? "Building tool contract..." : "Building response schema...",
+      status: isContract ? "Building tool contract…" : "Building response schema…",
       equipmentBusy: true,
       capability: null,
     });
@@ -695,7 +695,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
         } else if (event.event === "tool") {
           patch({
             status:
-              event.data.phase === "call" ? `Running ${event.data.name}...` : "Updating draft...",
+              event.data.phase === "call" ? `Running ${event.data.name}…` : "Updating draft…",
           });
         } else if (event.event === "response-schema") {
           responseSchemaDraft = event.data.source;
@@ -773,7 +773,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
           : "untitled schema";
       patch({
         equipmentBusy: true,
-        status: isContract ? "Checking tool contract..." : "Checking response schema...",
+        status: isContract ? "Checking tool contract…" : "Checking response schema…",
       });
       try {
         const kept = await checkAndKeepEquipment(kind, name, finishedRaw);
@@ -809,7 +809,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
   async function startDraft(): Promise<void> {
     const skillId = snapshot.currentSkillId;
     if (!skillId || snapshot.busy || snapshot.draftBusy) return;
-    patch({ draftBusy: true, capability: null, activeTool: null, status: "Starting a draft..." });
+    patch({ draftBusy: true, capability: null, activeTool: null, status: "Starting a draft…" });
     try {
       const res = await fetchImpl(`/api/skills/${encodeURIComponent(skillId)}/branches`, {
         method: "POST",
@@ -837,7 +837,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
   async function openDraft(draftToOpen: string): Promise<void> {
     const skillId = snapshot.currentSkillId;
     if (!skillId || snapshot.busy || snapshot.draftBusy) return;
-    patch({ draftBusy: true, capability: null, activeTool: null, status: "Opening draft..." });
+    patch({ draftBusy: true, capability: null, activeTool: null, status: "Opening draft…" });
     try {
       const res = await fetchImpl(
         `/api/skills/${encodeURIComponent(skillId)}/branches/${encodeURIComponent(draftToOpen)}`,
@@ -887,7 +887,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       }
     }
 
-    patch({ draftBusy: true, capability: null, activeTool: null, status: "Setting as main version..." });
+    patch({ draftBusy: true, capability: null, activeTool: null, status: "Setting as main version…" });
     try {
       const res = await fetchImpl(
         `/api/skills/${encodeURIComponent(skillId)}/branches/${encodeURIComponent(branchId)}/promote`,
@@ -923,7 +923,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     const confirmed = confirmImpl("Discard this draft? Your main version is unchanged.");
     if (!confirmed) return;
 
-    patch({ draftBusy: true, capability: null, activeTool: null, status: "Discarding draft..." });
+    patch({ draftBusy: true, capability: null, activeTool: null, status: "Discarding draft…" });
     try {
       const res = await fetchImpl(
         `/api/skills/${encodeURIComponent(skillId)}/branches/${encodeURIComponent(branchId)}`,
@@ -1027,7 +1027,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       activeTool: "safety-review",
       toolBusy: true,
       capability: null,
-      status: "Safety rating running...",
+      status: "Safety rating running…",
     });
     try {
       const res = await fetchImpl("/api/safety-review", {
@@ -1080,7 +1080,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     const skill = snapshot.current;
     if (!skill || snapshot.lintBusy) return;
 
-    patch({ activeTool: null, lintBusy: true, status: "Quality running..." });
+    patch({ activeTool: null, lintBusy: true, status: "Quality running…" });
 
     try {
       const res = await fetchImpl("/api/lint", {
@@ -1120,7 +1120,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       activeTool: action,
       toolBusy: true,
       capability: isEvaluationTool(action) ? emptyProgressPanel(action) : null,
-      status: `${toolLabel(action)} running...`,
+      status: `${toolLabel(action)} running…`,
     });
 
     try {
@@ -1157,6 +1157,9 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
 
       const body = (await res.json().catch(() => null)) as unknown;
       if (!res.ok) {
+        // Return the hero to the document — a progress panel must never
+        // outlive its failed run.
+        patch({ capability: null });
         fail(toolErrorMessage(body, res.status, action));
         return;
       }
@@ -1165,6 +1168,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
         status: `${toolLabel(action)} ready.`,
       });
     } catch (cause) {
+      patch({ capability: null });
       fail(friendlyError(String(cause)));
     } finally {
       patch({ toolBusy: false });

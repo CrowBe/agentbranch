@@ -1,4 +1,5 @@
 import type { HeroView } from "@/modules/hero";
+import { Segmented } from "./ui/segmented";
 
 /**
  * The hero view toggle — a small segmented control, Rendered | Source,
@@ -12,19 +13,13 @@ export function ViewToggle({
   onChange: (view: HeroView) => void;
 }) {
   return (
-    <div className="inline-flex rounded-[var(--radius-md)] border border-outline-variant p-0.5">
-      {(["rendered", "source"] as const).map((view) => (
-        <button
-          key={view}
-          type="button"
-          onClick={() => onChange(view)}
-          className={`text-label rounded-[calc(var(--radius-md)-2px)] px-3 py-1 capitalize ${
-            value === view ? "bg-primary text-on-primary" : "text-on-surface-variant"
-          }`}
-        >
-          {view}
-        </button>
-      ))}
-    </div>
+    <Segmented
+      options={[
+        { value: "rendered", label: "Rendered" },
+        { value: "source", label: "Source" },
+      ]}
+      value={value}
+      onChange={onChange}
+    />
   );
 }

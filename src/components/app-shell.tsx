@@ -9,14 +9,17 @@ import { ModelConsole } from "./model-console";
 import { HeroPanel } from "./hero-panel";
 import { InteractionPanel } from "./interaction-panel";
 import { DraftControls } from "./draft-controls";
+import { Segmented } from "./ui/segmented";
 import { useWorkspace } from "./workspace";
 
 /**
- * The app shell — composes the chrome top bar, collapsible left rail,
- * preview-primary hero, and slim right interaction panel (ARCHITECTURE §7).
- * Composition/JSX only: all protocol + choreography state lives in the
- * workspace module (issue #159); the shell renders its snapshot and wires the
- * controls to its actions. The only React state here is pure chrome.
+ * The app shell — mobile-first (ARCHITECTURE §7). Compact viewports get the
+ * chat drawer as the main window with a Chat | Skill tab pair to swap to the
+ * document; from `lg` up the preview-primary arrangement holds (hero centre,
+ * slim right panel) and the tabs disappear. Both surfaces stay mounted — the
+ * tabs only flip visibility, so no state is lost switching. Composition/JSX
+ * only: all protocol + choreography state lives in the workspace module
+ * (issue #159); the only React state here is pure chrome.
  */
 export function AppShell({
   rendered,
@@ -31,15 +34,27 @@ export function AppShell({
 }) {
   const [menuExpanded, setMenuExpanded] = useState(false);
   const [consoleOpen, setConsoleOpen] = useState(false);
+  const [mobileTab, setMobileTab] = useState<"chat" | "skill">("chat");
   const { snapshot, actions } = useWorkspace({ rendered, source, initialSkill, initialLintSummary });
 
   return (
     <div className="flex h-dvh flex-col">
       <TopBar onToggleMenu={() => setMenuExpanded((v) => !v)} />
+      <div className="flex justify-center border-b border-outline-variant bg-surface px-4 py-2 lg:hidden">
+        <Segmented
+          options={[
+            { value: "chat", label: "Chat" },
+            { value: "skill", label: "Skill" },
+          ]}
+          value={mobileTab}
+          onChange={setMobileTab}
+        />
+      </div>
       <div className="flex min-h-0 flex-1">
         <SideRail
           expanded={menuExpanded}
           active={snapshot.mode}
+          onCollapse={() => setMenuExpanded(false)}
           onBuild={actions.showBuild}
           onImport={actions.showImport}
           onModels={() => setConsoleOpen(true)}
@@ -48,7 +63,11 @@ export function AppShell({
           onHistory={() => void actions.showHistory()}
           onTemplates={() => void actions.showTemplates()}
         />
-        <main className="min-w-0 flex-1 overflow-hidden">
+        <main
+          className={`min-w-0 flex-1 flex-col overflow-hidden ${
+            mobileTab === "skill" ? "flex" : "hidden lg:flex"
+          }`}
+        >
           <HeroPanel
             rendered={snapshot.heroDocs.rendered}
             source={snapshot.heroDocs.source}
@@ -82,7 +101,7 @@ export function AppShell({
             feedbackBusy={snapshot.busy || snapshot.toolBusy}
           />
           {snapshot.status && (
-            <p className="text-label px-6 pb-4 text-on-surface-variant" role="status">
+            <p className="text-label px-4 pb-3 text-on-surface-variant lg:px-6 lg:pb-4" role="status">
               {snapshot.status}
             </p>
           )}
@@ -91,6 +110,7 @@ export function AppShell({
           entries={snapshot.entries}
           busy={snapshot.busy || snapshot.equipmentBusy}
           mode={snapshot.mode}
+          className={mobileTab === "chat" ? "flex" : "hidden lg:flex"}
           onSend={(message) => void actions.send(message)}
           onImport={(raw) => void actions.importSkill(raw)}
           onEquipment={(raw) => void actions.submitEquipment(raw)}

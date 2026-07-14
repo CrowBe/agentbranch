@@ -12,6 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:visual": "vitest run --config vitest.visual.config.ts",
+    "test:visual:update": "vitest run --config vitest.visual.config.ts --update",
     "check:docs": "node scripts/check-doc-drift.mjs",
     "tap:apply-snapshot": "node scripts/apply-tap-repository-snapshot.mjs",
     "prepare": "git config core.hooksPath .githooks || true",
@@ -28,6 +30,7 @@
     "@clerk/nextjs": "^7.4.2",
     "@prisma/client": "^7.8.0",
     "ai": "^6.0.194",
+    "mermaid": "^11.16.0",
     "next": "^16.2.7",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
@@ -36,8 +39,12 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@fontsource/hanken-grotesk": "^5.2.8",
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8",
     "@prisma/adapter-pg": "^7.8.0",
     "@tailwindcss/postcss": "^4.3.0",
+    "@tailwindcss/vite": "^4.3.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
@@ -46,6 +53,7 @@
     "@types/react": "^19.2.16",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
+    "@vitest/browser-playwright": "^4.1.10",
     "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.7",
@@ -56,6 +64,7 @@
     "tailwindcss": "^4.3.0",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.8",
+    "vitest-browser-react": "^2.2.0"
   }
 }

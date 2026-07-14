@@ -15,10 +15,10 @@ export const mermaidRenderer: Renderer<SkillIR, MermaidSource> = {
     if (ir.diagram === "stateDiagram") return { mermaid: renderState(ir) };
 
     const lines = ["flowchart TD"];
-    for (const node of ir.nodes) lines.push(`  ${node.id}${shape(node)}`);
+    for (const node of ir.nodes) lines.push(`  ${safeId(node.id)}${shape(node)}`);
     for (const edge of ir.edges) {
       const label = edge.label ? `|${escape(edge.label)}|` : "";
-      lines.push(`  ${edge.from} -->${label} ${edge.to}`);
+      lines.push(`  ${safeId(edge.from)} -->${label} ${safeId(edge.to)}`);
     }
     return { mermaid: lines.join("\n") };
   },
@@ -35,13 +35,37 @@ function renderSequence(ir: SkillIR): string {
 
 function renderState(ir: SkillIR): string {
   const lines = ["stateDiagram-v2"];
-  for (const node of ir.nodes) lines.push(`  ${node.id}: ${escape(node.label)}`);
+  for (const node of ir.nodes) lines.push(`  ${safeId(node.id)}: ${escape(node.label)}`);
   for (const edge of ir.edges) {
     const label = edge.label ? `: ${escape(edge.label)}` : "";
-    lines.push(`  ${edge.from} --> ${edge.to}${label}`);
+    lines.push(`  ${safeId(edge.from)} --> ${safeId(edge.to)}${label}`);
   }
   return lines.join("\n");
 }
+
+/**
+ * Mermaid treats some identifiers as syntax (`end` closes a subgraph or
+ * composite state and breaks the parse outright), and the IR's id charset —
+ * whether from the model or the offline fallback — doesn't exclude them.
+ * Suffix the reserved ones so every IR serializes to parseable Mermaid.
+ */
+const RESERVED_IDS = new Set([
+  "end",
+  "subgraph",
+  "direction",
+  "style",
+  "linkstyle",
+  "classdef",
+  "class",
+  "click",
+  "default",
+  "graph",
+  "flowchart",
+  "state",
+  "note",
+]);
+
+const safeId = (id: string): string => (RESERVED_IDS.has(id.toLowerCase()) ? `${id}_` : id);
 
 /** Map a node kind to Mermaid node shape syntax. */
 function shape(node: IrNode): string {

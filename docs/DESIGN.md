@@ -90,10 +90,13 @@ Warmth lever: lean to the **generous** end of this scale. Whitespace is the chea
 | Token | Value | Note |
 |---|---|---|
 | `topbar-height` | 48px | Thin chrome bar (no nav links) |
-| `rail-width` | 56px | Collapsed left nav (default) |
-| `menu-width` | 240px | Expanded left slideout |
-| `panel-width` | 300px | Slim right interaction panel |
+| `rail-width` | 56px | Left nav icon bar (every viewport) |
+| `menu-width` | 240px | Expanded left slideout (overlay) |
+| `panel-width` | 300px | Slim right interaction panel (`lg`+ only) |
+| `breakpoint-shell` | `lg` (1024px) | Compact ↔ full arrangement switch (ARCHITECTURE §7) |
 | — hero — | fluid | Single centred document; **not** a card/bento grid |
+
+Styling is **mobile-first**: base classes target the compact arrangement (Chat main window + Chat \| Skill tabs, 16px paddings); `lg:` variants layer the full preview-primary arrangement on top (hero + 300px panel, 24px+ paddings). Compact swaps *arrangement*, never *theme* — same tokens, same components.
 
 ### 3.5 Radius
 
@@ -111,7 +114,11 @@ Flat by default; shadow **overlay-only**.
 
 - **Base / canvas** — background color, no border.
 - **Surface / card / hero** — surface + **1px border**, no shadow.
-- **Overlay** (popover / modal / menu / floating voice control) — surface-high + soft shadow, **no blur** (light: `0 8px 24px rgba(11,28,48,.12)`; dark: `0 10px 32px rgba(0,0,0,.40)`).
+- **Overlay** (popover / modal / menu / floating voice control) — surface + **1px border** + soft shadow (the `elevation-overlay` class), **no blur** (light: `0 8px 24px rgba(11,28,48,.12)`; dark: `0 10px 32px rgba(0,0,0,.40)`), floating over a **`scrim` at 40% opacity** (§4) that dims the page behind it.
+
+### 3.7 Focus
+
+Every interactive element gets a visible `:focus-visible` ring: **2px solid `primary`, 2px offset** — no glow blur (§3.6 flatness). Inputs swap it for their own focus treatment (§5) so the ring never doubles a focused border.
 
 ---
 
@@ -143,6 +150,7 @@ Identical semantic role names; only hex differs. Functional accent triad is cons
 | `on-tertiary` | `#ffffff` |
 | `error` | `#ba1a1a` |
 | `on-error` | `#ffffff` |
+| `scrim` | `#0b1c30` |
 
 ### 4.2 Dark theme — power-user option
 
@@ -163,6 +171,9 @@ Identical semantic role names; only hex differs. Functional accent triad is cons
 | `on-tertiary` | `#0f172a` |
 | `error` | `#ef4444` |
 | `on-error` | `#ffffff` |
+| `scrim` | `#000000` |
+
+> `scrim` is only ever used at **40% opacity** behind overlays (§3.6) — never as a fill.
 
 > **Contrast rule:** on light surfaces, amber `#b8730a` is the only AA-safe amber for **text**; the brighter `#f59e0b` is for fill/border/dot only. Cobalt and teal are darkened on light for the same reason.
 
@@ -170,22 +181,42 @@ Identical semantic role names; only hex differs. Functional accent triad is cons
 
 ## 5. Components
 
-Behaviour identical across themes; colors resolve from §4 roles.
+Behaviour identical across themes; colors resolve from §4 roles. Copy is **sentence-case, plain-language** everywhere; trailing activity copy uses a true ellipsis (`Building…`, never `Building...`).
 
-- **Buttons** — Primary: solid `primary`, `radius-sm`. Secondary: ghost `secondary` outline. Warning/constraint: solid `tertiary` (amber). Copy is **sentence-case, plain-language** ("Test this skill", not "EXEC").
-- **Inputs** — filled surface + 1px `outline-variant`; focus → `primary` border + 2px `primary`/30% ring (no glow blur).
+### 5.1 Primitives (`src/components/ui`)
+
+- **Buttons** — Primary: solid `primary`, `radius-sm`. Secondary: ghost `secondary` outline. Warning/constraint: solid `tertiary` (amber). ("Test this skill", not "EXEC".)
+- **Inputs & textareas** — filled surface + 1px `outline-variant`; focus → `primary` border + 2px `primary`/30% ring (no glow blur).
+- **Segmented control** — the one two-way-switch treatment: outlined `outline-variant` container at `radius-md` with 2px inset, active segment = `primary`/15 fill + solid `primary` text (the chips' accent language), inactive = muted with `surface-high` hover. Used by the hero's **Rendered | Source** toggle (defaults Rendered) and the **Insights | Breakdown** surface tabs; any future two-view switch reuses it.
+- **Chips** (tool surfaces) — `radius-md`, sentence-case `label`. Accent fill ~15% + solid accent text. Visualise/Run = `primary`; Triggers/Safety = `tertiary`; Export = `secondary`. Busy chip reads `Running…`.
+- **State pills** (`radius-full`) — success = `secondary`/15 + `secondary` text, warn = `tertiary`/15 + `tertiary`, error = `error`/15 + `error`, neutral = `surface-high` + muted. Pills carry *states and metadata*, never actions.
+
+### 5.2 Composites
+
 - **Cards & hero** — `surface` + 1px `outline-variant`, `radius-lg`, generous `space-lg` padding. Rendered hero uses `doc-rendered`/`doc-rendered-h`; Source view uses `doc-source`/`doc-source-fm` with a streaming caret.
-- **Hero view toggle** — a small segmented control on the hero header: **Rendered | Source**, defaulting Rendered. Sentence-case labels.
-- **Chips** (tool surfaces) — `radius-md`, sentence-case `label`. Accent fill ~15% + solid accent text. Visualise/Run = `primary`; Triggers = `tertiary`; Export = `secondary`.
-- **State pills** (`radius-full`) — success = `secondary`, warn = `tertiary`, error = `error`.
+- **Quality pill** (hero header) — the lint summary as a pill-shaped button: grade + score, toned by severity (clean = `secondary`, warnings/C = `tertiary`, errors/D = `error`). Opens the lint Insights surface.
+- **Draft banner** (branching iteration) — the state-legibility strip above the hero. *Editing a draft*: `primary`/40 border + `primary`/5 fill, `label` in `primary`, with **Discard draft** / **Set as main version**. *Viewing the main version*: plain `surface` + `outline-variant`, with **Resume draft** / **Start a draft**. Never git vocabulary (§1 tone; CONTEXT.md).
+- **Insights / Breakdown surfaces** — every evaluation and lint result renders Insights-first: `label` eyebrow (the capability name), `headline-md` verdict, `doc-rendered` summary, findings/watch as lists. Breakdown sits behind the segmented tabs: per-case cards (`radius-sm`, 1px border) with pass/fail as `doc-rendered-h`, metadata as muted `label`; test-run transcripts are `doc-source` blocks on `surface-high`.
+- **Overlays** (model console) — `scrim`/40 backdrop, panel = `surface` + 1px `outline-variant` + `radius-xl` + `elevation-overlay` (§3.6). Never Tailwind `shadow-*` utilities.
+- **Trust & safety marks** (publish surfaces) — the **safety badge** renders as a success pill; **"potentially unsafe — not validated"** renders as a warn pill, copy kept blunt (ARCHITECTURE §9.1). Trust tier, category, and `#tags` are neutral pills. Safety verdicts on the hero: passed / needs review / blocked as headline + per-class score cards in the breakdown.
+- **Nav rail** — active item = `primary`/10 fill + `primary` text, `radius-md`; inactive = muted with `surface-high` hover. The icon bar stays in flow; the expanded slideout is an **overlay** (`menu-width`, `elevation-overlay`, scrim on compact viewports) so the main window keeps its width. Labels appear only when expanded; collapsed buttons keep `aria-label`s.
+- **Mobile tabs** — the compact arrangement's Chat | Skill switch is the standard segmented control (§5.1), centred in a slim bar under the top bar; it disappears at `lg`.
+- **Plan chip** (top bar) — the free-tier status as a **neutral** pill; it flips to warn only when usage is actually exhausted ("out of free usage today"). Plan identity is metadata, not a success state.
+- **Status line** — the shell's one `role="status"` live region, below the hero: `label` type in `on-surface-variant`. Every action lands a sentence there; errors repeat as an error-toned entry in the interaction drawer.
 - **Streaming indicator** — `secondary` (teal) dot + label while writing; settles to `on-surface-variant` idle.
+
+### 5.3 Conformance
+
+The token layer lives in `src/app/globals.css` (CSS variables + the §3.2 type-scale classes); components compose those and never hard-code hex values, raw font sizes, or Tailwind palette colors. Guarded by `src/meta/design-conformance.test.ts` (tokens ⇄ this doc ⇄ component usage) and the visual suite (`npm run test:visual`).
 
 ---
 
 ## 6. Not yet designed
 
 - **Rendered-view layout detail** — how sections / trigger-logic render as friendly cards/lists (the actual SMB-facing document design). Highest-value next design pass.
-- **Diagram theming** (Mermaid → React Flow) — palette from §4 roles; specify when Visualise is built.
+- **Theme switch surface** — dark tokens ship but nothing user-facing sets `data-theme`; needs a home (account menu, not the chrome bar) once account UI exists.
+- **Icon system** — the rail uses unicode glyphs as placeholders; pick a real icon set (stroke-consistent, 18–20px grid) before the surface grows further.
+- **Interaction drawer voices** — user turns, agent turns, and system notices currently share one text treatment; needs a quiet visual split that stays a control surface, not a chat app — it matters more now that the drawer is the compact arrangement's main window.
+- **Interactive diagram canvas** (React Flow) — Visualise renders Mermaid client-side, themed from §4 roles via `themeVariables` (surface-high nodes, outline lines, primary borders; source block as loading/error fallback); the point-and-annotate canvas remains undesigned.
 - **Floating voice control** styling (ARCH §9).
-- **Logged-out / landing** visual treatment — the SMB owner's *true* first impression.
-- **Final mono pick** — JetBrains Mono assumed; open on license/character grounds.
+- **Logged-out / landing** visual treatment — the SMB owner's *true* first impression, including the public skill profile pages' relationship to it.

@@ -31,3 +31,11 @@ jobs:
       - name: Dead code (knip)
         run: npx knip
         continue-on-error: true
+      # Visual regression (vitest browser mode, DESIGN.md §5.3). Advisory until
+      # the committed baselines are confirmed stable on the Actions image, then
+      # drop `continue-on-error` to make it blocking.
+      - name: Install Chromium for visual tests
+        run: npx playwright install chromium --with-deps
+      - name: Visual tests (vitest browser mode)
+        run: npm run test:visual
+        continue-on-error: true

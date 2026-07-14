@@ -35,3 +35,6 @@ yarn-error.log*
 .vscode/*
 !.vscode/extensions.json
 .idea
+
+# vitest browser-mode run artifacts (visual suite)
+.vitest-attachments/

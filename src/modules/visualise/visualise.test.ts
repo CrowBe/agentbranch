@@ -49,6 +49,25 @@ describe("visualise capability", () => {
     expect(ir.diagram).toBe("flowchart");
     expect(ir.nodes.map((node) => node.label)).toContain("Fetch mail");
   });
+
+  it("never emits Mermaid-reserved identifiers as node ids", async () => {
+    // `end` is Mermaid syntax (closes a subgraph / composite state); an IR
+    // node with that id must serialize suffixed or the whole diagram fails to
+    // parse — in the flowchart fallback and the model-emitted state diagram.
+    const flowchart = unwrap(await runCapability(visualiseCapability, "mermaid", fixtureSkill()));
+    expect(flowchart.mermaid).toContain("end_([Done])");
+    expect(flowchart.mermaid).toContain("--> end_");
+    expect(flowchart.mermaid).not.toMatch(/^\s*end\(/m);
+
+    const state = unwrap(
+      await runCapability(visualiseCapability, "mermaid", fixtureSkill(), {
+        gateway: fakeGateway(),
+        tag: { kind: "account", userId: UserId("u1"), capability: "visualise" },
+      }),
+    );
+    expect(state.mermaid).toContain("end_: Done");
+    expect(state.mermaid).not.toMatch(/^\s*end:/m);
+  });
 });
 
 function fakeGateway(): ModelGateway {

@@ -361,8 +361,10 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
 - `app/layout.tsx` — next/font + conditional `ClerkProvider`; `globals.css`
   holds the DESIGN tokens as CSS variables; `proxy.ts` is Clerk/passthrough.
 - `components/` — `app-shell`, `top-bar`, `side-rail`, `hero-panel`,
-  `view-toggle`, `tool-chips`, `interaction-panel`, `model-console` (the
-  provider/model + auth overlay, opened from the rail), `ui/{chip,button,pill}`,
+  `view-toggle`, `tool-chips`, `interaction-panel`, `mermaid-diagram` (client
+  Mermaid render of the visualise capability's source, token-themed, source
+  block as fallback), `model-console` (the provider/model + auth overlay,
+  opened from the rail), `ui/{chip,button,pill,segmented}`,
   and `workspace/` — the **client workspace module**
   ([#159](https://github.com/CrowBe/agentbranch/issues/159)): a framework-free
   store owning the HTTP protocol and the request choreography behind a small
@@ -454,6 +456,8 @@ Almost every change is one of these. If a task fits neither, surface it.
 npm run dev        # run the app           npm run typecheck   # tsc --noEmit
 npm run build      # production build      npm run lint        # eslint
 npm test           # vitest (run once)     npm run test:watch
+npm run test:visual # browser-mode screenshot suite (baselines in __screenshots__;
+                    # refresh with test:visual:update)  — DESIGN.md §5.3
 npm run db:generate / db:push / db:migrate # Prisma (needs DATABASE_URL)
 ```
 
