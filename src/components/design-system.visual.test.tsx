@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { page } from "vitest/browser";
 import { render } from "vitest-browser-react";
 import { heroCapability } from "@/modules/hero";
@@ -7,9 +7,11 @@ import { createLintSummary } from "@/modules/lint";
 import { makeSkill, parseSkillMd } from "@/modules/skill";
 import { runCapability } from "@/modules/skill-analysis";
 import { SkillId, UserId, unwrap } from "@/shared";
+import { AppShell } from "./app-shell";
 import { DraftControls } from "./draft-controls";
 import { HeroPanel } from "./hero-panel";
 import { InteractionPanel } from "./interaction-panel";
+import { MermaidDiagram } from "./mermaid-diagram";
 import { ModelConsole } from "./model-console";
 import { SideRail } from "./side-rail";
 import { ToolChips } from "./tool-chips";
@@ -240,6 +242,60 @@ describe("shell chrome", () => {
       </Frame>,
     );
     await screenshotFrame("interaction-panel-light");
+  });
+});
+
+describe("compact shell (mobile-first arrangement)", () => {
+  // Restore the suite viewport even when an assertion throws (e.g. first-run
+  // baseline creation) so the phone viewport never leaks into later tests.
+  afterEach(async () => {
+    await page.viewport(1024, 768);
+  });
+
+  async function renderCompactShell() {
+    await page.viewport(390, 844);
+    const docs = await heroProps();
+    render(
+      <div data-testid="frame" className="bg-background" style={{ width: 390, height: 844 }}>
+        <AppShell
+          rendered={docs.rendered}
+          source={docs.source}
+          initialSkill={source}
+          initialLintSummary={createLintSummary(source)}
+        />
+      </div>,
+    );
+  }
+
+  test("chat tab is the main window", async () => {
+    await renderCompactShell();
+    await screenshotFrame("compact-chat");
+  });
+
+  test("skill tab shows the document", async () => {
+    await renderCompactShell();
+    await page.getByRole("button", { name: "Skill", exact: true }).click();
+    await screenshotFrame("compact-skill");
+  });
+});
+
+describe("mermaid diagram", () => {
+  test("renders the visualise source as a themed diagram", async () => {
+    render(
+      <Frame>
+        <MermaidDiagram
+          source={
+            "flowchart TD\n  start([Triggered])\n  n0[Goal]\n  n1[Workflow]\n  n2[/Never auto-send/]\n  end_([Done])\n  start --> n0\n  n0 --> n1\n  n1 --> n2\n  n2 --> end_"
+          }
+        />
+      </Frame>,
+    );
+    await expect
+      .poll(() => document.querySelector("figure[aria-label='Skill diagram'] svg") !== null, {
+        timeout: 20000,
+      })
+      .toBe(true);
+    await screenshotFrame("mermaid-diagram-light");
   });
 });
 

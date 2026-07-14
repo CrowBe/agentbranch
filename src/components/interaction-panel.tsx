@@ -13,6 +13,7 @@ export function InteractionPanel({
   entries,
   busy = false,
   mode = "build",
+  className = "flex",
   onSend,
   onImport,
   onEquipment,
@@ -21,6 +22,10 @@ export function InteractionPanel({
   entries: readonly InteractionEntry[];
   busy?: boolean;
   mode?: InteractionMode;
+  /** Display classes from the shell (the mobile Chat | Skill tabs decide
+   * visibility); must include the panel's display, e.g. "flex" or
+   * "hidden lg:flex". */
+  className?: string;
   onSend: (message: string) => void;
   onImport?: (raw: string) => void;
   onEquipment?: (raw: string) => void;
@@ -50,8 +55,7 @@ export function InteractionPanel({
 
   return (
     <aside
-      className="flex shrink-0 flex-col border-l border-outline-variant bg-surface"
-      style={{ width: "var(--spacing-panel)" }}
+      className={`min-w-0 flex-1 flex-col bg-surface lg:w-[var(--spacing-panel)] lg:flex-none lg:border-l lg:border-outline-variant ${className}`}
     >
       <div className="border-b border-outline-variant px-4 py-3">
         <h2 className="text-label text-on-surface-variant">{copy.title}</h2>

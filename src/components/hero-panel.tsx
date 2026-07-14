@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { RenderedDoc, SourceDoc, HeroView } from "@/modules/hero";
 import type { SkillVersionLintSummary } from "@/modules/skill";
 import { Button } from "./ui/button";
+import { MermaidDiagram } from "./mermaid-diagram";
 import { Segmented } from "./ui/segmented";
 import { ViewToggle } from "./view-toggle";
 import { ToolChips } from "./tool-chips";
@@ -59,14 +60,14 @@ export function HeroPanel({
   feedbackBusy: boolean;
 }) {
   return (
-    <section className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-4 px-6 py-8">
+    <section className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-3 px-4 py-4 lg:gap-4 lg:px-6 lg:py-8">
       {banner}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <ToolChips active={activeTool} busy={toolBusy} onSelect={onToolSelect} />
         <ViewToggle value={view} onChange={onViewChange} />
       </div>
 
-      <article className="flex-1 overflow-auto rounded-[var(--radius-lg)] border border-outline-variant bg-surface p-6">
+      <article className="flex-1 overflow-auto rounded-[var(--radius-lg)] border border-outline-variant bg-surface p-4 lg:p-6">
         {capability ? (
           <CapabilityView
             panel={capability}
@@ -162,9 +163,7 @@ function CapabilityView({
     return (
       <div className="flex flex-col gap-3">
         <h1 className="text-headline-md">Visualise</h1>
-        <pre className="text-doc-source overflow-auto whitespace-pre-wrap rounded-[var(--radius-sm)] border border-outline-variant bg-surface-high p-4">
-          <code>{panel.mermaid}</code>
-        </pre>
+        <MermaidDiagram source={panel.mermaid} />
       </div>
     );
   }

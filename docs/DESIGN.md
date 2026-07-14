@@ -90,10 +90,13 @@ Warmth lever: lean to the **generous** end of this scale. Whitespace is the chea
 | Token | Value | Note |
 |---|---|---|
 | `topbar-height` | 48px | Thin chrome bar (no nav links) |
-| `rail-width` | 56px | Collapsed left nav (default) |
-| `menu-width` | 240px | Expanded left slideout |
-| `panel-width` | 300px | Slim right interaction panel |
+| `rail-width` | 56px | Left nav icon bar (every viewport) |
+| `menu-width` | 240px | Expanded left slideout (overlay) |
+| `panel-width` | 300px | Slim right interaction panel (`lg`+ only) |
+| `breakpoint-shell` | `lg` (1024px) | Compact ↔ full arrangement switch (ARCHITECTURE §7) |
 | — hero — | fluid | Single centred document; **not** a card/bento grid |
+
+Styling is **mobile-first**: base classes target the compact arrangement (Chat main window + Chat \| Skill tabs, 16px paddings); `lg:` variants layer the full preview-primary arrangement on top (hero + 300px panel, 24px+ paddings). Compact swaps *arrangement*, never *theme* — same tokens, same components.
 
 ### 3.5 Radius
 
@@ -196,7 +199,8 @@ Behaviour identical across themes; colors resolve from §4 roles. Copy is **sent
 - **Insights / Breakdown surfaces** — every evaluation and lint result renders Insights-first: `label` eyebrow (the capability name), `headline-md` verdict, `doc-rendered` summary, findings/watch as lists. Breakdown sits behind the segmented tabs: per-case cards (`radius-sm`, 1px border) with pass/fail as `doc-rendered-h`, metadata as muted `label`; test-run transcripts are `doc-source` blocks on `surface-high`.
 - **Overlays** (model console) — `scrim`/40 backdrop, panel = `surface` + 1px `outline-variant` + `radius-xl` + `elevation-overlay` (§3.6). Never Tailwind `shadow-*` utilities.
 - **Trust & safety marks** (publish surfaces) — the **safety badge** renders as a success pill; **"potentially unsafe — not validated"** renders as a warn pill, copy kept blunt (ARCHITECTURE §9.1). Trust tier, category, and `#tags` are neutral pills. Safety verdicts on the hero: passed / needs review / blocked as headline + per-class score cards in the breakdown.
-- **Nav rail** — active item = `primary`/10 fill + `primary` text, `radius-md`; inactive = muted with `surface-high` hover. Labels appear only when expanded (`menu-width`); collapsed buttons keep `aria-label`s.
+- **Nav rail** — active item = `primary`/10 fill + `primary` text, `radius-md`; inactive = muted with `surface-high` hover. The icon bar stays in flow; the expanded slideout is an **overlay** (`menu-width`, `elevation-overlay`, scrim on compact viewports) so the main window keeps its width. Labels appear only when expanded; collapsed buttons keep `aria-label`s.
+- **Mobile tabs** — the compact arrangement's Chat | Skill switch is the standard segmented control (§5.1), centred in a slim bar under the top bar; it disappears at `lg`.
 - **Plan chip** (top bar) — the free-tier status as a **neutral** pill; it flips to warn only when usage is actually exhausted ("out of free usage today"). Plan identity is metadata, not a success state.
 - **Status line** — the shell's one `role="status"` live region, below the hero: `label` type in `on-surface-variant`. Every action lands a sentence there; errors repeat as an error-toned entry in the interaction drawer.
 - **Streaming indicator** — `secondary` (teal) dot + label while writing; settles to `on-surface-variant` idle.
@@ -210,10 +214,9 @@ The token layer lives in `src/app/globals.css` (CSS variables + the §3.2 type-s
 ## 6. Not yet designed
 
 - **Rendered-view layout detail** — how sections / trigger-logic render as friendly cards/lists (the actual SMB-facing document design). Highest-value next design pass.
-- **Responsive / mobile shell** — the shell is desktop-only today (fixed rail + 300px panel; `margin-mobile` is unused). Needs a collapse order: panel → drawer, rail → sheet, hero full-bleed.
 - **Theme switch surface** — dark tokens ship but nothing user-facing sets `data-theme`; needs a home (account menu, not the chrome bar) once account UI exists.
 - **Icon system** — the rail uses unicode glyphs as placeholders; pick a real icon set (stroke-consistent, 18–20px grid) before the surface grows further.
-- **Interaction drawer voices** — user turns, agent turns, and system notices currently share one text treatment; needs a quiet visual split that stays a control surface, not a chat app.
-- **Diagram theming** (Mermaid → React Flow) — palette from §4 roles; Visualise currently shows the Mermaid source as a `doc-source` block, awaiting a real diagram render.
+- **Interaction drawer voices** — user turns, agent turns, and system notices currently share one text treatment; needs a quiet visual split that stays a control surface, not a chat app — it matters more now that the drawer is the compact arrangement's main window.
+- **Interactive diagram canvas** (React Flow) — Visualise renders Mermaid client-side, themed from §4 roles via `themeVariables` (surface-high nodes, outline lines, primary borders; source block as loading/error fallback); the point-and-annotate canvas remains undesigned.
 - **Floating voice control** styling (ARCH §9).
 - **Logged-out / landing** visual treatment — the SMB owner's *true* first impression, including the public skill profile pages' relationship to it.

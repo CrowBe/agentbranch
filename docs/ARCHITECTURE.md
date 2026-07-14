@@ -177,10 +177,15 @@ Export shapes are **rendered from** the skill record — the schema is export-ag
 
 Presentation-layer architecture — same kind of decision as the rest of this doc (it determines components, shell, routing), so it lives here.
 
+**The shell is styled mobile-first, with two arrangements over the same mounted surfaces:**
+
+- **Compact (below `lg`, 1024px)** — the interaction drawer is the **main window (Chat)**, with a **Chat | Skill** tab pair under the top bar to swap to the document; the hero (and its Rendered/Source toggle, chips, and capability panels) lives behind the Skill tab. Both stay mounted — tabs only flip visibility, so no state is lost switching. Chat-first here is the same judgement preview-primary makes on desktop, applied to one column: on a phone you're *talking*, and you peek at the artifact.
+- **Full (`lg` and up)** — preview-primary: hero centre stage, slim right interaction panel, no tabs.
+
 **The shell:**
 
 - **Thin branded top bar** — hamburger + mark + free-tier status chip. No nav links (chrome only).
-- **Left slideout menu** — all primary nav (Build / My skills / History / Templates) + account in the footer. Defaults **collapsed** to a 56px icon rail for max hero width; expands to a 240px labelled slideout on demand. First-run needs a one-time hint so the expandability is discoverable.
+- **Left slideout menu** — all primary nav (Build / My skills / History / Templates) + account in the footer. A 56px icon rail at every viewport; expansion is a 240px labelled slideout **overlaying** the content (the main window never loses width) — opened by hover where a fine pointer exists, by the hamburger everywhere, and floating over a scrim on compact viewports (closes on scrim tap or after a pick). First-run needs a one-time hint so the expandability is discoverable.
 - **Hero** — centred streaming skill document with **tool chips** on its header. Chip → tool mapping:
 
   | Chip | Backed by | Glossary term |
@@ -191,7 +196,7 @@ Presentation-layer architecture — same kind of decision as the rest of this do
   | **Export** | export renderer | standard skill folder `.zip` |
 
   **Two views via a header toggle:** *Rendered* (default, friendly sans-serif document) and *Source* (raw monospace `SKILL.md`). Streaming reads as *a document assembling itself* in Rendered, *code being typed* in Source. Default Rendered for the SMB first impression; Source for power users.
-- **Right** — slim 300px interaction panel (typed drawer now; collapses to a floating voice-forward control when realtime voice lands — see [§9](#9-deferred-features--their-seams)).
+- **Right** — slim 300px interaction panel on `lg`+ (the compact arrangement's Chat main window; typed drawer now, collapses to a floating voice-forward control when realtime voice lands — see [§9](#9-deferred-features--their-seams)).
 
 **Why preview-primary:** the skill artifact is the product; the conversation merely nudges it. A fat chat transcript is the wrong frame — and actively wrong once voice is the input. The hero is the document; chat is a thin control surface beside it.
 
