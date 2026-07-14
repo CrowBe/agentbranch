@@ -127,7 +127,7 @@ function copyForMode(mode: InteractionMode): {
       hint: 'Say "just draft it" if you don\'t want any questions before the first draft.',
       placeholder: "e.g. A schema for the invoice summaries my billing skill returns",
       button: "Send",
-      busy: "Working...",
+      busy: "Working…",
     };
   }
   if (mode === "import") {
@@ -136,7 +136,7 @@ function copyForMode(mode: InteractionMode): {
       empty: "Paste a SKILL.md document or a public GitHub URL to add it to your workspace.",
       placeholder: "https://github.com/acme/skills/tree/main/inbox\n\n---\nname: inbox-triage\ndescription: Sort unread email.\n---",
       button: "Import skill",
-      busy: "Importing...",
+      busy: "Importing…",
     };
   }
   if (mode === "skills") {
@@ -164,7 +164,7 @@ function copyForMode(mode: InteractionMode): {
       hint: "Reviewed skills show here. Direct Skill library links can still open published skills.",
       placeholder: "Search by name, owner, or slug",
       button: "Search",
-      busy: "Searching...",
+      busy: "Searching…",
     };
   }
   return {
@@ -174,6 +174,6 @@ function copyForMode(mode: InteractionMode): {
     hint: 'Say "just draft it" if you don\'t want any questions or advice before the first draft.',
     placeholder: "e.g. Sort my inbox into respond, archive, escalate",
     button: "Build skill",
-    busy: "Building...",
+    busy: "Building…",
   };
 }

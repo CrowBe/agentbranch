@@ -77,7 +77,7 @@ export function SideRail({
           aria-label={expanded ? undefined : "Account"}
           className="flex w-full items-center gap-3 rounded-[var(--radius-md)] px-2.5 py-2 text-on-surface-variant hover:bg-surface-high"
         >
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-high text-[10px]">
+          <span className="text-label flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-high">
             D
           </span>
           {expanded && <span className="text-label">Account</span>}

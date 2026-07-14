@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { RenderedDoc, SourceDoc, HeroView } from "@/modules/hero";
 import type { SkillVersionLintSummary } from "@/modules/skill";
 import { Button } from "./ui/button";
+import { Segmented } from "./ui/segmented";
 import { ViewToggle } from "./view-toggle";
 import { ToolChips } from "./tool-chips";
 import type {
@@ -58,7 +59,7 @@ export function HeroPanel({
   feedbackBusy: boolean;
 }) {
   return (
-    <section className="mx-auto flex h-full w-full max-w-3xl flex-col gap-4 px-6 py-8">
+    <section className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-4 px-6 py-8">
       {banner}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <ToolChips active={activeTool} busy={toolBusy} onSelect={onToolSelect} />
@@ -381,21 +382,15 @@ function EvaluationSurfaceTabs({
   onChange: (surface: "insights" | "breakdown") => void;
 }) {
   return (
-    <div className="inline-flex w-fit rounded-[var(--radius-sm)] border border-outline-variant p-1">
-      {(["insights", "breakdown"] as const).map((surface) => (
-        <button
-          key={surface}
-          type="button"
-          disabled={busy || value === surface}
-          onClick={() => onChange(surface)}
-          className={`text-label rounded-[var(--radius-sm)] px-3 py-1.5 ${
-            value === surface ? "bg-primary/15 text-primary" : "text-on-surface-variant"
-          } disabled:cursor-not-allowed`}
-        >
-          {surface === "insights" ? "Insights" : "Breakdown"}
-        </button>
-      ))}
-    </div>
+    <Segmented
+      options={[
+        { value: "insights", label: "Insights" },
+        { value: "breakdown", label: "Breakdown" },
+      ]}
+      value={value}
+      disabled={busy}
+      onChange={onChange}
+    />
   );
 }
 

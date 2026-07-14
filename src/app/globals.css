@@ -24,6 +24,7 @@
   --on-tertiary: #ffffff;
   --error: #ba1a1a;
   --on-error: #ffffff;
+  --scrim: #0b1c30;
   --overlay-shadow: 0 8px 24px rgba(11, 28, 48, 0.12);
 }
 
@@ -44,6 +45,7 @@
   --on-tertiary: #0f172a;
   --error: #ef4444;
   --on-error: #ffffff;
+  --scrim: #000000;
   --overlay-shadow: 0 10px 32px rgba(0, 0, 0, 0.4);
 }
 
@@ -64,6 +66,7 @@
   --color-on-tertiary: var(--on-tertiary);
   --color-error: var(--error);
   --color-on-error: var(--on-error);
+  --color-scrim: var(--scrim);
 
   /* §3.1 Type families (wired to next/font CSS variables in layout.tsx) */
   --font-display: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
@@ -95,7 +98,15 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* §3.2 Type scale — the handful the shell uses. */
+/* Focus is a 2px primary ring for every interactive element — visible, no glow
+   blur (§3.6 flatness). Inputs restyle it locally with the §5 focus border. */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* §3.2 Type scale — the full scale; components compose these, never raw
+   font-size utilities. */
 .text-display-lg {
   font-family: var(--font-display);
   font-weight: 700;
@@ -103,11 +114,43 @@ body {
   line-height: 56px;
   letter-spacing: -0.02em;
 }
+.text-headline-xl {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 40px;
+  line-height: 48px;
+  letter-spacing: -0.02em;
+}
+.text-headline-lg {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 32px;
+  line-height: 40px;
+  letter-spacing: -0.01em;
+}
 .text-headline-md {
   font-family: var(--font-display);
   font-weight: 600;
   font-size: 24px;
   line-height: 32px;
+}
+.text-body-lg {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 18px;
+  line-height: 28px;
+}
+.text-body-md {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 24px;
+}
+.text-body-sm {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 20px;
 }
 .text-doc-rendered-h {
   font-family: var(--font-display);
@@ -128,12 +171,26 @@ body {
   font-size: 14px;
   line-height: 22px;
 }
+.text-doc-source-fm {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 20px;
+}
 .text-label {
   font-family: var(--font-body);
   font-weight: 600;
   font-size: 12px;
   line-height: 16px;
   letter-spacing: 0.02em;
+}
+.text-label-caps {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 16px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 /* §3.6 Elevation — flat by default; shadow is overlay-only. */

@@ -48,7 +48,7 @@ export function AppShell({
           onHistory={() => void actions.showHistory()}
           onTemplates={() => void actions.showTemplates()}
         />
-        <main className="min-w-0 flex-1 overflow-hidden">
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <HeroPanel
             rendered={snapshot.heroDocs.rendered}
             source={snapshot.heroDocs.source}

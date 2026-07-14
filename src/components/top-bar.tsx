@@ -21,7 +21,7 @@ export function TopBar({ onToggleMenu }: { onToggleMenu: () => void }) {
         </button>
         <span className="text-headline-md select-none">agent.branch</span>
       </div>
-      <Pill tone="success">Free plan</Pill>
+      <Pill tone="neutral">Free plan</Pill>
     </header>
   );
 }

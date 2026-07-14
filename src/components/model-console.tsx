@@ -59,12 +59,12 @@ export function ModelConsole({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <div
-        className="flex max-h-[85dvh] w-full max-w-2xl flex-col overflow-hidden rounded-[var(--radius-xl)] border border-outline-variant bg-surface shadow-lg"
+        className="elevation-overlay flex max-h-[85dvh] w-full max-w-2xl flex-col overflow-hidden rounded-[var(--radius-xl)] border border-outline-variant bg-surface"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-outline-variant px-6 py-4">
           <div>
-            <h2 className="text-title font-display">Models</h2>
+            <h2 className="text-headline-md">Models</h2>
             <p className="text-label text-on-surface-variant">
               Pick the provider and model for this session, or connect your own key.
             </p>
@@ -80,7 +80,9 @@ export function ModelConsole({ onClose }: { onClose: () => void }) {
         </header>
 
         <div className="flex flex-col gap-3 overflow-y-auto px-6 py-4">
-          {snapshot ? (
+          {snapshot === null ? null : snapshot.providers.length === 0 ? (
+            <p className="text-body-md text-on-surface-variant">No providers available.</p>
+          ) : (
             snapshot.providers.map((provider) => (
               <ProviderCard
                 key={provider.id}
@@ -112,8 +114,6 @@ export function ModelConsole({ onClose }: { onClose: () => void }) {
                 }
               />
             ))
-          ) : (
-            <p className="text-body text-on-surface-variant">No providers available.</p>
           )}
         </div>
 
@@ -170,7 +170,7 @@ function ProviderCard({
             onChange={() => onSelect()}
             className="accent-primary"
           />
-          <span className="text-body font-medium">{provider.label}</span>
+          <span className="text-body-md font-medium">{provider.label}</span>
         </label>
         <div className="flex items-center gap-1.5">
           {provider.ready ? <Pill tone="success">ready</Pill> : <Pill tone="neutral">no key</Pill>}
