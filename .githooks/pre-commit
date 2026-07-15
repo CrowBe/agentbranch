@@ -1,18 +1,32 @@
 #!/bin/sh
-# Non-blocking doc-drift nudge. If a commit touches src/ but no docs/, remind the
-# author/agent to re-verify the docs haven't drifted. The deterministic half
-# (public surface + STUB claims) is enforced in CI via `npm run check:docs`; this
-# hook covers the semantic half a static check can't see. Always exits 0 — it
-# never blocks a commit.
+# Non-blocking drift nudges. Deterministic file-set checks only — each block
+# prints a reminder when a commit's shape suggests a companion artifact may
+# have drifted. Always exits 0 — never blocks a commit.
 staged=$(git diff --cached --name-only)
 
-echo "$staged" | grep -qE '^src/' || exit 0
-echo "$staged" | grep -qE '^docs/' && exit 0
-
-cat <<'MSG'
+# Doc-drift nudge: src/ changed, docs/ untouched. The deterministic half
+# (public surface + STUB claims) is enforced in CI via `npm run check:docs`;
+# this covers the semantic half a static check can't see.
+if echo "$staged" | grep -qE '^src/' && ! echo "$staged" | grep -qE '^docs/'; then
+  cat <<'MSG'
 ⓘ doc-drift nudge: this commit changes src/ but no docs/.
   If you changed a module's public surface, its status, or a stubbed behaviour,
   re-check docs/MODULE_DESIGN.md and docs/ARCHITECTURE.md so they read as
   current state before pushing. (Deterministic checks: npm run check:docs)
 MSG
+fi
+
+# Sitemap-drift nudge: UI surface changed, E2E sitemap spec untouched. The
+# spec asserts exact selectors, routes, and status copy, so any change under
+# src/app or src/components can silently invalidate it.
+if echo "$staged" | grep -qE '^src/(app|components)/' && \
+   ! echo "$staged" | grep -qE '^\.claude/skills/e2e-sitemap/'; then
+  cat <<'MSG'
+ⓘ sitemap-drift nudge: this commit changes src/app or src/components but not
+  .claude/skills/e2e-sitemap/. If it touches routes, nav, chips, dialogs, or
+  status copy, run the sitemap-sync skill (/sitemap-sync) to re-ground the
+  E2E spec and prove it with the walk runner.
+MSG
+fi
+
 exit 0
