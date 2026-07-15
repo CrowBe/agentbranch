@@ -1,0 +1,38 @@
+/* ---------------------------------------------------------------------------
+   Terminal — the developer custom theme set (DESIGN.md §4.5): a green-phosphor
+   CRT. Near-black green-cast surfaces, phosphor text, the brightest green
+   reserved for actions; a full-look set, so headings swap to the mono face
+   and every corner squares off. Body text stays Inter — the terminal reads in
+   the chrome and headings, not as a wall of mono prose. Same semantic roles,
+   same meanings: primary = actions, secondary = success, tertiary =
+   warnings/constraints.
+   --------------------------------------------------------------------------- */
+
+[data-theme="terminal"] {
+  color-scheme: dark;
+
+  --background: #050807;
+  --surface: #0b110d;
+  --surface-high: #121b14;
+  --on-surface: #a8f0b8;
+  --on-surface-variant: #5f9973;
+  --outline: #3c7a53;
+  --outline-variant: #1c2f22;
+  --primary: #35e06d;
+  --on-primary: #04180b;
+  --secondary: #2ec7ba;
+  --on-secondary: #041312;
+  --tertiary: #ffb224;
+  --on-tertiary: #1a1102;
+  --error: #ff6259;
+  --on-error: #1c0605;
+  --scrim: #000000;
+  --overlay-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
+
+  /* Full-look overrides (DESIGN §3): mono headings, square corners. */
+  --type-display: var(--font-jetbrains), ui-monospace, monospace;
+  --shape-sm: 0px;
+  --shape-md: 0px;
+  --shape-lg: 0px;
+  --shape-xl: 0px;
+}

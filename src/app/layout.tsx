@@ -1,19 +1,23 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Hanken_Grotesk, Inter, JetBrains_Mono, Playfair_Display } from "next/font/google";
+import { Fraunces, Hanken_Grotesk, Inter, JetBrains_Mono, Playfair_Display } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { THEME_COOKIE, THEME_SETS } from "./themes/registry";
 import "./globals.css";
 // Custom theme sets are their own stylesheets, loaded after the token layer
 // so their [data-theme] blocks win the equal-specificity contest with :root.
 import "./themes/tuxedo.css";
+import "./themes/cardigan.css";
+import "./themes/terminal.css";
 
 // §3.1 Type families. JetBrains Mono is loaded in both themes (Source view);
-// Playfair Display is the Tuxedo theme set's display face (DESIGN §4.3).
+// Playfair Display and Fraunces are custom-set display faces (DESIGN §4.3–4.4;
+// the Terminal set reuses JetBrains Mono for display).
 const hanken = Hanken_Grotesk({ subsets: ["latin"], variable: "--font-hanken", weight: ["600", "700"] });
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", weight: ["400", "500", "600"] });
 const jetbrains = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains", weight: ["400", "500"] });
 const playfair = Playfair_Display({ subsets: ["latin"], variable: "--font-playfair", weight: ["600", "700"] });
+const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces", weight: ["600", "700"] });
 
 export const metadata: Metadata = {
   title: "agent.branch",
@@ -41,7 +45,7 @@ const themeInit = `(function () {
 })();`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-  const fontVars = `${hanken.variable} ${inter.variable} ${jetbrains.variable} ${playfair.variable}`;
+  const fontVars = `${hanken.variable} ${inter.variable} ${jetbrains.variable} ${playfair.variable} ${fraunces.variable}`;
   const tree = (
     // suppressHydrationWarning: the pre-paint script legitimately rewrites
     // data-theme before React hydrates.

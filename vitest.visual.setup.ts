@@ -15,8 +15,12 @@ import "@fontsource/jetbrains-mono/400.css";
 import "@fontsource/jetbrains-mono/500.css";
 import "@fontsource/playfair-display/600.css";
 import "@fontsource/playfair-display/700.css";
+import "@fontsource/fraunces/600.css";
+import "@fontsource/fraunces/700.css";
 import "@/app/globals.css";
 import "@/app/themes/tuxedo.css";
+import "@/app/themes/cardigan.css";
+import "@/app/themes/terminal.css";
 import { beforeEach } from "vitest";
 
 const style = document.createElement("style");
@@ -26,6 +30,7 @@ style.textContent = `
     --font-inter: "Inter";
     --font-jetbrains: "JetBrains Mono";
     --font-playfair: "Playfair Display";
+    --font-fraunces: "Fraunces";
   }
   *, *::before, *::after {
     transition: none !important;

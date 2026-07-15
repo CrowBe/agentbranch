@@ -25,6 +25,8 @@ export const THEME_SETS: readonly ThemeSet[] = [
   { id: "light", label: "Light", scheme: "light", kind: "system" },
   { id: "dark", label: "Dark", scheme: "dark", kind: "system" },
   { id: "tuxedo", label: "Tuxedo", scheme: "dark", kind: "custom" },
+  { id: "cardigan", label: "Cardigan", scheme: "light", kind: "custom" },
+  { id: "terminal", label: "Terminal", scheme: "dark", kind: "custom" },
 ];
 
 /** Browser-level persistence: the selected theme-set id, or absent = system. */
