@@ -224,7 +224,7 @@ describe("shell chrome", () => {
   test("side rail collapsed and expanded — light", async () => {
     render(
       <Frame width={480}>
-        <div className="flex h-[420px] items-stretch gap-6">
+        <div className="flex h-[560px] items-stretch gap-6">
           <SideRail expanded={false} active="build" />
           <SideRail expanded active="templates" />
         </div>
@@ -276,6 +276,26 @@ describe("compact shell (mobile-first arrangement)", () => {
     await renderCompactShell();
     await page.getByRole("button", { name: "Skill", exact: true }).click();
     await screenshotFrame("compact-skill");
+  });
+});
+
+describe("theme sets", () => {
+  // Per DESIGN §5.3: each custom theme set carries exactly one baseline —
+  // the populated main screen in the desktop arrangement.
+  test("tuxedo — populated main screen, desktop", async () => {
+    document.documentElement.dataset.theme = "tuxedo";
+    const docs = await heroProps();
+    render(
+      <div data-testid="frame" className="bg-background" style={{ width: 1024, height: 768 }}>
+        <AppShell
+          rendered={docs.rendered}
+          source={docs.source}
+          initialSkill={source}
+          initialLintSummary={createLintSummary(source)}
+        />
+      </div>,
+    );
+    await screenshotFrame("main-tuxedo");
   });
 });
 

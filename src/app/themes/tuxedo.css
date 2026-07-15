@@ -1,0 +1,36 @@
+/* ---------------------------------------------------------------------------
+   Tuxedo — the first custom theme set (DESIGN.md §4.3): black-tie evening
+   wear. Midnight surfaces, warm ivory text, champagne-gold actions; a
+   full-look set, so the display face swaps to the Playfair Display serif and
+   corners sharpen to a tailored crease. Same semantic roles, same meanings:
+   primary = actions, secondary = success, tertiary = warnings/constraints.
+   --------------------------------------------------------------------------- */
+
+[data-theme="tuxedo"] {
+  color-scheme: dark;
+
+  --background: #0b0d12;
+  --surface: #12151d;
+  --surface-high: #1a1e29;
+  --on-surface: #ece7da;
+  --on-surface-variant: #a39c8a;
+  --outline: #6b6350;
+  --outline-variant: #2a2e3a;
+  --primary: #c9a227;
+  --on-primary: #16130a;
+  --secondary: #46a184;
+  --on-secondary: #0b0d12;
+  --tertiary: #e0703c;
+  --on-tertiary: #0b0d12;
+  --error: #e14b57;
+  --on-error: #ffffff;
+  --scrim: #000000;
+  --overlay-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+
+  /* Full-look overrides (DESIGN §3): title-card serif, crisper corners. */
+  --type-display: var(--font-playfair), ui-serif, Georgia, serif;
+  --shape-sm: 2px;
+  --shape-md: 4px;
+  --shape-lg: 6px;
+  --shape-xl: 10px;
+}

@@ -2,12 +2,17 @@
 
 /* ---------------------------------------------------------------------------
    agent.branch design tokens — DESIGN.md.
-   Semantic role names are identical across themes; only the colour layer
-   swaps. Light is the default (the welcoming face); dark is a power-user
-   preference set via [data-theme="dark"].
+   Semantic role names are identical across every theme set; a theme block
+   swaps the colour layer and (custom sets only) the look tokens. Light is
+   the default (the welcoming face); dark is the system pair's power-user
+   side. Custom theme sets live in ./themes/ as their own stylesheets —
+   imported after this file in layout.tsx — and are registered in
+   ./themes/registry.ts.
    --------------------------------------------------------------------------- */
 
 :root {
+  color-scheme: light;
+
   /* §4.1 Light theme — DEFAULT */
   --background: #fbfbfd;
   --surface: #ffffff;
@@ -26,9 +31,21 @@
   --on-error: #ffffff;
   --scrim: #0b1c30;
   --overlay-shadow: 0 8px 24px rgba(11, 28, 48, 0.12);
+
+  /* §3 look tokens — the shared default look. The system pair never touches
+     these; a custom theme set may override them for a full-look swap. */
+  --type-display: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+  --type-body: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --type-mono: var(--font-jetbrains), ui-monospace, monospace;
+  --shape-sm: 0.25rem;
+  --shape-md: 0.5rem;
+  --shape-lg: 0.75rem;
+  --shape-xl: 1rem;
 }
 
 [data-theme="dark"] {
+  color-scheme: dark;
+
   /* §4.2 Dark theme — power-user option */
   --background: #0f172a;
   --surface: #1e293b;
@@ -68,10 +85,11 @@
   --color-on-error: var(--on-error);
   --color-scrim: var(--scrim);
 
-  /* §3.1 Type families (wired to next/font CSS variables in layout.tsx) */
-  --font-display: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
-  --font-body: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+  /* §3.1 Type families — resolved through the :root look tokens (wired to
+     next/font CSS variables in layout.tsx) so a theme set can swap a family. */
+  --font-display: var(--type-display);
+  --font-body: var(--type-body);
+  --font-mono: var(--type-mono);
 
   /* §3.4 Layout tokens (mapped to ARCHITECTURE §7) */
   --spacing-topbar: 48px;
@@ -79,11 +97,11 @@
   --spacing-menu: 240px;
   --spacing-panel: 300px;
 
-  /* §3.5 Radius */
-  --radius-sm: 0.25rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
+  /* §3.5 Radius — resolved through the :root look tokens */
+  --radius-sm: var(--shape-sm);
+  --radius-md: var(--shape-md);
+  --radius-lg: var(--shape-lg);
+  --radius-xl: var(--shape-xl);
 }
 
 html,
