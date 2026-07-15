@@ -77,4 +77,8 @@ await page.goto("http://localhost:3000/");
 `src/components/side-rail.tsx`, chips in `tool-chips.tsx`, status copy in
 `components/workspace/workspace.ts`, routes under `src/app/`. When a walk
 fails because copy or a route changed (not because of a bug), fix
-`sitemap.md` in the same change and say so in the report.
+`sitemap.md` in the same change and say so in the report. The
+**`sitemap-sync`** skill is the maintenance path: the pre-commit
+sitemap-drift nudge recommends it (non-blocking) whenever a commit touches
+`src/app/` or `src/components/` without touching this folder, and it carries
+the file → spec-section map for re-grounding.
