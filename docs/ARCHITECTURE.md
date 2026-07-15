@@ -185,7 +185,7 @@ Presentation-layer architecture — same kind of decision as the rest of this do
 **The shell:**
 
 - **Thin branded top bar** — hamburger + mark + free-tier status chip. No nav links (chrome only).
-- **Left slideout menu** — all primary nav (Build / My skills / History / Templates) + account in the footer. A 56px icon rail at every viewport; expansion is a 240px labelled slideout **overlaying** the content (the main window never loses width) — opened by hover where a fine pointer exists, by the hamburger everywhere, and floating over a scrim on compact viewports (closes on scrim tap or after a pick). First-run needs a one-time hint so the expandability is discoverable.
+- **Left slideout menu** — all primary nav (Build / My skills / History / Templates) + the theme picker and account in the footer. A 56px icon rail at every viewport; expansion is a 240px labelled slideout **overlaying** the content (the main window never loses width) — opened by hover where a fine pointer exists, by the hamburger everywhere, and floating over a scrim on compact viewports (closes on scrim tap or after a pick). First-run needs a one-time hint so the expandability is discoverable.
 - **Hero** — centred streaming skill document with **tool chips** on its header. Chip → tool mapping:
 
   | Chip | Backed by | Glossary term |
@@ -197,6 +197,8 @@ Presentation-layer architecture — same kind of decision as the rest of this do
 
   **Two views via a header toggle:** *Rendered* (default, friendly sans-serif document) and *Source* (raw monospace `SKILL.md`). Streaming reads as *a document assembling itself* in Rendered, *code being typed* in Source. Default Rendered for the SMB first impression; Source for power users.
 - **Right** — slim 300px interaction panel on `lg`+ (the compact arrangement's Chat main window; typed drawer now, collapses to a floating voice-forward control when realtime voice lands — see [§9](#9-deferred-features--their-seams)).
+
+**Theme selection & persistence:** the visual system ships the system theme pair plus selectable full-look **theme sets** (DESIGN §4). A choice persists **browser-level** in the `ab-theme` cookie, applied by a pre-paint inline script in the root layout — no flash of the wrong theme, and the layout stays static (no per-request cookie read). With no cookie the system pair follows `prefers-color-scheme`; there is no first-visit prompt (the default must welcome, not interrogate). Account-level preference sync is deferred until account UI exists.
 
 **Why preview-primary:** the skill artifact is the product; the conversation merely nudges it. A fat chat transcript is the wrong frame — and actively wrong once voice is the input. The hero is the document; chat is a thin control surface beside it.
 

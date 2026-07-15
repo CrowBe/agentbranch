@@ -1,14 +1,16 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { THEME_SETS } from "@/app/themes/registry";
 
 /**
  * Design-system conformance (DESIGN.md §5.3) — deterministic drift guards
- * between the three places the visual system lives:
+ * between the four places the visual system lives:
  *
- *   1. docs/DESIGN.md §4 (the palette contract)
- *   2. src/app/globals.css (the token layer)
- *   3. src/components + src/app TSX (the usage)
+ *   1. docs/DESIGN.md §4 (the palette contract, one table per theme)
+ *   2. src/app/themes/registry.ts (the theme-set registry)
+ *   3. src/app/globals.css + src/app/themes/*.css (the token layer)
+ *   4. src/components + src/app TSX (the usage)
  *
  * Catches the silent failure mode where a component names a token that does
  * not exist — Tailwind generates nothing for an unknown class, so the bug
@@ -16,8 +18,39 @@ import { describe, expect, it } from "vitest";
  */
 
 const ROOT = join(__dirname, "..", "..");
-const CSS = readFileSync(join(ROOT, "src", "app", "globals.css"), "utf8");
+const THEMES_DIR = join(ROOT, "src", "app", "themes");
+const CSS = [
+  readFileSync(join(ROOT, "src", "app", "globals.css"), "utf8"),
+  ...readdirSync(THEMES_DIR)
+    .filter((name) => name.endsWith(".css"))
+    .map((name) => readFileSync(join(THEMES_DIR, name), "utf8")),
+].join("\n");
 const DESIGN = readFileSync(join(ROOT, "docs", "DESIGN.md"), "utf8");
+
+/**
+ * Look tokens (DESIGN §3): the full-look layer a *custom* theme set may
+ * override. Everything else in a theme block must be a §4 semantic role.
+ * The system pair may restyle only the overlay shadow.
+ */
+const LOOK_TOKENS = new Set([
+  "type-display",
+  "type-body",
+  "type-mono",
+  "shape-sm",
+  "shape-md",
+  "shape-lg",
+  "shape-xl",
+  "overlay-shadow",
+]);
+
+function themeSelector(id: string): string {
+  return id === "light" ? ":root" : `[data-theme="${id}"]`;
+}
+
+/** The semantic color roles of a block — its tokens minus the look layer. */
+function colorRoles(tokens: Map<string, string>): Map<string, string> {
+  return new Map([...tokens].filter(([name]) => !LOOK_TOKENS.has(name)));
+}
 
 // --- parse the token layer --------------------------------------------------
 
@@ -41,10 +74,12 @@ function definedTypeClasses(): Set<string> {
 // --- parse the palette contract in DESIGN.md ---------------------------------
 
 /** Role → hex rows of one §4 theme table (rows like `| \`primary\` (cobalt) | \`#004ac6\` |`). */
-function designPaletteTable(heading: string): Map<string, string> {
-  const start = DESIGN.indexOf(heading);
-  expect(start, `DESIGN.md must have the section "${heading}"`).toBeGreaterThanOrEqual(0);
-  const end = DESIGN.indexOf("###", start + heading.length);
+function designPaletteTable(themeLabel: string): Map<string, string> {
+  // Each theme's palette lives under a `### … <Label> theme …` heading.
+  const heading = new RegExp(`^### .*${themeLabel} theme.*$`, "m").exec(DESIGN);
+  expect(heading, `DESIGN.md must have a §4 heading for the ${themeLabel} theme`).not.toBeNull();
+  const start = heading!.index;
+  const end = DESIGN.indexOf("###", start + heading![0].length);
   const section = DESIGN.slice(start, end === -1 ? undefined : end);
   const roles = new Map<string, string>();
   for (const match of section.matchAll(/^\|\s*`([a-z-]+)`[^|]*\|\s*`(#[0-9a-fA-F]+)`\s*\|/gm)) {
@@ -80,25 +115,33 @@ const SOURCES = [
 
 // --- the guards ---------------------------------------------------------------
 
-describe("token layer ⇄ DESIGN.md", () => {
-  const light = cssBlockTokens(":root");
-  const dark = cssBlockTokens('[data-theme="dark"]');
+describe("token layer ⇄ theme registry ⇄ DESIGN.md", () => {
+  const roleNames = [...colorRoles(cssBlockTokens(":root")).keys()].sort();
 
-  it("light and dark themes define the same semantic roles", () => {
-    expect([...dark.keys()].sort()).toEqual([...light.keys()].sort());
+  it("every registered theme set defines the same semantic roles", () => {
+    for (const theme of THEME_SETS) {
+      const block = colorRoles(cssBlockTokens(themeSelector(theme.id)));
+      expect([...block.keys()].sort(), `${theme.id} semantic roles`).toEqual(roleNames);
+    }
   });
 
-  it("globals.css hex values match the DESIGN.md §4 palette, both themes", () => {
-    const cases: [string, Map<string, string>][] = [
-      ["### 4.1 Light theme", light],
-      ["### 4.2 Dark theme", dark],
-    ];
-    for (const [heading, theme] of cases) {
-      const documented = designPaletteTable(heading);
-      expect(documented.size, `${heading} table parsed`).toBeGreaterThan(0);
+  it("token-layer hex values match the DESIGN.md §4 palette, every theme", () => {
+    for (const theme of THEME_SETS) {
+      const block = cssBlockTokens(themeSelector(theme.id));
+      const documented = designPaletteTable(theme.label);
+      expect([...documented.keys()].sort(), `${theme.label} table documents every role`).toEqual(roleNames);
       for (const [role, hex] of documented) {
-        expect(theme.get(role), `${heading}: --${role}`).toBe(hex);
+        expect(block.get(role), `${theme.label} theme: --${role}`).toBe(hex);
       }
+    }
+  });
+
+  it("system themes keep the shared default look (no look-token overrides)", () => {
+    for (const theme of THEME_SETS.filter((t) => t.kind === "system" && t.id !== "light")) {
+      const lookOverrides = [...cssBlockTokens(themeSelector(theme.id)).keys()].filter(
+        (name) => LOOK_TOKENS.has(name) && name !== "overlay-shadow",
+      );
+      expect(lookOverrides, `${theme.id} must not override look tokens (DESIGN §3)`).toEqual([]);
     }
   });
 
@@ -113,7 +156,7 @@ describe("token layer ⇄ DESIGN.md", () => {
 
 describe("component usage ⇄ token layer", () => {
   const typeClasses = definedTypeClasses();
-  const roles = new Set(cssBlockTokens(":root").keys());
+  const roles = new Set(colorRoles(cssBlockTokens(":root")).keys());
   // Tailwind utilities that share a color-utility prefix but are not colors.
   const NON_COLOR = new Set(["left", "center", "right", "justify", "clip", "wrap", "nowrap", "balance", "pretty", "ellipsis"]);
 

@@ -18,7 +18,7 @@ Two users, one identity (per `ARCHITECTURE.md` §1):
 > **Warmth comes from type, copy, and spacing. Professionalism comes from restraint and structure.**
 > Don't buy warmth with bright colors or big rounded everything (→ toy). Don't buy credibility with austere mono-everything dark chrome (→ alienates SMB). Plain sentence-case language, generous whitespace, and a human type voice do the warming; a tight palette and clear structure do the professionalising.
 
-**Light is the default theme** (the welcoming first impression); **dark is a power-user preference.**
+**Light is the default theme** (the welcoming first impression); **dark is a power-user preference.** Together they are the **system pair**, following the OS preference until the user chooses. **Custom theme sets** (§4) are opt-in personality skins on the same semantic roles — they may bend the warm-pro dress code, but only for the user who asked for it; the system pair stays the identity.
 
 **Surfaces are flat** — 1px border, no fill-blur; shadow is overlay-only. Flatness serves the clarity the tool is for.
 
@@ -40,9 +40,9 @@ The raw streaming `SKILL.md`: YAML frontmatter + markdown, **JetBrains Mono**, b
 
 ---
 
-## 3. Shared structural tokens (theme-independent)
+## 3. Shared structural tokens (the default look)
 
-Identical across light and dark. Only the **color** layer (§4) swaps.
+Identical across the system themes — for light and dark only the **color** layer (§4) swaps. A **custom theme set** (§4) may additionally override the **look tokens** — type families (§3.1) as `--type-display/body/mono`, radius (§3.5) as `--shape-sm/md/lg/xl`, and the overlay shadow (§3.6) — for a full-look swap. The type *scale* (§3.2), spacing (§3.3), and layout tokens (§3.4) are fixed for every theme: a theme set changes how the app dresses, never how it is arranged.
 
 ### 3.1 Type families
 
@@ -53,6 +53,8 @@ Identical across light and dark. Only the **color** layer (§4) swaps.
 | **Mono** | **JetBrains Mono** (400/500) | The Source view of the hero, code/YAML blocks, technical metadata |
 
 > Mono dresses the **Source view**, not the default Rendered hero; the Rendered default is Inter. JetBrains Mono is loaded in **both** themes.
+
+The table above is the default look, exposed to theme blocks as `--type-display` / `--type-body` / `--type-mono`. The Tuxedo set (§4.3) swaps `--type-display` to **Playfair Display** (600/700), loaded in `layout.tsx` alongside the defaults.
 
 ### 3.2 Type scale
 
@@ -108,6 +110,8 @@ Styling is **mobile-first**: base classes target the compact arrangement (Chat m
 | `radius-xl` | 16px (1rem) | Large panels / modals |
 | `radius-full` | 9999px | Pills & avatars |
 
+The scale is the default look, exposed to theme blocks as `--shape-sm/md/lg/xl` (`radius-full` never varies). Tuxedo (§4.3) sharpens them to 2/4/6/10px.
+
 ### 3.6 Elevation
 
 Flat by default; shadow **overlay-only**.
@@ -122,14 +126,16 @@ Every interactive element gets a visible `:focus-visible` ring: **2px solid `pri
 
 ---
 
-## 4. Color themes
+## 4. Themes
 
-Identical semantic role names; only hex differs. Functional accent triad is constant in meaning:
+Every theme defines the same semantic role names — components never know which theme is active. The functional accent triad is constant in **meaning** everywhere (hues may differ per theme set):
 
-- **Primary = Cobalt** — primary actions, active nav, selection, focus.
-- **Secondary = Teal** — success, "active/healthy", secondary data.
-- **Tertiary = Amber** — warnings, **constraints/policy** (a skill's "never auto-send" rule renders amber).
-- **Error = Red** — failure/destructive.
+- **Primary** (cobalt in the system pair) — primary actions, active nav, selection, focus.
+- **Secondary** (teal) — success, "active/healthy", secondary data.
+- **Tertiary** (amber) — warnings, **constraints/policy** (a skill's "never auto-send" rule renders in `tertiary`).
+- **Error** (red) — failure/destructive.
+
+**The theme model.** Two **system themes** — light (default) and dark — form the AA-audited pair and follow `prefers-color-scheme` when the user hasn't chosen. **Custom theme sets** are opt-in full-look skins on the same roles: a set may also override the §3 look tokens, and its contrast is **best-effort, not AA-audited** — picking one is choosing personality over guarantees, and the system pair stays one click away. Selection lives in the **theme picker** (slideout footer, above Account) and persists browser-level (`ab-theme` cookie + the root layout's pre-paint script; ARCHITECTURE §7); account-level sync is deferred until account UI exists. Each theme is one `[data-theme="<id>"]` CSS block (custom sets as their own file under `src/app/themes/`), registered in `src/app/themes/registry.ts` and documented as a table below — the §5.3 conformance suite holds registry, token layer, and this section in sync.
 
 ### 4.1 Light theme — **DEFAULT** (the welcoming face)
 
@@ -175,7 +181,30 @@ Identical semantic role names; only hex differs. Functional accent triad is cons
 
 > `scrim` is only ever used at **40% opacity** behind overlays (§3.6) — never as a fill.
 
-> **Contrast rule:** on light surfaces, amber `#b8730a` is the only AA-safe amber for **text**; the brighter `#f59e0b` is for fill/border/dot only. Cobalt and teal are darkened on light for the same reason.
+> **Contrast rule:** on light surfaces, amber `#b8730a` is the only AA-safe amber for **text**; the brighter `#f59e0b` is for fill/border/dot only. Cobalt and teal are darkened on light for the same reason. (System pair only — custom theme sets are best-effort, per the theme model above.)
+
+### 4.3 Tuxedo theme set — midnight & champagne (custom)
+
+Black-tie evening wear: midnight surfaces, warm ivory text, champagne-gold actions. Full-look — the display face swaps to the Playfair Display serif (§3.1) and corners sharpen to a tailored 2/4/6/10px (§3.5), with a heavier overlay shadow. The triad keeps its meaning: gold = actions, jade = success, burnt copper = warnings/constraints.
+
+| Role | Hex |
+|---|---|
+| `background` | `#0b0d12` |
+| `surface` | `#12151d` |
+| `surface-high` | `#1a1e29` |
+| `on-surface` | `#ece7da` |
+| `on-surface-variant` (muted) | `#a39c8a` |
+| `outline` | `#6b6350` |
+| `outline-variant` (borders) | `#2a2e3a` |
+| `primary` (champagne gold) | `#c9a227` |
+| `on-primary` | `#16130a` |
+| `secondary` (jade) | `#46a184` |
+| `on-secondary` | `#0b0d12` |
+| `tertiary` (burnt copper) | `#e0703c` |
+| `on-tertiary` | `#0b0d12` |
+| `error` (crimson) | `#e14b57` |
+| `on-error` | `#ffffff` |
+| `scrim` | `#000000` |
 
 ---
 
@@ -207,14 +236,13 @@ Behaviour identical across themes; colors resolve from §4 roles. Copy is **sent
 
 ### 5.3 Conformance
 
-The token layer lives in `src/app/globals.css` (CSS variables + the §3.2 type-scale classes); components compose those and never hard-code hex values, raw font sizes, or Tailwind palette colors. Guarded by `src/meta/design-conformance.test.ts` (tokens ⇄ this doc ⇄ component usage) and the visual suite (`npm run test:visual`).
+The token layer lives in `src/app/globals.css` plus one file per custom theme set under `src/app/themes/` (CSS variables + the §3.2 type-scale classes), with the theme-set registry in `src/app/themes/registry.ts`; components compose those and never hard-code hex values, raw font sizes, or Tailwind palette colors. Guarded by `src/meta/design-conformance.test.ts` (registry ⇄ tokens ⇄ this doc ⇄ component usage) and the visual suite (`npm run test:visual`) — the system pair is snapshot per component gallery; each custom theme set carries exactly **one** baseline, the populated main screen in the desktop arrangement.
 
 ---
 
 ## 6. Not yet designed
 
 - **Rendered-view layout detail** — how sections / trigger-logic render as friendly cards/lists (the actual SMB-facing document design). Highest-value next design pass.
-- **Theme switch surface** — dark tokens ship but nothing user-facing sets `data-theme`; needs a home (account menu, not the chrome bar) once account UI exists.
 - **Icon system** — the rail uses unicode glyphs as placeholders; pick a real icon set (stroke-consistent, 18–20px grid) before the surface grows further.
 - **Interaction drawer voices** — user turns, agent turns, and system notices currently share one text treatment; needs a quiet visual split that stays a control surface, not a chat app — it matters more now that the drawer is the compact arrangement's main window.
 - **Interactive diagram canvas** (React Flow) — Visualise renders Mermaid client-side, themed from §4 roles via `themeVariables` (surface-high nodes, outline lines, primary borders; source block as loading/error fallback); the point-and-annotate canvas remains undesigned.

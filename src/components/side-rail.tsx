@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ThemePicker } from "./theme-picker";
 
 /**
  * Left nav — a 56px icon bar that never leaves the flow; its expansion is a
@@ -71,7 +72,7 @@ export function SideRail({
         />
       )}
       <nav
-        className={`flex h-full flex-col justify-between border-r border-outline-variant bg-surface py-3 transition-[width] duration-200 ${
+        className={`flex h-full flex-col justify-between gap-4 overflow-y-auto border-r border-outline-variant bg-surface py-3 transition-[width] duration-200 ${
           open
             ? "elevation-overlay absolute inset-y-0 left-0 z-40"
             : "w-full"
@@ -104,6 +105,7 @@ export function SideRail({
         </ul>
 
         <div className="px-2">
+          {open && <ThemePicker />}
           <button
             type="button"
             aria-label={open ? undefined : "Account"}
