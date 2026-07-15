@@ -54,7 +54,7 @@ Identical across the system themes — for light and dark only the **color** lay
 
 > Mono dresses the **Source view**, not the default Rendered hero; the Rendered default is Inter. JetBrains Mono is loaded in **both** themes.
 
-The table above is the default look, exposed to theme blocks as `--type-display` / `--type-body` / `--type-mono`. The Tuxedo set (§4.3) swaps `--type-display` to **Playfair Display** (600/700), loaded in `layout.tsx` alongside the defaults.
+The table above is the default look, exposed to theme blocks as `--type-display` / `--type-body` / `--type-mono`. Custom sets swap `--type-display`: Tuxedo (§4.3) to **Playfair Display** (600/700), Cardigan (§4.4) to **Fraunces** (600/700) — both loaded in `layout.tsx` alongside the defaults — and Terminal (§4.5) to the already-loaded JetBrains Mono.
 
 ### 3.2 Type scale
 
@@ -110,7 +110,7 @@ Styling is **mobile-first**: base classes target the compact arrangement (Chat m
 | `radius-xl` | 16px (1rem) | Large panels / modals |
 | `radius-full` | 9999px | Pills & avatars |
 
-The scale is the default look, exposed to theme blocks as `--shape-sm/md/lg/xl` (`radius-full` never varies). Tuxedo (§4.3) sharpens them to 2/4/6/10px.
+The scale is the default look, exposed to theme blocks as `--shape-sm/md/lg/xl` (`radius-full` never varies). Tuxedo (§4.3) sharpens them to 2/4/6/10px, Cardigan (§4.4) softens them to 6/10/14/20px, Terminal (§4.5) squares them to 0.
 
 ### 3.6 Elevation
 
@@ -204,6 +204,52 @@ Black-tie evening wear: midnight surfaces, warm ivory text, champagne-gold actio
 | `on-tertiary` | `#0b0d12` |
 | `error` (crimson) | `#e14b57` |
 | `on-error` | `#ffffff` |
+| `scrim` | `#000000` |
+
+### 4.4 Cardigan theme set — knitwear & terracotta (custom)
+
+Warm office: oatmeal and good paper, walnut text, terracotta actions. Full-look — the display face swaps to the Fraunces soft serif (§3.1) and corners round out to 6/10/14/20px (§3.5), with a warm-toned overlay shadow. The triad keeps its meaning: terracotta = actions, moss = success, mustard = warnings/constraints.
+
+| Role | Hex |
+|---|---|
+| `background` | `#f5efe4` |
+| `surface` | `#fdfaf2` |
+| `surface-high` | `#ece3d1` |
+| `on-surface` | `#332a1d` |
+| `on-surface-variant` (muted) | `#6d5f4b` |
+| `outline` | `#8b7b63` |
+| `outline-variant` (borders) | `#ddd1bb` |
+| `primary` (terracotta) | `#a6501f` |
+| `on-primary` | `#ffffff` |
+| `secondary` (moss) | `#56682d` |
+| `on-secondary` | `#ffffff` |
+| `tertiary` (mustard) | `#96700f` |
+| `on-tertiary` | `#ffffff` |
+| `error` (brick) | `#b0392e` |
+| `on-error` | `#ffffff` |
+| `scrim` | `#2a2013` |
+
+### 4.5 Terminal theme set — green phosphor (custom)
+
+Old-school CRT: near-black green-cast surfaces, phosphor text, the brightest green reserved for actions. Full-look — the display face swaps to JetBrains Mono (§3.1) and corners square off to 0 (§3.5). Body text stays Inter: the terminal reads in the chrome and headings, never as a wall of mono prose. The triad keeps its meaning: phosphor green = actions, terminal cyan = success, amber phosphor = warnings/constraints.
+
+| Role | Hex |
+|---|---|
+| `background` | `#050807` |
+| `surface` | `#0b110d` |
+| `surface-high` | `#121b14` |
+| `on-surface` | `#a8f0b8` |
+| `on-surface-variant` (muted) | `#5f9973` |
+| `outline` | `#3c7a53` |
+| `outline-variant` (borders) | `#1c2f22` |
+| `primary` (phosphor green) | `#35e06d` |
+| `on-primary` | `#04180b` |
+| `secondary` (terminal cyan) | `#2ec7ba` |
+| `on-secondary` | `#041312` |
+| `tertiary` (amber phosphor) | `#ffb224` |
+| `on-tertiary` | `#1a1102` |
+| `error` | `#ff6259` |
+| `on-error` | `#1c0605` |
 | `scrim` | `#000000` |
 
 ---

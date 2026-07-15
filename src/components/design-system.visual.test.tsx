@@ -282,8 +282,8 @@ describe("compact shell (mobile-first arrangement)", () => {
 describe("theme sets", () => {
   // Per DESIGN §5.3: each custom theme set carries exactly one baseline —
   // the populated main screen in the desktop arrangement.
-  test("tuxedo — populated main screen, desktop", async () => {
-    document.documentElement.dataset.theme = "tuxedo";
+  async function renderMainScreen(themeId: string) {
+    document.documentElement.dataset.theme = themeId;
     const docs = await heroProps();
     render(
       <div data-testid="frame" className="bg-background" style={{ width: 1024, height: 768 }}>
@@ -295,7 +295,21 @@ describe("theme sets", () => {
         />
       </div>,
     );
+  }
+
+  test("tuxedo — populated main screen, desktop", async () => {
+    await renderMainScreen("tuxedo");
     await screenshotFrame("main-tuxedo");
+  });
+
+  test("cardigan — populated main screen, desktop", async () => {
+    await renderMainScreen("cardigan");
+    await screenshotFrame("main-cardigan");
+  });
+
+  test("terminal — populated main screen, desktop", async () => {
+    await renderMainScreen("terminal");
+    await screenshotFrame("main-terminal");
   });
 });
 

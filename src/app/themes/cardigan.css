@@ -1,0 +1,36 @@
+/* ---------------------------------------------------------------------------
+   Cardigan — the warm-office custom theme set (DESIGN.md §4.4): knitwear and
+   good paper. Oatmeal surfaces, walnut text, terracotta actions; a full-look
+   set, so the display face swaps to the Fraunces soft serif and corners
+   round out a notch. Same semantic roles, same meanings: primary = actions,
+   secondary = success, tertiary = warnings/constraints.
+   --------------------------------------------------------------------------- */
+
+[data-theme="cardigan"] {
+  color-scheme: light;
+
+  --background: #f5efe4;
+  --surface: #fdfaf2;
+  --surface-high: #ece3d1;
+  --on-surface: #332a1d;
+  --on-surface-variant: #6d5f4b;
+  --outline: #8b7b63;
+  --outline-variant: #ddd1bb;
+  --primary: #a6501f;
+  --on-primary: #ffffff;
+  --secondary: #56682d;
+  --on-secondary: #ffffff;
+  --tertiary: #96700f;
+  --on-tertiary: #ffffff;
+  --error: #b0392e;
+  --on-error: #ffffff;
+  --scrim: #2a2013;
+  --overlay-shadow: 0 10px 32px rgba(58, 42, 22, 0.18);
+
+  /* Full-look overrides (DESIGN §3): soft-serif headings, rounder corners. */
+  --type-display: var(--font-fraunces), ui-serif, Georgia, serif;
+  --shape-sm: 6px;
+  --shape-md: 10px;
+  --shape-lg: 14px;
+  --shape-xl: 20px;
+}
