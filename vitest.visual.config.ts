@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
  * `npm run test:visual`, refresh baselines with `npm run test:visual:update`.
  *
  * CHROMIUM_EXECUTABLE overrides browser resolution for environments with a
- * pre-provisioned Chromium (e.g. Claude Code remote); everywhere else the
+ * pre-provisioned Chromium (e.g. a remote agent environment); everywhere else the
  * installed playwright package resolves its own browser.
  */
 export default defineConfig({

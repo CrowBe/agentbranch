@@ -18,7 +18,7 @@ export const irAnalyzer: Analyzer<Skill, SkillIR> = {
     if (gateway?.hasModel && context?.tag) {
       const generated = await gateway.generate({
         system:
-          "You extract a visual intermediate representation for Claude Skills. Return only graph data grounded in the supplied SKILL.md source.",
+          "You extract a visual intermediate representation for Agent Skills. Return only graph data grounded in the supplied SKILL.md source.",
         prompt: modelPrompt(skill),
         schema: skillIrSchema,
         tag: context.tag,

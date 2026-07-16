@@ -10,7 +10,7 @@ Validate the whole agent.branch client surface by stepping through
 app exposes, and ordered walk paths whose steps each carry a `selector`, an
 `action`, and an `expect`. Run all walks for a full validation pass, or only
 the walks whose routes a change touches. **`walk-runner.mjs`** (same folder)
-is the executable form of the spec — `node .claude/skills/e2e-sitemap/walk-runner.mjs`
+is the executable form of the spec — `node .agents/skills/e2e-sitemap/walk-runner.mjs`
 from the repo root prints a per-walk PASS/FAIL matrix and exits non-zero on
 any failure.
 

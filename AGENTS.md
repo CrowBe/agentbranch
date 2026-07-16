@@ -1,6 +1,6 @@
 # agent.branch — agent guide
 
-Tool for building + testing agent skills (the Agent Skills open standard): author a skill in a chat-driven loop, see it live, validate it, export it. Claude-first runtime, standard-native artifact.
+Tool for building + testing agent skills (the Agent Skills open standard): author a skill in a chat-driven loop, see it live, validate it, export it. Provider-routed runtime, standard-native artifact.
 
 ## Read before working
 
@@ -20,3 +20,5 @@ If ARCHITECTURE and DESIGN disagree, ARCHITECTURE wins. **Domain language is non
 **Knowledge has one home — update existing docs, don't add files.** A new doc needs the same justification as a decision register: the content genuinely fits nowhere that exists. Keep UI/layout/system/data decisions in ARCHITECTURE; DESIGN is only the visual system.
 
 **Instruction files: this file is the source of truth.** `CLAUDE.md` is a symlink to it. Keep it small — point to the docs above and record decisions that live nowhere else. Don't restate anything discoverable (stack, commands, module layout) that a doc or `package.json` already carries; point to it instead.
+
+**Agent extensions use the open layout.** Keep reusable skills under `.agents/skills/`. `.claude/skills` is a compatibility symlink only; do not put source files there.

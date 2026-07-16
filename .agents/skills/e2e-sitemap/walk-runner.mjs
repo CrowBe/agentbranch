@@ -2,7 +2,7 @@
 // and prints a PASS/FAIL matrix. Run from the repo root (module resolution
 // walks up to the repo's node_modules):
 //
-//   node .claude/skills/e2e-sitemap/walk-runner.mjs
+//   node .agents/skills/e2e-sitemap/walk-runner.mjs
 //
 // Expects a fresh `npm run dev` session (memory adapters empty — see
 // sitemap.md §2 on the five-skill free-tier cap) and no model key, so the

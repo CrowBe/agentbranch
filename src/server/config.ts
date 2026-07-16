@@ -58,7 +58,7 @@ export type ModelProviderKind = "anthropic" | "nous";
 export const DEFAULT_ANTHROPIC_MODEL = "claude-opus-4-8";
 export const DEFAULT_ANTHROPIC_CLASSIFY_MODEL = "claude-haiku-4-5";
 export const DEFAULT_ANTHROPIC_GENERATE_MODEL = "claude-sonnet-4-6";
-export const DEFAULT_NOUS_MODEL = "Hermes-4.3-36B";
+export const DEFAULT_NOUS_MODEL = "deepseek/deepseek-v4-flash";
 export const DEFAULT_NOUS_BASE_URL = "https://inference-api.nousresearch.com/v1";
 
 export function readConfig(): AppConfig {
