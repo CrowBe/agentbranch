@@ -5,12 +5,12 @@ description: Validate and update the e2e-sitemap spec after a UI change — re-g
 
 # Sitemap sync — validate & update the E2E spec
 
-The e2e-sitemap spec (`.claude/skills/e2e-sitemap/`) asserts **exact** copy
+The e2e-sitemap spec (`.agents/skills/e2e-sitemap/`) asserts **exact** copy
 strings, selectors, and routes. Any UI change can silently invalidate it. This
 skill re-grounds the spec against source and proves the result by running the
 walks. The pre-commit hook fires a **non-blocking nudge** when a commit
 touches `src/app/` or `src/components/` without touching
-`.claude/skills/e2e-sitemap/` — the nudge is a *maybe*, this skill is the
+`.agents/skills/e2e-sitemap/` — the nudge is a *maybe*, this skill is the
 check that decides.
 
 ## 1. Find what changed
@@ -44,11 +44,11 @@ Ground-truth map — each source file feeds specific parts of `sitemap.md` and
 For each hit, re-read the file and diff its labels/copy/routes against what
 the spec asserts. Added surfaces (a new nav entry, chip, route, dialog) need
 new spec rows/steps; removed ones get deleted — the spec reads as **current
-state, no history** (CLAUDE.md doc rule).
+state, no history** (AGENTS.md doc rule).
 
 ## 3. Update the spec
 
-Edit in `.claude/skills/e2e-sitemap/`:
+Edit in `.agents/skills/e2e-sitemap/`:
 
 - `sitemap.md` — tables and walk steps (exact strings, selectors, routes).
 - `walk-runner.mjs` — keep it the executable mirror of the walks it covers.
@@ -63,7 +63,7 @@ server (memory adapters must be empty — five-skill free-tier cap):
 ```bash
 npm run db:generate   # fresh clone only
 npm run dev &         # wait for curl 200 on http://localhost:3000/
-node .claude/skills/e2e-sitemap/walk-runner.mjs
+node .agents/skills/e2e-sitemap/walk-runner.mjs
 ```
 
 All walks must PASS. A failure means either the spec update missed something

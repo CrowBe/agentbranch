@@ -20,10 +20,10 @@ fi
 # spec asserts exact selectors, routes, and status copy, so any change under
 # src/app or src/components can silently invalidate it.
 if echo "$staged" | grep -qE '^src/(app|components)/' && \
-   ! echo "$staged" | grep -qE '^\.claude/skills/e2e-sitemap/'; then
+   ! echo "$staged" | grep -qE '^\.agents/skills/e2e-sitemap/'; then
   cat <<'MSG'
 ⓘ sitemap-drift nudge: this commit changes src/app or src/components but not
-  .claude/skills/e2e-sitemap/. If it touches routes, nav, chips, dialogs, or
+  .agents/skills/e2e-sitemap/. If it touches routes, nav, chips, dialogs, or
   status copy, run the sitemap-sync skill (/sitemap-sync) to re-ground the
   E2E spec and prove it with the walk runner.
 MSG

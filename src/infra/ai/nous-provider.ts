@@ -23,6 +23,7 @@ export function createNousProvider(params: {
     apiKey: params.apiKey,
     baseURL: params.baseUrl ?? DEFAULT_NOUS_BASE_URL,
     includeUsage: true,
+    supportsStructuredOutputs: true,
   });
   const fallback = nous(params.modelIds.default);
   return {

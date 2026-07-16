@@ -19,6 +19,7 @@ describe("createNousProvider", () => {
     });
 
     expect(provider.model).not.toBeNull();
+    expect(provider.model).toMatchObject({ supportsStructuredOutputs: true });
   });
 });
 

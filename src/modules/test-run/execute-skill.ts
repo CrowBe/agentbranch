@@ -111,7 +111,7 @@ language — warm, concrete, no jargon. The author may be non-technical. Say wha
 the skill did with the request, whether it behaved sensibly, and flag anything
 worth adjusting.`;
 
-const WORLD_SYSTEM = `You design deterministic test-run inputs for Claude Skills.
+const WORLD_SYSTEM = `You design deterministic test-run inputs for Agent Skills.
 Infer the mock tools the skill would need, create realistic mock responses that
 stress the skill, and write one user request that exercises the skill. Return
 only data that is safe to use in a mock environment.`;
@@ -197,16 +197,16 @@ another integration, infer a clear tool name for that integration.`;
 
 const generatedMockToolSchema = z.object({
   name: z.string().min(1).max(60).regex(/^[A-Za-z][A-Za-z0-9_-]*$/),
-  description: z.string().min(1).max(240),
+  description: z.string().min(1),
   response: z.unknown(),
 });
 
 const generatedWorldSchema = z.object({
   scenario: z.object({
-    prompt: z.string().min(1).max(500),
+    prompt: z.string().min(1),
     seedData: z.record(z.string(), z.unknown()),
   }),
-  mockTools: z.array(generatedMockToolSchema).min(1).max(4),
+  mockTools: z.array(generatedMockToolSchema),
 });
 
 type GeneratedWorld = z.infer<typeof generatedWorldSchema>;
@@ -217,7 +217,8 @@ function normalizeGeneratedWorld(world: GeneratedWorld, skill: Skill): Generated
   const mockTools = dedupeMockTools(world.mockTools);
   return {
     scenario: {
-      prompt: world.scenario.prompt.trim() || `Use the "${skillName(skill)}" skill.`,
+      prompt:
+        clampText(world.scenario.prompt.trim(), 500) || `Use the "${skillName(skill)}" skill.`,
       seedData: world.scenario.seedData,
     },
     mockTools: mockTools.length > 0 ? mockTools : fallbackGeneratedWorld().mockTools,
@@ -227,11 +228,11 @@ function normalizeGeneratedWorld(world: GeneratedWorld, skill: Skill): Generated
 function dedupeMockTools(tools: readonly GeneratedWorld["mockTools"][number][]) {
   const seen = new Set<string>();
   const deduped: GeneratedWorld["mockTools"] = [];
-  for (const tool of tools) {
+  for (const tool of tools.slice(0, 4)) {
     const name = tool.name.trim();
     if (!name || seen.has(name)) continue;
     seen.add(name);
-    deduped.push({ ...tool, name, description: tool.description.trim() });
+    deduped.push({ ...tool, name, description: clampText(tool.description.trim(), 240) });
   }
   return deduped;
 }

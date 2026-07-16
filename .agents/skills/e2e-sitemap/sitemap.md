@@ -4,7 +4,7 @@ Machine-followable map of the whole app surface. Read the protocol in
 `SKILL.md` first (status-line sync, dialog policy, offline expectations).
 Base URL: `http://localhost:3000`. All copy strings below are exact and were
 validated against the running app; `walk-runner.mjs` in this folder is the
-executable form of this spec (run `node .claude/skills/e2e-sitemap/walk-runner.mjs`
+executable form of this spec (run `node .agents/skills/e2e-sitemap/walk-runner.mjs`
 from the repo root against a fresh dev server).
 
 ## 1. Node inventory

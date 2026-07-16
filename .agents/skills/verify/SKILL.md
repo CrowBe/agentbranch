@@ -18,7 +18,7 @@ npm run dev             # Next dev server on http://localhost:3000
 Wait for a `200` from `curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/`
 (first compile takes ~10s).
 
-## Drive (Playwright, Chromium at /opt/pw-browsers/chromium in CCR)
+## Drive (Playwright with pre-provisioned Chromium)
 
 `playwright-core` + `executablePath: "/opt/pw-browsers/chromium"`. The status
 line is `[role="status"]`; wait on its text between actions. Confirm dialogs
