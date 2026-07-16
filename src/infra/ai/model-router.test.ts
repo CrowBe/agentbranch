@@ -56,6 +56,7 @@ describe("createModelRouter — resolution", () => {
     if (isOk(resolved)) {
       expect(resolved.value.providerId).toBe("anthropic");
       expect(resolved.value.kind).toBe("anthropic");
+      expect(resolved.value.structuredOutputs).toBe("json-schema");
       expect(resolved.value.modelId).toBe("claude-haiku-4-5");
       expect(resolved.value.viaOverride).toBe(false);
     }
@@ -64,7 +65,10 @@ describe("createModelRouter — resolution", () => {
 
 describe("createModelRouter — selection", () => {
   it("switches the active provider and resolves the new one's model", () => {
-    const r = router({ anthropic: { apiKey: "sk-a" }, nous: { apiKey: "sk-n" } });
+    const r = router({
+      anthropic: { apiKey: "sk-a" },
+      nous: { apiKey: "sk-n" },
+    });
 
     const applied = r.setActive({ providerId: "nous" });
     expect(isOk(applied)).toBe(true);
@@ -79,7 +83,10 @@ describe("createModelRouter — selection", () => {
 
   it("honours a per-primitive model override in the selection", () => {
     const r = router({ anthropic: { apiKey: "sk-a" } });
-    r.setActive({ providerId: "anthropic", modelIds: { generate: "claude-sonnet-pinned" } });
+    r.setActive({
+      providerId: "anthropic",
+      modelIds: { generate: "claude-sonnet-pinned" },
+    });
     const resolved = r.resolve("generate");
     if (isOk(resolved)) expect(resolved.value.modelId).toBe("claude-sonnet-pinned");
   });
@@ -94,7 +101,10 @@ describe("createModelRouter — selection", () => {
 describe("createModelRouter — bring-your-own credentials", () => {
   it("resolves via a bring-your-own key when the server pool has none", () => {
     const r = router();
-    const stored = r.setCredential({ providerId: "anthropic", apiKey: "sk-byo" });
+    const stored = r.setCredential({
+      providerId: "anthropic",
+      apiKey: "sk-byo",
+    });
     expect(isOk(stored)).toBe(true);
     expect(r.hasModel()).toBe(true);
 
@@ -104,7 +114,10 @@ describe("createModelRouter — bring-your-own credentials", () => {
   });
 
   it("rejects an empty bring-your-own key", () => {
-    const stored = router().setCredential({ providerId: "anthropic", apiKey: "  " });
+    const stored = router().setCredential({
+      providerId: "anthropic",
+      apiKey: "  ",
+    });
     expect(isErr(stored)).toBe(true);
     if (isErr(stored)) expect(stored.error.tag).toBe("not_configured");
   });
@@ -130,8 +143,36 @@ describe("createModelRouter — snapshot is secret-free", () => {
 
     const anthropic = snapshot.providers.find((p) => p.id === "anthropic");
     const nous = snapshot.providers.find((p) => p.id === "nous");
-    expect(anthropic).toMatchObject({ hasServerKey: true, hasByoKey: false, ready: true });
-    expect(nous).toMatchObject({ hasServerKey: false, hasByoKey: true, ready: true });
+    expect(anthropic).toMatchObject({
+      hasServerKey: true,
+      hasByoKey: false,
+      ready: true,
+    });
+    expect(anthropic?.structuredOutputs).toBe("json-schema");
+    expect(nous).toMatchObject({
+      hasServerKey: false,
+      hasByoKey: true,
+      ready: true,
+      structuredOutputs: "json",
+    });
     expect(snapshot.active).toEqual({ providerId: "anthropic" });
+  });
+
+  it("rebuilds a provider when its structured-output mode changes", () => {
+    const mutableProfile = {
+      ...profiles[1]!,
+      structuredOutputs: "json" as "json" | "json-schema",
+    };
+    const r = createModelRouter({
+      profiles: [mutableProfile],
+      serverKeys: { nous: { apiKey: "sk-n" } },
+    });
+    const first = r.resolve("classify");
+    mutableProfile.structuredOutputs = "json-schema";
+    const second = r.resolve("classify");
+
+    expect(isOk(first)).toBe(true);
+    expect(isOk(second)).toBe(true);
+    if (isOk(first) && isOk(second)) expect(second.value.model).not.toBe(first.value.model);
   });
 });

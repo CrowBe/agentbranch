@@ -4,6 +4,7 @@ import type {
   PrimitiveModelIds,
   ProviderId,
   ProviderProfile,
+  StructuredOutputSupport,
 } from "./router.types";
 import type { ModelGatewayPrimitive } from "@/modules/model-gateway";
 
@@ -22,6 +23,11 @@ export function findProfile(
   id: ProviderId,
 ): ProviderProfile | undefined {
   return profiles.find((profile) => profile.id === id);
+}
+
+/** Resolve a profile's structured-output mode, defaulting by provider kind. */
+export function structuredOutputSupportFor(profile: ProviderProfile): StructuredOutputSupport {
+  return profile.structuredOutputs ?? (profile.kind === "anthropic" ? "json-schema" : "json");
 }
 
 /**
@@ -74,7 +80,10 @@ export function effectiveModelIds(
   const selectionIds = selection?.providerId === profile.id ? selection.modelIds : undefined;
   const entries = MODEL_ID_KEYS.map((key) => {
     const picked =
-      selectionIds?.[key] ?? override?.modelIds?.[key] ?? profile.modelIds[key] ?? profile.modelIds.default;
+      selectionIds?.[key] ??
+      override?.modelIds?.[key] ??
+      profile.modelIds[key] ??
+      profile.modelIds.default;
     return [key, picked] as const;
   });
   return Object.fromEntries(entries) as PrimitiveModelIds;

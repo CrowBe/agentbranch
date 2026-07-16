@@ -12,6 +12,7 @@
  */
 export type {
   ProviderKind,
+  StructuredOutputSupport,
   ProviderId,
   PrimitiveModelIds,
   ProviderProfile,
@@ -27,4 +28,5 @@ export {
   defaultSelection,
   validateSelection,
   effectiveModelIds,
+  structuredOutputSupportFor,
 } from "./selection";

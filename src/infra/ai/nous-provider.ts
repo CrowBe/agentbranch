@@ -1,5 +1,6 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { ModelProvider } from "@/modules/model-gateway";
+import type { StructuredOutputSupport } from "@/modules/model-router";
 import { DEFAULT_NOUS_BASE_URL } from "@/server/config";
 
 /**
@@ -16,6 +17,7 @@ export function createNousProvider(params: {
     readonly streamAgent: string;
   };
   baseUrl?: string;
+  structuredOutputs: StructuredOutputSupport;
 }): ModelProvider {
   if (!params.apiKey) return { model: null };
   const nous = createOpenAICompatible({
@@ -23,7 +25,7 @@ export function createNousProvider(params: {
     apiKey: params.apiKey,
     baseURL: params.baseUrl ?? DEFAULT_NOUS_BASE_URL,
     includeUsage: true,
-    supportsStructuredOutputs: true,
+    supportsStructuredOutputs: params.structuredOutputs === "json-schema",
   });
   const fallback = nous(params.modelIds.default);
   return {

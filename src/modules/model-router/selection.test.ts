@@ -4,6 +4,7 @@ import {
   defaultSelection,
   effectiveModelIds,
   findProfile,
+  structuredOutputSupportFor,
   validateSelection,
 } from "./selection";
 import type { ProviderProfile } from "./router.types";
@@ -42,13 +43,26 @@ describe("findProfile", () => {
   });
 });
 
+describe("structuredOutputSupportFor", () => {
+  it("defaults by provider kind", () => {
+    expect(structuredOutputSupportFor(anthropic)).toBe("json-schema");
+    expect(structuredOutputSupportFor(nous)).toBe("json");
+  });
+
+  it("prefers an explicit profile value", () => {
+    expect(structuredOutputSupportFor({ ...nous, structuredOutputs: "none" })).toBe("none");
+  });
+});
+
 describe("defaultSelection", () => {
   it("prefers the requested provider when registered", () => {
     expect(defaultSelection(registry, "nous")).toEqual({ providerId: "nous" });
   });
 
   it("falls back to the first registered provider", () => {
-    expect(defaultSelection(registry, "missing")).toEqual({ providerId: "anthropic" });
+    expect(defaultSelection(registry, "missing")).toEqual({
+      providerId: "anthropic",
+    });
     expect(defaultSelection(registry)).toEqual({ providerId: "anthropic" });
   });
 });
@@ -90,12 +104,19 @@ describe("effectiveModelIds", () => {
   });
 
   it("falls back to a bring-your-own override before the profile", () => {
-    const ids = effectiveModelIds(nous, { providerId: "nous" }, { modelIds: { default: "Hermes-byo" } });
+    const ids = effectiveModelIds(
+      nous,
+      { providerId: "nous" },
+      { modelIds: { default: "Hermes-byo" } },
+    );
     expect(ids.default).toBe("Hermes-byo");
   });
 
   it("ignores a selection aimed at a different provider", () => {
-    const ids = effectiveModelIds(anthropic, { providerId: "nous", modelIds: { default: "x" } });
+    const ids = effectiveModelIds(anthropic, {
+      providerId: "nous",
+      modelIds: { default: "x" },
+    });
     expect(ids).toEqual(anthropic.modelIds);
   });
 });

@@ -30,6 +30,7 @@ const resolved = (id = "resolved"): ResolvedModel => ({
   kind: "anthropic",
   modelId: "claude-sonnet-4-6",
   viaOverride: false,
+  structuredOutputs: "json-schema",
 });
 
 /** A router that always resolves — enough to pass admission. */

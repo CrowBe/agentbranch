@@ -6,19 +6,31 @@ describe("createNousProvider", () => {
     const provider = createNousProvider({
       apiKey: undefined,
       modelIds: modelIds("Hermes-4.3-36B"),
+      structuredOutputs: "json",
     });
 
     expect(provider.model).toBeNull();
   });
 
-  it("creates an AI SDK language model when configured", () => {
+  it("disables strict structured outputs for JSON mode", () => {
     const provider = createNousProvider({
       apiKey: "nous-key",
       modelIds: modelIds("Hermes-4.3-36B"),
       baseUrl: "https://example.test/v1",
+      structuredOutputs: "json",
     });
 
     expect(provider.model).not.toBeNull();
+    expect(provider.model).toMatchObject({ supportsStructuredOutputs: false });
+  });
+
+  it("preserves strict structured outputs for JSON-schema mode", () => {
+    const provider = createNousProvider({
+      apiKey: "nous-key",
+      modelIds: modelIds("Hermes-4.3-36B"),
+      structuredOutputs: "json-schema",
+    });
+
     expect(provider.model).toMatchObject({ supportsStructuredOutputs: true });
   });
 });
