@@ -36,6 +36,7 @@ function resolved(overrides?: Partial<ResolvedModel>): ResolvedModel {
     model: { id: "m" } as unknown as ResolvedModel["model"],
     providerId: "anthropic",
     kind: "anthropic",
+    structuredOutputs: "json-schema",
     modelId: "claude-sonnet-4-6",
     viaOverride: false,
     ...overrides,

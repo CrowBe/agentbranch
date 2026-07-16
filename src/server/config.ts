@@ -3,6 +3,7 @@ import type {
   PrimitiveModelIds,
   ProviderId,
   ProviderProfile,
+  StructuredOutputSupport,
 } from "@/modules/model-router";
 
 /**
@@ -37,7 +38,10 @@ export type AppConfig = {
    * configured, only these identities may read or change the active selection /
    * credentials; with no list set, the surface is locked (fail-safe).
    */
-  readonly admin: { readonly userIds: readonly string[]; readonly emails: readonly string[] };
+  readonly admin: {
+    readonly userIds: readonly string[];
+    readonly emails: readonly string[];
+  };
   readonly clerkConfigured: boolean;
   readonly clerkProPlanSlug: string;
   /**
@@ -89,6 +93,7 @@ export function readConfig(): AppConfig {
     nonEmpty(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) !== undefined;
 
   const nousBaseUrl = nonEmpty(process.env.NOUS_BASE_URL) ?? DEFAULT_NOUS_BASE_URL;
+  const nousStructuredOutputs = readStructuredOutputSupport(process.env.NOUS_STRUCTURED_OUTPUTS);
   // Per-provider model ids: the active provider honours the env routes; the
   // other provider takes its own sensible defaults so it is ready to switch to.
   const anthropicModelIds: PrimitiveModelIds = {
@@ -111,12 +116,18 @@ export function readConfig(): AppConfig {
     streamAgent: modelProvider === "nous" ? modelIds.streamAgent : nousModel,
   };
   const providerRegistry: readonly ProviderProfile[] = [
-    { id: "anthropic", label: "Anthropic (Claude)", kind: "anthropic", modelIds: anthropicModelIds },
+    {
+      id: "anthropic",
+      label: "Anthropic (Claude)",
+      kind: "anthropic",
+      modelIds: anthropicModelIds,
+    },
     {
       id: "nous",
       label: "Nous Portal",
       kind: "openai-compatible",
       baseUrl: nousBaseUrl,
+      structuredOutputs: nousStructuredOutputs,
       modelIds: nousModelIds,
     },
   ];
@@ -145,8 +156,7 @@ export function readConfig(): AppConfig {
     cronSecret: nonEmpty(process.env.CRON_SECRET),
     flags: {
       hasDatabase: databaseUrl !== undefined,
-      hasModel:
-        modelProvider === "nous" ? nousApiKey !== undefined : anthropicApiKey !== undefined,
+      hasModel: modelProvider === "nous" ? nousApiKey !== undefined : anthropicApiKey !== undefined,
       hasAuth: clerkConfigured,
     },
   };
@@ -165,6 +175,16 @@ function readModelProvider(params: {
   }
   throw new Error(
     `Unsupported AGENTBRANCH_MODEL_PROVIDER "${params.explicit}". Use "anthropic" or "nous".`,
+  );
+}
+
+function readStructuredOutputSupport(value: string | undefined): StructuredOutputSupport {
+  const configured = nonEmpty(value) ?? "json";
+  if (configured === "json-schema" || configured === "json" || configured === "none") {
+    return configured;
+  }
+  throw new Error(
+    `Unsupported NOUS_STRUCTURED_OUTPUTS "${configured}". Use "json-schema", "json", or "none".`,
   );
 }
 

@@ -17,6 +17,9 @@ import type { Result, DomainError } from "@/shared";
 /** How a provider's `LanguageModel` is constructed by infra (AI-SDK provider seam). */
 export type ProviderKind = "anthropic" | "openai-compatible";
 
+/** The structured-output mode a provider reliably supports. */
+export type StructuredOutputSupport = "json-schema" | "json" | "none";
+
 /** A provider's stable id in the registry (e.g. `"anthropic"`, `"nous"`). */
 export type ProviderId = string;
 
@@ -34,6 +37,8 @@ export type ProviderProfile = {
   readonly kind: ProviderKind;
   /** Base URL for OpenAI-compatible providers; ignored for Anthropic. */
   readonly baseUrl?: string;
+  /** Explicit override; otherwise the provider kind supplies the default. */
+  readonly structuredOutputs?: StructuredOutputSupport;
   readonly modelIds: PrimitiveModelIds;
 };
 
@@ -63,6 +68,7 @@ export type ProviderStatus = {
   readonly id: ProviderId;
   readonly label: string;
   readonly kind: ProviderKind;
+  readonly structuredOutputs: StructuredOutputSupport;
   readonly modelIds: PrimitiveModelIds;
   /** A server-pool key is configured for this provider. */
   readonly hasServerKey: boolean;
@@ -83,6 +89,7 @@ export type ResolvedModel = {
   readonly model: LanguageModel;
   readonly providerId: ProviderId;
   readonly kind: ProviderKind;
+  readonly structuredOutputs: StructuredOutputSupport;
   readonly modelId: string;
   /** True when resolved from a bring-your-own override rather than the server pool. */
   readonly viaOverride: boolean;

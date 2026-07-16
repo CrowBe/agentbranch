@@ -53,6 +53,9 @@ describe("readConfig", () => {
       streamAgent: DEFAULT_NOUS_MODEL,
     });
     expect(config.flags.hasModel).toBe(true);
+    expect(
+      config.providerRegistry.find((profile) => profile.id === "nous")?.structuredOutputs,
+    ).toBe("json");
   });
 
   it("auto-selects Nous when only a Nous key is present", () => {
@@ -119,6 +122,20 @@ describe("readConfig", () => {
 
     expect(() => readConfig()).toThrow(/Unsupported AGENTBRANCH_MODEL_PROVIDER/);
   });
+
+  it("accepts an explicit Nous structured-output mode", () => {
+    replaceEnv({ NOUS_STRUCTURED_OUTPUTS: "none" });
+
+    expect(
+      readConfig().providerRegistry.find((profile) => profile.id === "nous")?.structuredOutputs,
+    ).toBe("none");
+  });
+
+  it("rejects an unsupported Nous structured-output mode", () => {
+    replaceEnv({ NOUS_STRUCTURED_OUTPUTS: "xml" });
+
+    expect(() => readConfig()).toThrow(/Unsupported NOUS_STRUCTURED_OUTPUTS/);
+  });
 });
 
 function replaceEnv(env: Record<string, string>): void {
@@ -127,6 +144,7 @@ function replaceEnv(env: Record<string, string>): void {
   delete process.env.ANTHROPIC_API_KEY;
   delete process.env.NOUS_API_KEY;
   delete process.env.NOUS_BASE_URL;
+  delete process.env.NOUS_STRUCTURED_OUTPUTS;
   delete process.env.AGENTBRANCH_MODEL;
   delete process.env.AGENTBRANCH_CLASSIFY_MODEL;
   delete process.env.AGENTBRANCH_GENERATE_MODEL;

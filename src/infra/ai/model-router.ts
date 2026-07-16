@@ -2,6 +2,7 @@ import {
   defaultSelection,
   effectiveModelIds,
   findProfile,
+  structuredOutputSupportFor,
   validateSelection,
   type CredentialOverride,
   type ModelRouter,
@@ -39,8 +40,7 @@ export function createModelRouter(deps: {
   defaultSelection?: ModelSelection;
 }): ModelRouter {
   const { profiles, serverKeys } = deps;
-  let active: ModelSelection =
-    deps.defaultSelection ?? defaultSelection(profiles);
+  let active: ModelSelection = deps.defaultSelection ?? defaultSelection(profiles);
   const overrides = new Map<ProviderId, CredentialOverride>();
   // Cache built providers; keyed by provider + key-source + model ids so a
   // credential or model change rebuilds rather than serves a stale model.
@@ -63,7 +63,12 @@ export function createModelRouter(deps: {
     if (profile.kind === "anthropic") {
       return createAnthropicProvider({ apiKey, modelIds });
     }
-    return createNousProvider({ apiKey, modelIds, baseUrl });
+    return createNousProvider({
+      apiKey,
+      modelIds,
+      baseUrl,
+      structuredOutputs: structuredOutputSupportFor(profile),
+    });
   }
 
   function providerFor(
@@ -81,6 +86,7 @@ export function createModelRouter(deps: {
       modelIds.runAgent,
       modelIds.streamAgent,
       modelIds.generate,
+      structuredOutputSupportFor(profile),
     ].join("|");
     const cached = cache.get(cacheKey);
     if (cached) return cached;
@@ -103,6 +109,7 @@ export function createModelRouter(deps: {
       id: profile.id,
       label: profile.label,
       kind: profile.kind,
+      structuredOutputs: structuredOutputSupportFor(profile),
       modelIds: effectiveModelIds(profile, active),
       hasServerKey,
       hasByoKey,
@@ -131,9 +138,7 @@ export function createModelRouter(deps: {
 
     setCredential(credential): Result<RouterSnapshot, DomainError> {
       if (!findProfile(profiles, credential.providerId)) {
-        return err(
-          domainError("not_found", `Unknown model provider: "${credential.providerId}".`),
-        );
+        return err(domainError("not_found", `Unknown model provider: "${credential.providerId}".`));
       }
       if (credential.apiKey.trim().length === 0) {
         return err(domainError("not_configured", "An API key is required."));
@@ -157,7 +162,9 @@ export function createModelRouter(deps: {
       if (isErr(requested)) return requested;
       const profile = findProfile(profiles, requested.value.providerId);
       if (!profile) {
-        return err(domainError("not_found", `Unknown model provider: "${requested.value.providerId}".`));
+        return err(
+          domainError("not_found", `Unknown model provider: "${requested.value.providerId}".`),
+        );
       }
       const override = overrides.get(profile.id);
       const apiKey = override?.apiKey ?? serverKeyFor(profile.id).apiKey;
@@ -179,6 +186,7 @@ export function createModelRouter(deps: {
         model,
         providerId: profile.id,
         kind: profile.kind,
+        structuredOutputs: structuredOutputSupportFor(profile),
         modelId: modelIds[primitive],
         viaOverride: Boolean(override),
       });
