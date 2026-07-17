@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Mock } from "vitest";
 import { z } from "zod";
-import { classifyProviderError, createSdkModelCalls } from "./sdk-model-calls";
+import {
+  classifyProviderError,
+  createSdkModelCalls,
+  extractJsonValue,
+} from "./sdk-model-calls";
 import { PROVIDER_TRANSIENT_MESSAGE } from "@/modules/model-gateway";
 import type { ResolvedModel } from "@/modules/model-router";
 import { isErr } from "@/shared";
@@ -122,6 +126,109 @@ describe("sdk model calls — classification choice", () => {
   });
 });
 
+describe("sdk model calls — structured output fallback", () => {
+  it.each([
+    ['```json\n{"ok":true}\n```', { ok: true }],
+    ['Here is the object: {"ok":true}', { ok: true }],
+    ['{"ok":true} trailing commentary', { ok: true }],
+  ])("extracts tolerant JSON from %j", (text, expected) => {
+    expect(extractJsonValue(text)).toEqual(expected);
+  });
+
+  it.each(['```json\n{"ok":', '{"ok":', "no object here"])(
+    "returns undefined for invalid JSON %j",
+    (text) => {
+      expect(extractJsonValue(text)).toBeUndefined();
+    },
+  );
+
+  it("uses prompt JSON directly when schema-native output is unsupported", async () => {
+    aiMocks.generateText.mockResolvedValueOnce({
+      text: 'preface {"ok":true} trailing',
+      usage: { inputTokens: 4, outputTokens: 2 },
+    } as never);
+
+    const result = await calls.generate(resolved({ structuredOutputs: "json" }), {
+      system: "Keep the answer small.",
+      prompt: "Return success.",
+      schema: z.object({ ok: z.boolean() }),
+    });
+
+    expect(isErr(result)).toBe(false);
+    expect(aiMocks.generateObject).not.toHaveBeenCalled();
+    expect(aiMocks.generateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: "Keep the answer small.",
+        prompt: expect.stringContaining("Output only the JSON object"),
+      }),
+    );
+  });
+
+  it("retries one schema-native failure and sums usage from both attempts", async () => {
+    aiMocks.generateObject.mockRejectedValueOnce({
+      usage: { inputTokens: 3, outputTokens: 1 },
+      message: "invalid structured output",
+    });
+    aiMocks.generateText.mockResolvedValueOnce({
+      text: '```json\n{"ok":true}\n```',
+      usage: { inputTokens: 5, outputTokens: 2 },
+    } as never);
+
+    const result = await calls.generate(resolved(), {
+      system: "Keep the answer small.",
+      prompt: "Return success.",
+      schema: z.object({ ok: z.boolean() }),
+    });
+
+    expect(aiMocks.generateObject).toHaveBeenCalledTimes(1);
+    expect(aiMocks.generateText).toHaveBeenCalledTimes(1);
+    expect(isErr(result)).toBe(false);
+    if (!isErr(result)) {
+      expect(result.value.usage).toEqual({
+        inputTokens: 8,
+        outputTokens: 3,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
+      });
+    }
+  });
+
+  it("does not retry a provider cap failure", async () => {
+    aiMocks.generateObject.mockRejectedValueOnce({ status: 429, message: "quota exceeded" });
+
+    const result = await calls.generate(resolved(), {
+      system: "",
+      prompt: "Return success.",
+      schema: z.object({ ok: z.boolean() }),
+    });
+
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) expect(result.error.tag).toBe("cap_reached");
+    expect(aiMocks.generateText).not.toHaveBeenCalled();
+  });
+
+  it("returns model_unavailable when fallback JSON cannot be parsed", async () => {
+    aiMocks.generateText.mockResolvedValueOnce({
+      text: '```json\n{"ok":',
+      usage: { totalTokens: 2 },
+    } as never);
+
+    const result = await calls.generate(resolved({ structuredOutputs: "none" }), {
+      system: "",
+      prompt: "Return success.",
+      schema: z.object({ ok: z.boolean() }),
+    });
+
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) {
+      expect(result.error).toMatchObject({
+        tag: "model_unavailable",
+        message: "Structured output could not be parsed.",
+      });
+    }
+  });
+});
+
 describe("sdk model calls — provider cap errors", () => {
   it("maps provider quota failures to cap_reached instead of model_unavailable", async () => {
     aiMocks.generateObject.mockRejectedValueOnce({
@@ -148,23 +255,21 @@ describe("sdk model calls — provider cap errors", () => {
   });
 
   it.each([{ status: 429 }, { message: "rate limit exceeded" }])(
-    "maps an OpenAI-compatible throttle to a retryable model_unavailable error: %j",
+    "falls back after an OpenAI-compatible throttle: %j",
     async (cause) => {
       aiMocks.generateObject.mockRejectedValueOnce(cause);
+      aiMocks.generateText.mockResolvedValueOnce({
+        text: '{"choice":"a","rationale":"fits"}',
+        usage: { totalTokens: 2 },
+      } as never);
 
       const result = await calls.classify(
         resolved({ providerId: "nous", kind: "openai-compatible" }),
         { prompt: "x", choices: ["a"] },
       );
 
-      expect(isErr(result)).toBe(true);
-      if (isErr(result)) {
-        expect(result.error).toMatchObject({
-          tag: "model_unavailable",
-          message: PROVIDER_TRANSIENT_MESSAGE,
-        });
-        expect(result.error.message).not.toContain("Out of free usage today.");
-      }
+      expect(isErr(result)).toBe(false);
+      expect(aiMocks.generateText).toHaveBeenCalledTimes(1);
     },
   );
 
@@ -394,12 +499,12 @@ describe("sdk model calls — SDK translation", () => {
   });
 
   it("raises structured-output ceilings for OpenAI-compatible models", async () => {
-    aiMocks.generateObject
+    aiMocks.generateText
       .mockResolvedValueOnce({
-        object: { choice: "a", rationale: "best match" },
+        text: '{"choice":"a","rationale":"best match"}',
         usage: { totalTokens: 3 },
       } as never)
-      .mockResolvedValueOnce({ object: { ok: true }, usage: { totalTokens: 5 } } as never);
+      .mockResolvedValueOnce({ text: '{"ok":true}', usage: { totalTokens: 5 } } as never);
 
     const openAiCompatible = resolved({
       providerId: "nous",
@@ -414,14 +519,15 @@ describe("sdk model calls — SDK translation", () => {
       schema: z.object({ ok: z.boolean() }),
     });
 
-    expect(aiMocks.generateObject).toHaveBeenNthCalledWith(
+    expect(aiMocks.generateText).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ maxOutputTokens: 2048 }),
     );
-    expect(aiMocks.generateObject).toHaveBeenNthCalledWith(
+    expect(aiMocks.generateText).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ maxOutputTokens: 4096 }),
     );
+    expect(aiMocks.generateObject).not.toHaveBeenCalled();
   });
 
   it("adds Anthropic effort only for Sonnet-routed eval and insight primitives", async () => {

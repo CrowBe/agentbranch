@@ -21,7 +21,7 @@ import {
   type AgentStep,
 } from "@/modules/model-gateway";
 import type { ProviderKind, ResolvedModel } from "@/modules/model-router";
-import { ok, err, domainError, type Result, type DomainError } from "@/shared";
+import { ok, err, isErr, domainError, type Result, type DomainError } from "@/shared";
 
 const OUTPUT_LIMITS = {
   classify: 256,
@@ -73,29 +73,25 @@ export function createSdkModelCalls(): RawModelCalls {
       resolved: ResolvedModel,
       input: RawClassifyInput,
     ): Promise<Result<RawCallResult<Classification>, DomainError>> {
-      try {
-        const { object, usage } = await generateObject({
-          model: resolved.model,
-          maxOutputTokens: outputLimitFor(resolved, "classify"),
-          schema: z.object({
-            choice: z
-              .string()
-              .describe('The best-fitting option copied exactly, or "none" when nothing fits.'),
-            rationale: z.string().describe("One short line: why this choice."),
-          }),
-          prompt: classifyPrompt(input.prompt, input.choices),
-        });
-        return ok({
-          value: {
-            // A literal "none" choice collides with this v1 sentinel and is unsupported.
-            choice: isNoChoice(object.choice) ? null : object.choice,
-            rationale: object.rationale,
-          },
-          usage: readTokenUsage(usage),
-        });
-      } catch (cause) {
-        return err(modelCallError(resolved.kind, "Classification call failed.", cause));
-      }
+      const result = await generateStructured(resolved, {
+        maxOutputTokens: outputLimitFor(resolved, "classify"),
+        schema: z.object({
+          choice: z
+            .string()
+            .describe('The best-fitting option copied exactly, or "none" when nothing fits.'),
+          rationale: z.string().describe("One short line: why this choice."),
+        }),
+        prompt: classifyPrompt(input.prompt, input.choices),
+      });
+      if (isErr(result)) return result;
+      return ok({
+        value: {
+          // A literal "none" choice collides with this v1 sentinel and is unsupported.
+          choice: isNoChoice(result.value.value.choice) ? null : result.value.value.choice,
+          rationale: result.value.value.rationale,
+        },
+        usage: result.value.usage,
+      });
     },
 
     async runAgent(
@@ -200,21 +196,87 @@ export function createSdkModelCalls(): RawModelCalls {
       resolved: ResolvedModel,
       input: RawGenerateInput<T>,
     ): Promise<Result<RawCallResult<T>, DomainError>> {
-      try {
-        const { object, usage } = await generateObject({
-          model: resolved.model,
-          maxOutputTokens: outputLimitFor(resolved, "generate"),
-          ...effortFor(resolved)?.low,
-          schema: input.schema,
-          system: input.system,
-          prompt: input.prompt,
-        });
-        return ok({ value: object, usage: readTokenUsage(usage) });
-      } catch (cause) {
-        return err(modelCallError(resolved.kind, "Generation call failed.", cause));
-      }
+      return generateStructured(resolved, {
+        maxOutputTokens: outputLimitFor(resolved, "generate"),
+        schema: input.schema,
+        system: input.system,
+        prompt: input.prompt,
+      });
     },
   };
+}
+
+async function generateStructured<T>(
+  resolved: ResolvedModel,
+  input: {
+    system?: string;
+    prompt: string;
+    schema: z.ZodType<T>;
+    maxOutputTokens: number;
+  },
+): Promise<Result<RawCallResult<T>, DomainError>> {
+  let firstUsage = zeroUsage();
+  if (resolved.structuredOutputs === "json-schema") {
+    try {
+      const { object, usage } = await generateObject({
+        model: resolved.model,
+        maxOutputTokens: input.maxOutputTokens,
+        ...(input.system === undefined ? {} : effortFor(resolved)?.low),
+        schema: input.schema,
+        system: input.system,
+        prompt: input.prompt,
+      });
+      return ok({ value: object, usage: readTokenUsage(usage) });
+    } catch (cause) {
+      if (classifyProviderError(resolved.kind, cause) === "cap") {
+        return err(modelCallError(resolved.kind, "Structured output call failed.", cause));
+      }
+      firstUsage = readTokenUsage(cause);
+    }
+  }
+
+  try {
+    const result = await generateText({
+      model: resolved.model,
+      maxOutputTokens: input.maxOutputTokens,
+      ...(input.system === undefined ? {} : effortFor(resolved)?.low),
+      system: input.system,
+      prompt: promptWithJsonContract(input.prompt, input.schema),
+    });
+    const extracted = extractJsonValue(result.text);
+    const parsed = input.schema.safeParse(extracted);
+    if (!parsed.success) {
+      return err(
+        domainError(
+          "model_unavailable",
+          "Structured output could not be parsed.",
+          parsed.error,
+        ),
+      );
+    }
+    return ok({
+      value: parsed.data,
+      usage: addUsage(firstUsage, readTokenUsage(result.usage)),
+    });
+  } catch (cause) {
+    return err(modelCallError(resolved.kind, "Structured output call failed.", cause));
+  }
+}
+
+function promptWithJsonContract<T>(prompt: string, schema: z.ZodType<T>): string {
+  return `${prompt}\n\nRespond with exactly one JSON object that conforms to this JSON Schema:\n${JSON.stringify(z.toJSONSchema(schema))}\nOutput only the JSON object — no prose, no markdown fences.`;
+}
+
+export function extractJsonValue(text: string): unknown | undefined {
+  const unfenced = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
+  const start = unfenced.indexOf("{");
+  const end = unfenced.lastIndexOf("}");
+  if (start < 0 || end < start) return undefined;
+  try {
+    return JSON.parse(unfenced.slice(start, end + 1));
+  } catch {
+    return undefined;
+  }
 }
 
 function toAnthropicProviderOptions(cacheControl: GatewayCacheControl | undefined) {
@@ -326,6 +388,15 @@ function zeroUsage(): TokenUsageBreakdown {
 
 function maxUsage(a: TokenUsageBreakdown, b: TokenUsageBreakdown): TokenUsageBreakdown {
   return totalTokens(b) > totalTokens(a) ? b : a;
+}
+
+function addUsage(a: TokenUsageBreakdown, b: TokenUsageBreakdown): TokenUsageBreakdown {
+  return {
+    inputTokens: a.inputTokens + b.inputTokens,
+    outputTokens: a.outputTokens + b.outputTokens,
+    cacheReadInputTokens: a.cacheReadInputTokens + b.cacheReadInputTokens,
+    cacheCreationInputTokens: a.cacheCreationInputTokens + b.cacheCreationInputTokens,
+  };
 }
 
 function totalTokens(usage: TokenUsageBreakdown): number {
