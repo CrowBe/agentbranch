@@ -92,6 +92,35 @@ describe("sdk model calls — token usage shapes", () => {
   });
 });
 
+describe("sdk model calls — classification choice", () => {
+  it.each(["none", "NONE ", ""])("maps the %j sentinel to no choice", async (choice) => {
+    aiMocks.generateObject.mockResolvedValueOnce({
+      object: { choice, rationale: "nothing fits" },
+      usage: { totalTokens: 1 },
+    } as never);
+
+    const result = await calls.classify(resolved(), { prompt: "x", choices: ["a"] });
+
+    expect(isErr(result)).toBe(false);
+    if (!isErr(result)) expect(result.value.value.choice).toBeNull();
+  });
+
+  it("returns a real label verbatim", async () => {
+    aiMocks.generateObject.mockResolvedValueOnce({
+      object: { choice: "Best Match", rationale: "fits" },
+      usage: { totalTokens: 1 },
+    } as never);
+
+    const result = await calls.classify(resolved(), {
+      prompt: "x",
+      choices: ["Best Match"],
+    });
+
+    expect(isErr(result)).toBe(false);
+    if (!isErr(result)) expect(result.value.value.choice).toBe("Best Match");
+  });
+});
+
 describe("sdk model calls — provider cap errors", () => {
   it("maps provider quota failures to cap_reached instead of model_unavailable", async () => {
     aiMocks.generateObject.mockRejectedValueOnce({
@@ -303,6 +332,37 @@ describe("sdk model calls — SDK translation", () => {
     expect(aiMocks.generateObject).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ maxOutputTokens: 2048 }),
+    );
+  });
+
+  it("raises structured-output ceilings for OpenAI-compatible models", async () => {
+    aiMocks.generateObject
+      .mockResolvedValueOnce({
+        object: { choice: "a", rationale: "best match" },
+        usage: { totalTokens: 3 },
+      } as never)
+      .mockResolvedValueOnce({ object: { ok: true }, usage: { totalTokens: 5 } } as never);
+
+    const openAiCompatible = resolved({
+      providerId: "nous",
+      kind: "openai-compatible",
+      structuredOutputs: "json",
+      modelId: "deepseek/deepseek-v4-flash",
+    });
+    await calls.classify(openAiCompatible, { prompt: "x", choices: ["a"] });
+    await calls.generate(openAiCompatible, {
+      system: "",
+      prompt: "x",
+      schema: z.object({ ok: z.boolean() }),
+    });
+
+    expect(aiMocks.generateObject).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ maxOutputTokens: 2048 }),
+    );
+    expect(aiMocks.generateObject).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ maxOutputTokens: 4096 }),
     );
   });
 

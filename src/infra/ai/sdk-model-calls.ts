@@ -29,6 +29,20 @@ const OUTPUT_LIMITS = {
   generate: 2_048,
 } as const;
 
+const OPENAI_COMPATIBLE_OUTPUT_LIMITS: Partial<Record<keyof typeof OUTPUT_LIMITS, number>> = {
+  classify: 2_048,
+  generate: 4_096,
+};
+
+function outputLimitFor(
+  resolved: ResolvedModel,
+  primitive: keyof typeof OUTPUT_LIMITS,
+): number {
+  return resolved.kind === "openai-compatible"
+    ? (OPENAI_COMPATIBLE_OUTPUT_LIMITS[primitive] ?? OUTPUT_LIMITS[primitive])
+    : OUTPUT_LIMITS[primitive];
+}
+
 const SONNET_EFFORT = {
   low: { providerOptions: { anthropic: { effort: "low" } } },
   medium: { providerOptions: { anthropic: { effort: "medium" } } },
@@ -61,18 +75,21 @@ export function createSdkModelCalls(): RawModelCalls {
       try {
         const { object, usage } = await generateObject({
           model: resolved.model,
-          maxOutputTokens: OUTPUT_LIMITS.classify,
+          maxOutputTokens: outputLimitFor(resolved, "classify"),
           schema: z.object({
             choice: z
               .string()
-              .nullable()
-              .describe("The label that best fits, or null if none fit."),
+              .describe('The best-fitting option copied exactly, or "none" when nothing fits.'),
             rationale: z.string().describe("One short line: why this choice."),
           }),
           prompt: classifyPrompt(input.prompt, input.choices),
         });
         return ok({
-          value: { choice: object.choice, rationale: object.rationale },
+          value: {
+            // A literal "none" choice collides with this v1 sentinel and is unsupported.
+            choice: isNoChoice(object.choice) ? null : object.choice,
+            rationale: object.rationale,
+          },
           usage: readTokenUsage(usage),
         });
       } catch (cause) {
@@ -87,7 +104,7 @@ export function createSdkModelCalls(): RawModelCalls {
       try {
         const result = await generateText({
           model: resolved.model,
-          maxOutputTokens: OUTPUT_LIMITS.runAgent,
+          maxOutputTokens: outputLimitFor(resolved, "runAgent"),
           ...effortFor(resolved)?.medium,
           system: toSdkSystem(input.system),
           messages: input.messages.map(toSdkMessage),
@@ -111,7 +128,7 @@ export function createSdkModelCalls(): RawModelCalls {
         try {
           result = streamText({
             model: resolved.model,
-            maxOutputTokens: OUTPUT_LIMITS.streamAgent,
+            maxOutputTokens: outputLimitFor(resolved, "streamAgent"),
             system: toSdkSystem(input.system),
             messages: input.messages.map(toSdkMessage),
             tools: toSdkTools(input.tools),
@@ -175,7 +192,7 @@ export function createSdkModelCalls(): RawModelCalls {
       try {
         const { object, usage } = await generateObject({
           model: resolved.model,
-          maxOutputTokens: OUTPUT_LIMITS.generate,
+          maxOutputTokens: outputLimitFor(resolved, "generate"),
           ...effortFor(resolved)?.low,
           schema: input.schema,
           system: input.system,
@@ -380,7 +397,12 @@ const providerCapTextPattern =
 
 function classifyPrompt(prompt: string, choices: readonly string[]): string {
   const list = choices.map((c, i) => `${i + 1}. ${c}`).join("\n");
-  return `Given the request below, pick the single best-matching option, or null if none fit.\n\nRequest:\n${prompt}\n\nOptions:\n${list}`;
+  return `Given the request below, pick the single best-matching option, or answer "none" if no option fits.\n\nRequest:\n${prompt}\n\nOptions:\n${list}`;
+}
+
+function isNoChoice(choice: string): boolean {
+  const normalized = choice.trim().toLowerCase();
+  return normalized === "none" || normalized === "";
 }
 
 /** Flatten the SDK's step/content model into our transcript shape. */
