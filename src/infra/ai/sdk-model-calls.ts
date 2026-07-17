@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { TokenUsageBreakdown } from "@/modules/usage";
 import {
   PROVIDER_CAP_REACHED_MESSAGE,
+  PROVIDER_TRANSIENT_MESSAGE,
   type RawModelCalls,
   type RawCallResult,
   type RawClassifyInput,
@@ -19,7 +20,7 @@ import {
   type AgentTurn,
   type AgentStep,
 } from "@/modules/model-gateway";
-import type { ResolvedModel } from "@/modules/model-router";
+import type { ProviderKind, ResolvedModel } from "@/modules/model-router";
 import { ok, err, domainError, type Result, type DomainError } from "@/shared";
 
 const OUTPUT_LIMITS = {
@@ -93,7 +94,7 @@ export function createSdkModelCalls(): RawModelCalls {
           usage: readTokenUsage(usage),
         });
       } catch (cause) {
-        return err(modelCallError("Classification call failed.", cause));
+        return err(modelCallError(resolved.kind, "Classification call failed.", cause));
       }
     },
 
@@ -116,7 +117,7 @@ export function createSdkModelCalls(): RawModelCalls {
           usage: readTokenUsage(result.usage),
         });
       } catch (cause) {
-        return err(modelCallError("Agent turn failed.", cause));
+        return err(modelCallError(resolved.kind, "Agent turn failed.", cause));
       }
     },
 
@@ -157,8 +158,13 @@ export function createSdkModelCalls(): RawModelCalls {
                 yield { kind: "finish", finishReason: readString(part, "finishReason") ?? "stop" };
                 break;
               case "error":
-                if (isProviderCapError(part.error)) {
+                const classification = classifyProviderError(resolved.kind, part.error);
+                if (classification === "cap") {
                   yield { kind: "provider-cap-error" };
+                  break;
+                }
+                if (classification === "transient") {
+                  yield { kind: "error", message: PROVIDER_TRANSIENT_MESSAGE };
                   break;
                 }
                 yield { kind: "error", message: String(part.error ?? "Unknown error") };
@@ -168,8 +174,13 @@ export function createSdkModelCalls(): RawModelCalls {
             }
           }
         } catch (cause) {
-          if (isProviderCapError(cause)) {
+          const classification = classifyProviderError(resolved.kind, cause);
+          if (classification === "cap") {
             yield { kind: "provider-cap-error" };
+            return;
+          }
+          if (classification === "transient") {
+            yield { kind: "error", message: PROVIDER_TRANSIENT_MESSAGE };
             return;
           }
           throw cause;
@@ -200,7 +211,7 @@ export function createSdkModelCalls(): RawModelCalls {
         });
         return ok({ value: object, usage: readTokenUsage(usage) });
       } catch (cause) {
-        return err(modelCallError("Generation call failed.", cause));
+        return err(modelCallError(resolved.kind, "Generation call failed.", cause));
       }
     },
   };
@@ -350,36 +361,47 @@ function readNumber(obj: Record<string, unknown>, key: string): number | undefin
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-function modelCallError(message: string, cause: unknown): DomainError {
-  if (isProviderCapError(cause)) {
+function modelCallError(kind: ProviderKind, message: string, cause: unknown): DomainError {
+  const classification = classifyProviderError(kind, cause);
+  if (classification === "cap") {
     return domainError("cap_reached", PROVIDER_CAP_REACHED_MESSAGE, cause);
+  }
+  if (classification === "transient") {
+    return domainError("model_unavailable", PROVIDER_TRANSIENT_MESSAGE, cause);
   }
   return domainError("model_unavailable", message, cause);
 }
 
-function isProviderCapError(value: unknown): boolean {
+export function classifyProviderError(
+  kind: ProviderKind,
+  value: unknown,
+): "cap" | "transient" | "other" {
   const visited = new Set<unknown>();
   const stack: unknown[] = [value];
+  let sawRateLimit = false;
   while (stack.length > 0) {
     const current = stack.pop();
     if (!current || visited.has(current)) continue;
     visited.add(current);
 
     if (typeof current === "string") {
-      if (providerCapTextPattern.test(current)) return true;
+      if (isCapText(kind, current)) return "cap";
+      if (rateLimitTextPattern.test(current)) sawRateLimit = true;
       continue;
     }
     if (typeof current !== "object") continue;
 
     const obj = current as Record<string, unknown>;
     if (readNumber(obj, "status") === 429 || readNumber(obj, "statusCode") === 429) {
-      return true;
+      if (kind === "anthropic") return "cap";
+      sawRateLimit = true;
     }
 
     for (const key of ["code", "type", "name", "message", "error"]) {
       const nested = obj[key];
-      if (typeof nested === "string" && providerCapTextPattern.test(nested)) {
-        return true;
+      if (typeof nested === "string") {
+        if (isCapText(kind, nested)) return "cap";
+        if (rateLimitTextPattern.test(nested)) sawRateLimit = true;
       }
       if (nested && typeof nested === "object") stack.push(nested);
     }
@@ -389,11 +411,20 @@ function isProviderCapError(value: unknown): boolean {
       if (nested && typeof nested === "object") stack.push(nested);
     }
   }
-  return false;
+  return sawRateLimit ? "transient" : "other";
 }
 
-const providerCapTextPattern =
-  /\b(429|rate[-\s]?limit(?:ed)?|quota|billing|credit|insufficient[_\s-]?quota)\b/i;
+function isCapText(kind: ProviderKind, value: string): boolean {
+  return kind === "anthropic"
+    ? anthropicCapTextPattern.test(value)
+    : openAiCompatibleCapTextPattern.test(value);
+}
+
+const anthropicCapTextPattern =
+  /\b(rate.?limit(?:ed)?|quota|billing|credit|insufficient[_\s-]?quota)\b/i;
+const openAiCompatibleCapTextPattern =
+  /\b(insufficient[_\s-]?quota|billing|credit)\b/i;
+const rateLimitTextPattern = /\b(?:429|rate.?limit(?:ed)?)\b/i;
 
 function classifyPrompt(prompt: string, choices: readonly string[]): string {
   const list = choices.map((c, i) => `${i + 1}. ${c}`).join("\n");

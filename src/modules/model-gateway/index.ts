@@ -42,5 +42,5 @@ export type {
   RawAgentStream,
   RawAgentStreamPart,
 } from "./raw-model-calls";
-export { PROVIDER_CAP_REACHED_MESSAGE } from "./raw-model-calls";
+export { PROVIDER_CAP_REACHED_MESSAGE, PROVIDER_TRANSIENT_MESSAGE } from "./raw-model-calls";
 export { createModelGateway } from "./gateway";

@@ -572,6 +572,36 @@ describe("model gateway — stream accounting", () => {
     expect(isErr(snapshot)).toBe(false);
     if (!isErr(snapshot)) expect(snapshot.value).toMatchObject({ tokensUsed: 0, turnsUsed: 0 });
   });
+
+  it("records usage for a regular provider error part", async () => {
+    const usage = createMemoryUsageRepository();
+    const calls = fakeCalls({
+      streamAgent: vi.fn(() =>
+        rawStream(
+          [{ kind: "error", message: "The provider rate-limited this request." }],
+          { usage: usageOf(0, 6) },
+        ),
+      ),
+    });
+    const gateway = gatewayWith({ usage, calls });
+
+    const opened = await gateway.streamAgent({
+      system: "",
+      messages: [],
+      tools: [],
+      tag: accountTag("stream-provider-transient"),
+    });
+
+    expect(isErr(opened)).toBe(false);
+    if (!isErr(opened)) {
+      expect(await collect(opened.value)).toEqual([
+        { kind: "error", message: "The provider rate-limited this request." },
+      ]);
+    }
+    const snapshot = await usage.get(UserId("stream-provider-transient"));
+    expect(isErr(snapshot)).toBe(false);
+    if (!isErr(snapshot)) expect(snapshot.value).toMatchObject({ tokensUsed: 6, turnsUsed: 1 });
+  });
 });
 
 async function collect(generator: AsyncGenerator<unknown>): Promise<unknown[]> {
