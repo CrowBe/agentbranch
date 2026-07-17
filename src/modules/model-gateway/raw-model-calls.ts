@@ -18,6 +18,10 @@ import type {
  */
 export const PROVIDER_CAP_REACHED_MESSAGE = "cap_reached: Out of free usage today.";
 
+/** The retryable message for provider throttling that is not a spend cap. */
+export const PROVIDER_TRANSIENT_MESSAGE =
+  "The model provider rate-limited this request — try again shortly.";
+
 /** What an unmetered raw call spent, alongside what it produced. */
 export type RawCallResult<T> = {
   readonly value: T;

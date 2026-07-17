@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Mock } from "vitest";
 import { z } from "zod";
-import { createSdkModelCalls } from "./sdk-model-calls";
+import { classifyProviderError, createSdkModelCalls } from "./sdk-model-calls";
+import { PROVIDER_TRANSIENT_MESSAGE } from "@/modules/model-gateway";
 import type { ResolvedModel } from "@/modules/model-router";
 import { isErr } from "@/shared";
 
@@ -146,6 +147,47 @@ describe("sdk model calls — provider cap errors", () => {
     if (isErr(result)) expect(result.error.tag).toBe("model_unavailable");
   });
 
+  it.each([{ status: 429 }, { message: "rate limit exceeded" }])(
+    "maps an OpenAI-compatible throttle to a retryable model_unavailable error: %j",
+    async (cause) => {
+      aiMocks.generateObject.mockRejectedValueOnce(cause);
+
+      const result = await calls.classify(
+        resolved({ providerId: "nous", kind: "openai-compatible" }),
+        { prompt: "x", choices: ["a"] },
+      );
+
+      expect(isErr(result)).toBe(true);
+      if (isErr(result)) {
+        expect(result.error).toMatchObject({
+          tag: "model_unavailable",
+          message: PROVIDER_TRANSIENT_MESSAGE,
+        });
+        expect(result.error.message).not.toContain("Out of free usage today.");
+      }
+    },
+  );
+
+  it("maps a nested OpenAI-compatible insufficient_quota failure to cap_reached", async () => {
+    const cause = { response: { data: { error: { code: "insufficient_quota" } } } };
+    aiMocks.generateObject.mockRejectedValueOnce(cause);
+
+    const result = await calls.generate(
+      resolved({ providerId: "nous", kind: "openai-compatible" }),
+      { system: "", prompt: "x", schema: z.object({ ok: z.boolean() }) },
+    );
+
+    expect(isErr(result)).toBe(true);
+    if (isErr(result)) expect(result.error.tag).toBe("cap_reached");
+  });
+
+  it.each([{ status: 429 }, { message: "quota exceeded" }])(
+    "keeps Anthropic provider caps classified as cap_reached: %j",
+    (cause) => {
+      expect(classifyProviderError("anthropic", cause)).toBe("cap");
+    },
+  );
+
   it("yields a provider-cap-error part when the stream throws a quota failure", async () => {
     aiMocks.streamText.mockReturnValueOnce({
       fullStream: throwingParts([], { statusCode: 429, message: "quota exceeded" }),
@@ -171,6 +213,22 @@ describe("sdk model calls — provider cap errors", () => {
     expect(await collect(stream.parts)).toEqual([
       { kind: "provider-cap-error" },
       { kind: "finish", finishReason: "error" },
+    ]);
+  });
+
+  it("yields a regular retryable error part for an OpenAI-compatible throttle", async () => {
+    aiMocks.streamText.mockReturnValueOnce({
+      fullStream: parts([{ type: "error", error: { status: 429 } }]),
+      totalUsage: Promise.resolve({ totalTokens: 7 }),
+    });
+
+    const stream = calls.streamAgent(
+      resolved({ providerId: "nous", kind: "openai-compatible" }),
+      { system: "", messages: [], tools: [] },
+    );
+
+    expect(await collect(stream.parts)).toEqual([
+      { kind: "error", message: PROVIDER_TRANSIENT_MESSAGE },
     ]);
   });
 });
