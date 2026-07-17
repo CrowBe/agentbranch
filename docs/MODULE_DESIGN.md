@@ -456,6 +456,7 @@ Almost every change is one of these. If a task fits neither, surface it.
 npm run dev        # run the app           npm run typecheck   # tsc --noEmit
 npm run build      # production build      npm run lint        # eslint
 npm test           # vitest (run once)     npm run test:watch
+npm run test:conformance # opt-in live provider check; set CONFORMANCE_PROVIDER + provider API key
 npm run test:visual # browser-mode screenshot suite (baselines in __screenshots__;
                     # refresh with test:visual:update)  — DESIGN.md §5.3
 npm run db:generate / db:push / db:migrate # Prisma (needs DATABASE_URL)
