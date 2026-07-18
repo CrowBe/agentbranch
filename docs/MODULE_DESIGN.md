@@ -382,6 +382,15 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
   touchpoint; the app shell is composition/JSX only — no fetch calls, no
   `unknown` guards — and workspace behaviour (choreography, decoding, error
   paths) is tested without rendering React (`workspace.test.ts`).
+  `workspace/local-suggestion-provider.ts` owns the browser-side local
+  suggestion port, its Prompt API adapter, and the deterministic adapter used
+  in choreography tests. The Prompt API adapter caches one availability probe
+  per workspace session, accepts only an already-`available` model, creates a
+  short-lived session per suggestion, constrains output with JSON Schema, and
+  truncates long skill source before prompting. `suggestLocallyOrRoute` is the
+  first-available-wins boundary: missing or malformed local output silently
+  falls through to the feature's existing server route. This client-only seam
+  deliberately does not touch the gateway, router, or accounting layers.
   The interaction panel's Equipment mode (side-rail entry) accepts both kinds
   of input: a pasted JSON document is checked against the two quality routes
   above, and a plain-language message drives the response-schema authoring

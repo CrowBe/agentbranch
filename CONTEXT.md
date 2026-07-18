@@ -84,6 +84,10 @@ _Avoid_: harness (evaluation-narrow + banned jargon), engine (feature-specific),
 The platform's *single* provider + model **selection** authority — its own module (`src/modules/model-router`), the layer beneath the gateway. Owns the provider registry, credentials (server-pool key + optional **bring-your-own override**), and the runtime-mutable active selection; resolves a `LanguageModel` per primitive. Pure *selection* mechanism, as the gateway is pure *metering* mechanism.
 _Avoid_: gateway (that's the metered entry, not the selector), provider (the raw `LanguageModel`), config (selection is runtime, not just env)
 
+**Local suggestion provider**:
+The browser-side progressive-enhancement option for light, editable suggestions. It sits beside the model gateway because it spends no platform tokens; it never writes an artifact, gates an action, or produces an Insight. User copy says **suggested on your device** only when this rung served the result.
+_Avoid_: local model (names the implementation, not the boundary), Gemini Nano (vendor jargon), model-router provider (it does not run server-side or resolve through the router)
+
 **Gateway primitive**:
 A single intent-level model operation on the gateway — three in v1: **`classify`** (one structured pick from a fixed choice set; returns the winning label or `null`, plus the model's own one-line rationale), **`runAgent`** (one metered agent turn — the gateway runs the loop, the caller supplies each tool's `handler`), **`generate`** (one metered free-form structured-output call, schema-validated). Fine, not capability-shaped — keeping primitives fine keeps **method** in the caller and the gateway fixed-size as callers multiply.
 _Avoid_: tool, op, command, wouldSelect/runScenario (those are caller methods, not gateway primitives)
