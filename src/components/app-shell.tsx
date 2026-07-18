@@ -9,6 +9,7 @@ import { ModelConsole } from "./model-console";
 import { HeroPanel } from "./hero-panel";
 import { InteractionPanel } from "./interaction-panel";
 import { DraftControls } from "./draft-controls";
+import { PublishControls } from "./publish-controls";
 import { Segmented } from "./ui/segmented";
 import { useWorkspace } from "./workspace";
 
@@ -100,6 +101,13 @@ export function AppShell({
             onReviseWithFeedback={actions.reviseWithFeedback}
             feedbackBusy={snapshot.busy || snapshot.toolBusy}
           />
+          {snapshot.mode === "build" && snapshot.currentSkillId && snapshot.branchId === null && (
+            <PublishControls
+              skillName={snapshot.current?.frontmatter.name ?? "skill"}
+              busy={snapshot.busy}
+              onPublish={(owner, name) => void actions.publish(owner, name)}
+            />
+          )}
           {snapshot.status && (
             <p className="text-label px-4 pb-3 text-on-surface-variant lg:px-6 lg:pb-4" role="status">
               {snapshot.status}

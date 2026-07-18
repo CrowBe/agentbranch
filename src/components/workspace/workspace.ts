@@ -429,6 +429,34 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     }
   }
 
+  async function publish(owner: string, name: string): Promise<void> {
+    if (snapshot.busy) return;
+    if (!snapshot.currentSkillId) {
+      fail("Open a saved skill first.");
+      return;
+    }
+
+    patch({ busy: true, status: "Publishing…" });
+    try {
+      const res = await fetchImpl("/api/publications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skillId: snapshot.currentSkillId, slug: { owner, name } }),
+      });
+      const body: unknown = await res.json().catch(() => null);
+      if (!res.ok) {
+        fail(errorMessage(body, res.status));
+        return;
+      }
+      patch({ status: "Published to the Skill library." });
+      appendEntry(entry(`Published at ${owner}/${name}.`, "muted"));
+    } catch (cause) {
+      fail(String(cause));
+    } finally {
+      patch({ busy: false });
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Import + saved skills
 
@@ -1223,6 +1251,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     openDraft,
     promote,
     discardDraft,
+    publish,
     runTool: runToolAction,
     selectEvaluationSurface,
     selectLintSurface,

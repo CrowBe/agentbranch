@@ -45,6 +45,7 @@ into a labelled slideout (name = visible text, `aria-label` gone), so a CSS
 | Safety chip | button `Safety` | safety rating (evaluation — needs a model) |
 | Export chip | button `Export` | standard skill folder manifest; works offline |
 | Draft controls | buttons `Start a draft` / `Set as main version` / `Discard draft` | banner `Editing a draft` vs `Viewing the main version` |
+| Publish | button `Publish` (main version only) | opens `Publish skill` form for the public `owner/name` address; submit reaches `/api/publications` |
 | Status line | `[role="status"]` | the synchronisation point for every step |
 
 ### Confirm dialogs (native `confirm()`)
@@ -165,6 +166,7 @@ precondition: WALK-01
 | 1 | click | nav button `My skills` | `Loading skills…` → panel lists `inbox-triage` |
 | 2 | click | `Open` on the entry card | `Opening skill…` → `Skill opened.` |
 | 3 | assert | draft controls | `Viewing the main version` + button `Start a draft` |
+| 4 | assert | publish control | button `Publish` is available for the main version |
 
 ### WALK-07 · Draft lifecycle (start → promote, start → discard)
 
