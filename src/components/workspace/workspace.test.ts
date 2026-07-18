@@ -39,6 +39,27 @@ function sseResponse(events: readonly { readonly event: string; readonly data: u
 }
 
 describe("workspace choreography", () => {
+  it("publishes the open skill under the requested public slug", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({ skill: { id: "skill-1", source: skill }, rendered: init.rendered, source: init.source }),
+      )
+      .mockResolvedValueOnce(Response.json({ publication: { id: "publication-1" } }, { status: 201 }));
+    const workspace = createWorkspace(init, { fetch: fetchMock });
+
+    await workspace.actions.importSkill("---\nname: inbox-triage\n---\nBody.");
+    await workspace.actions.publish("ben", "inbox-triage");
+
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/publications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ skillId: "skill-1", slug: { owner: "ben", name: "inbox-triage" } }),
+    });
+    expect(workspace.getSnapshot().status).toBe("Published to the Skill library.");
+    expect(workspace.getSnapshot().entries.at(-1)?.label).toBe("Published at ben/inbox-triage.");
+  });
+
   it("opens a saved skill: decodes the detail, re-renders the hero, returns to build mode", async () => {
     const fetchMock = vi
       .fn()

@@ -246,6 +246,7 @@ export type WorkspaceActions = {
   readonly openDraft: (id: string) => Promise<void>;
   readonly promote: () => Promise<void>;
   readonly discardDraft: () => Promise<void>;
+  readonly publish: (owner: string, name: string) => Promise<void>;
   readonly runTool: (action: ToolAction) => Promise<void>;
   readonly selectEvaluationSurface: (surface: EvaluationSurface) => Promise<void>;
   readonly selectLintSurface: (surface: EvaluationSurface) => Promise<void>;
