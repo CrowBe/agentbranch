@@ -99,6 +99,7 @@ export function AppShell({
             onLintSurfaceChange={(surface) => void actions.selectLintSurface(surface)}
             onSafetySurfaceChange={(surface) => actions.selectSafetySurface(surface)}
             onReviseWithFeedback={actions.reviseWithFeedback}
+            onApplyMetadataSuggestion={actions.applyMetadataSuggestion}
             feedbackBusy={snapshot.busy || snapshot.toolBusy}
           />
           {snapshot.mode === "build" && snapshot.currentSkillId && snapshot.branchId === null && (

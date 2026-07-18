@@ -9,6 +9,8 @@ import type { Artifact } from "@/modules/skill-analysis";
  * `withSkillMetadata` or a frontmatter edit in the build loop).
  */
 export type SkillMetadataSuggestion = Artifact<"skill-metadata"> & {
+  readonly name: string;
+  readonly description: string;
   /** Always a taxonomy member (or null when nothing fits). */
   readonly category: string | null;
   readonly tags: readonly string[];
@@ -20,6 +22,8 @@ export type SkillMetadataSuggestion = Artifact<"skill-metadata"> & {
 
 /** The JSON surface the workspace consumes. */
 export type SkillMetadataSuggestionView = {
+  readonly name: string;
+  readonly description: string;
   readonly category: string | null;
   readonly tags: readonly string[];
   readonly rationale: string;

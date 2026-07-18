@@ -7,7 +7,7 @@ import { invalidRequestResponse, parseJsonRequest } from "../_shared/request-bod
 export const runtime = "nodejs";
 
 /**
- * Suggest discovery metadata (category + tags) for the skill in the request —
+ * Suggest editable identity + discovery metadata for the skill in the request —
  * the "LLM recommended" leg of metadata authoring. Model-backed through the
  * gateway when configured, deterministic keyword fallback otherwise, so the
  * surface works offline. The response is a suggestion; writing happens through

@@ -38,6 +38,7 @@ export function HeroPanel({
   onLintSurfaceChange,
   onSafetySurfaceChange,
   onReviseWithFeedback,
+  onApplyMetadataSuggestion,
   feedbackBusy,
 }: {
   rendered: RenderedDoc;
@@ -57,6 +58,7 @@ export function HeroPanel({
   onLintSurfaceChange: (surface: "insights" | "breakdown") => void;
   onSafetySurfaceChange: (surface: "insights" | "breakdown") => void;
   onReviseWithFeedback: (result: EvaluationFeedbackResult) => void;
+  onApplyMetadataSuggestion?: () => void;
   feedbackBusy: boolean;
 }) {
   return (
@@ -76,6 +78,7 @@ export function HeroPanel({
             onLintSurfaceChange={onLintSurfaceChange}
             onSafetySurfaceChange={onSafetySurfaceChange}
             onReviseWithFeedback={onReviseWithFeedback}
+            onApplyMetadataSuggestion={onApplyMetadataSuggestion}
             feedbackBusy={feedbackBusy}
           />
         ) : view === "rendered" ? (
@@ -149,6 +152,7 @@ function CapabilityView({
   onLintSurfaceChange,
   onSafetySurfaceChange,
   onReviseWithFeedback,
+  onApplyMetadataSuggestion,
   feedbackBusy,
 }: {
   panel: CapabilityPanel;
@@ -157,8 +161,31 @@ function CapabilityView({
   onLintSurfaceChange: (surface: "insights" | "breakdown") => void;
   onSafetySurfaceChange: (surface: "insights" | "breakdown") => void;
   onReviseWithFeedback: (result: EvaluationFeedbackResult) => void;
+  onApplyMetadataSuggestion?: () => void;
   feedbackBusy: boolean;
 }) {
+  if (panel.kind === "metadata-suggestion") {
+    return (
+      <div className="flex flex-col gap-4">
+        <header className="flex flex-col gap-1">
+          <p className="text-label text-on-surface-variant">
+            {panel.provenance === "on-device" ? "Suggested on your device" : "Metadata suggestion"}
+          </p>
+          <h1 className="text-headline-md">{panel.name}</h1>
+          <p className="text-doc-rendered text-on-surface-variant">{panel.description}</p>
+        </header>
+        <section className="rounded-[var(--radius-sm)] border border-outline-variant p-3">
+          <p className="text-label text-on-surface-variant">Category</p>
+          <p className="text-doc-rendered">{panel.category ?? "No category suggested"}</p>
+          <p className="text-label mt-3 text-on-surface-variant">Tags</p>
+          <p className="text-doc-rendered">{panel.tags.join(", ") || "No tags suggested"}</p>
+        </section>
+        <p className="text-doc-rendered text-on-surface-variant">{panel.rationale}</p>
+        <div><Button type="button" variant="secondary" disabled={busy} onClick={() => onApplyMetadataSuggestion?.()}>Apply suggestion</Button></div>
+      </div>
+    );
+  }
+
   if (panel.kind === "visualise") {
     return (
       <div className="flex flex-col gap-3">

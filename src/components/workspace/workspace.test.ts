@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { encodeSse } from "@/shared";
 import type { SkillSource } from "@/modules/skill";
-import { createWorkspace } from "./index";
+import { createDeterministicLocalSuggestionProvider, createWorkspace } from "./index";
 
 const skill: SkillSource = {
   frontmatter: {
@@ -39,6 +39,59 @@ function sseResponse(events: readonly { readonly event: string; readonly data: u
 }
 
 describe("workspace choreography", () => {
+  const metadataSuggestion = {
+    name: "inbox-priority-triage",
+    description: "Prioritise unread email and draft the next action when the inbox needs triage.",
+    category: "email",
+    tags: ["email", "inbox-triage", "prioritisation"],
+    rationale: "The skill sorts unread inbox messages by urgency.",
+  };
+
+  it("uses the local metadata rung and applies only after the author accepts", async () => {
+    const fetchMock = vi.fn();
+    const workspace = createWorkspace(init, {
+      fetch: fetchMock,
+      localSuggestionProvider: createDeterministicLocalSuggestionProvider(metadataSuggestion),
+    });
+
+    await workspace.actions.runTool("metadata");
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(workspace.getSnapshot().current).toEqual(skill);
+    expect(workspace.getSnapshot().capability).toMatchObject({
+      kind: "metadata-suggestion",
+      provenance: "on-device",
+      name: "inbox-priority-triage",
+    });
+
+    workspace.actions.applyMetadataSuggestion();
+    expect(workspace.getSnapshot().current?.frontmatter).toMatchObject({
+      name: "inbox-priority-triage",
+      description: metadataSuggestion.description,
+      extra: { category: "email", tags: metadataSuggestion.tags },
+    });
+    expect(workspace.getSnapshot().status).toContain("Run Triggers");
+  });
+
+  it("silently falls through from unavailable local metadata to the gateway route", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+      ...metadataSuggestion,
+      current: { category: null, tags: [] },
+    }));
+    const workspace = createWorkspace(init, {
+      fetch: fetchMock,
+      localSuggestionProvider: createDeterministicLocalSuggestionProvider(null),
+    });
+
+    await workspace.actions.runTool("metadata");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/metadata-suggest", expect.objectContaining({ method: "POST" }));
+    expect(workspace.getSnapshot().capability).toMatchObject({
+      kind: "metadata-suggestion",
+      provenance: "route",
+    });
+  });
+
   it("publishes the open skill under the requested public slug", async () => {
     const fetchMock = vi
       .fn()

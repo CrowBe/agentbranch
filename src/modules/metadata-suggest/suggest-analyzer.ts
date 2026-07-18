@@ -37,6 +37,8 @@ export const suggestAnalyzer: Analyzer<Skill, SkillMetadataSuggestion> = {
       if (!isErr(generated)) {
         return ok({
           kind: "skill-metadata" as const,
+          name: generated.value.name,
+          description: generated.value.description,
           category: generated.value.category,
           tags: normalizeSkillTags(generated.value.tags),
           rationale: generated.value.rationale,
@@ -50,15 +52,19 @@ export const suggestAnalyzer: Analyzer<Skill, SkillMetadataSuggestion> = {
 };
 
 const suggestionSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().min(1).max(500),
   category: z.enum(SKILL_CATEGORIES),
   tags: z.array(z.string().min(1).max(40)).min(1).max(8),
   rationale: z.string().min(1).max(300),
 });
 
 function modelPrompt(skill: Skill): string {
-  return `Recommend a category and tags for this skill.
+  return `Recommend a name, description, category, and tags for this skill.
 
 Rules:
+- name is concise, lowercase hyphen-case, and describes the workflow.
+- description says what the skill does and when to use it in one or two plain sentences.
 - category must be one of: ${SKILL_CATEGORIES.join(", ")}.
 - 3 to 6 tags, lowercase hyphen-case, each a term a user would search for.
 - Tags name the workflow, artifact, or domain — not generic words like "assistant" or "helper".
@@ -97,6 +103,8 @@ function fallbackSuggestion(
 
   return {
     kind: "skill-metadata",
+    name: skill.source.frontmatter.name,
+    description: skill.source.frontmatter.description,
     category: best?.category ?? null,
     tags,
     rationale: best

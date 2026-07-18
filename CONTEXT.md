@@ -21,7 +21,7 @@ A persisted skill in our DB — `SKILL.md` source plus identity and timestamps. 
 _Avoid_: skill row, skill entity, document
 
 **Skill metadata**:
-A skill's discovery metadata — one **category** from the closed taxonomy (`SKILL_CATEGORIES`) plus up to 8 kebab-case **tags** — living in `SKILL.md` frontmatter so it travels with the artifact and is pinned by its content hash. Suggested by the **metadata-suggest** capability; written only by the author (build-loop frontmatter edits / `withSkillMetadata`).
+A skill's discovery metadata — one **category** from the closed taxonomy (`SKILL_CATEGORIES`) plus up to 8 kebab-case **tags** — living in `SKILL.md` frontmatter so it travels with the artifact and is pinned by its content hash. The **metadata-suggest** surface proposes editable name, description, category, and tags through its local → gateway → deterministic ladder; written only after the author accepts (`withSkillMetadata` / frontmatter edit paths).
 _Avoid_: labels, keywords (too generic), taxonomy (that's the category list, not a skill's values), SEO fields
 
 **Draft** (branching iteration, §9.3):
