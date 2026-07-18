@@ -25,3 +25,5 @@ export { renderSkillLibrary } from "./skill-library";
 export type { SkillLibraryEntry, SkillLibrarySurface, SkillLibraryView } from "./skill-library";
 export { renderSkillProfile } from "./skill-profile";
 export type { SkillProfileView } from "./skill-profile";
+export { TAP_REPOSITORY, TAP_REPOSITORY_URL, tapSkillReportUrl } from "./tap-sync";
+export type { TapSyncOutcome, TapSyncTrigger } from "./tap-sync";

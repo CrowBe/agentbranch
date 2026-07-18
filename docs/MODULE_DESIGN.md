@@ -174,7 +174,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **test-run** | `testRunCapability`, `executeSkill`, `createMockToolRegistry`, `defaultMockToolRegistry`, `emailMockTool`, `registryFromContracts`, `computeContractChecks`, `contractCheckIssues`, `toTestRunAnalysisRecord` | `TestRunRepository` | evaluation capability over a `TestRunInput` bundle · run + world generation real · contract-driven mocks + per-call validation real · email mock = offline fallback |
 | **triggering-eval** | `triggeringEvalCapability`, `runTriggeringEval`, `runBatteryCases`, `generatePromptBattery`, `distractorLibrary`, `toEvalRunAnalysisRecord` | `EvalRunRepository` | evaluation capability · run + battery generation real · adversarial negative battery · distractor library static v1 seed |
 | **safety-review** | `safetyReviewCapability`, `runSafetyReview`, `SafetyRating` + verdict/score types | `SafetyRatingRepository` | evaluation capability · LLM-judge over a full skill folder as structurally untrusted data · caller-tagged (opt-in rating = `account`; a platform-initiated review would tag `platform`) · records persist as safety ratings pinned to the reviewed version — the pin that earns a published version its safety badge (ARCHITECTURE §9.1) |
-| **publication** | `publishSkillVersion`, `renderTapMarketplace`, `renderTapRepositoryFiles`, `renderSkillLibrary`, `renderSkillProfile`, `Publication`, `SkillLibraryEntry/View`, `SkillProfileView`, `PublicationRepository` + types | `PublicationRepository` | real (pins a Skill version + content hash + slug + tier; rate-limited open publish service; pure tap marketplace + tap repository file renderers for `.claude-plugin/marketplace.json` and `skills/<owner>/<name>/SKILL.md`; pure Skill-library read model — reviewed tier surfaced, published tier link-reachable, entries enriched with pinned-frontmatter description/category/tags for filtering + search; pure skill-profile read model behind the public profile page) |
+| **publication** | `publishSkillVersion`, `renderTapMarketplace`, `renderTapRepositoryFiles`, `renderSkillLibrary`, `renderSkillProfile`, `TAP_REPOSITORY`, `tapSkillReportUrl`, `Publication`, `SkillLibraryEntry/View`, `SkillProfileView`, `PublicationRepository`, `TapSyncTrigger` + types | `PublicationRepository`, `TapSyncTrigger` | real (pins a Skill version + content hash + slug + tier; rate-limited open publish service; pure tap marketplace + tap repository file renderers for `.claude-plugin/marketplace.json` and `skills/<owner>/<name>/SKILL.md`; pure Skill-library read model — reviewed tier surfaced, published tier link-reachable, entries enriched with pinned-frontmatter description/category/tags for filtering + search; pure skill-profile read model behind the public profile page, carrying the tap repo install address + prefilled report link; `TapSyncTrigger` is the publish-time fast path asking the public tap repo — `TAP_REPOSITORY`, CrowBe/agentbranch-tap — to sync now, best-effort by contract) |
 | **export** | `exportCapability`, manifest types | — | real |
 | **lint** | `lintCapability`, `summarizeLintFindings`, `LintReport`, `LintFinding` | — | real (quality + pure policy rules; `summarizeLintFindings` is the shared scorer every LintReport-shaped artifact uses) |
 | **response-schema** | `responseSchemaCapability`, `parseResponseSchema`, `serializeResponseSchema`, `applyResponseSchemaEdit`, `responseSchemaName`, `schemaShapeFindings`, `validateAgainstSchema`, `exampleValueForSchema` + types | — | real (first equipment primitive: lossless source model + pure lint + offline schema-subset validation) |
@@ -251,6 +251,7 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
 | `clerk/clerk-auth.ts` | `AuthPort` | real Clerk server auth |
 | `clerk/stub-auth.ts` | `AuthPort` | fixed dev identity |
 | `github/skill-import-fetcher.ts` | `SkillImportFetcher` | fetches a `SKILL.md` from a GitHub URL; guarded (requires token) |
+| `github/tap-sync-trigger.ts` | `TapSyncTrigger` | fires the `publish` repository_dispatch at the public tap repo so its publish-sync workflow opens + auto-merges the bot PR; guarded (requires `TAP_SYNC_TOKEN`), with a disabled fallback that defers to the tap repo's scheduled reconciliation sweep |
 
 ### Server (`src/server`)
 
@@ -329,8 +330,10 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
   (ARCHITECTURE §9.1): server-rendered, force-dynamic (a takedown revert or new
   rating must be visible immediately). Resolves the visible publication by
   slug, renders `renderSkillProfile` (identity, trust tier, badge/flag,
-  category + tags, content hash, install source) plus the pinned source through
-  the hero capability's `rendered` view. 404 for missing or private slugs.
+  category + tags, content hash, the tap repo install source, and the report
+  link — the tap repo's issue form with slug + hash prefilled) plus the pinned
+  source through the hero capability's `rendered` view. 404 for missing or
+  private slugs.
 - `app/api/tap-repository/route.ts` — the public tap repository snapshot
   (ARCHITECTURE §9.1): GET renders the exact file set the bot PR writes —
   `.claude-plugin/marketplace.json` plus `skills/<owner>/<name>/SKILL.md` —
@@ -341,7 +344,9 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
   (ARCHITECTURE §9.1): POST authenticates, resolves the user's main version,
   pins its `SKILL.md` content hash, and invokes `publishSkillVersion` as a
   `published` publication. Safety ratings are badge data only; this route never
-  requires or runs one.
+  requires or runs one. On success it asks the public tap repo to sync via the
+  `TapSyncTrigger` — best-effort: an "unavailable" outcome is reported in the
+  response and left to the tap repo's scheduled sweep, never a publish failure.
 - `app/api/model-router/route.ts` — **admin-gated** (the selection is
   instance-wide): GET the secret-free router snapshot, POST to switch the active
   provider/model or store/clear a bring-your-own key. With Clerk auth on, only an
@@ -476,8 +481,13 @@ npm run db:generate / db:push / db:migrate # Prisma (needs DATABASE_URL)
 - `npm run tap:apply-snapshot -- --snapshot <url-or-file> --repo <tap-checkout>`
   applies the `/api/tap-repository` file set to a public tap repo checkout. It
   manages only `.claude-plugin/marketplace.json` and `skills/**`, rejects paths
-  outside those roots, and leaves the surrounding bot PR/merge wiring to the
-  tap repo automation.
+  outside those roots, and is what the tap repo's publish-sync workflow runs;
+  the surrounding bot PR/merge wiring lives there
+  (https://github.com/CrowBe/agentbranch-tap, `.github/workflows/`).
+- `npm run tap:lint-skills -- <tap-checkout>` runs the lint policy rules over a
+  tap repo checkout's published skill folders and prints GitHub annotations —
+  the advisory CI entry point the tap repo's workflows call, always exit 0 on
+  findings (verdicts annotate, never gate).
 
 ---
 

@@ -391,7 +391,19 @@ describe("renderSkillProfile", () => {
       category: "email",
       tags: ["triage", "inbox"],
       publishedAt: "2026-07-09T00:00:00.000Z",
-      install: { type: "git", ref: "HEAD", path: "skills/ben/inbox-triage" },
+      install: {
+        type: "git",
+        ref: "HEAD",
+        path: "skills/ben/inbox-triage",
+        source: "https://github.com/CrowBe/agentbranch-tap",
+      },
+      reportUrl:
+        "https://github.com/CrowBe/agentbranch-tap/issues/new?" +
+        new URLSearchParams({
+          template: "report-skill.yml",
+          slug: "ben/inbox-triage",
+          content_hash: publication.contentHash,
+        }).toString(),
     });
   });
 });

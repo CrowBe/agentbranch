@@ -79,11 +79,23 @@ export default async function SkillProfilePage({ params }: { params: RouteParams
       <section className="flex flex-col gap-1.5 rounded-[var(--radius-sm)] border border-outline-variant bg-surface-high p-4">
         <h2 className="text-label text-on-surface-variant">Install</h2>
         <p className="text-doc-source">
+          <a href={profile.install.source} className="hover:opacity-80">
+            {profile.install.source}
+          </a>
+        </p>
+        <p className="text-doc-source">
           {profile.install.path} @ {profile.install.ref}
         </p>
         <p className="text-label text-on-surface-variant">
           content hash {profile.contentHash.slice(0, 12)} · published{" "}
           {profile.publishedAt.slice(0, 10)}
+        </p>
+        <p className="text-label text-on-surface-variant">
+          Something wrong with this skill?{" "}
+          <a href={profile.reportUrl} className="underline hover:opacity-80">
+            Report it
+          </a>
+          .
         </p>
       </section>
 

@@ -1,5 +1,6 @@
 import { skillMetadata } from "@/modules/skill";
 import { safetyFor, splitSlug, trustLabel } from "./skill-library";
+import { TAP_REPOSITORY_URL, tapSkillReportUrl } from "./tap-sync";
 import type {
   PublicationSafetyRating,
   PublicationSafetyState,
@@ -30,7 +31,11 @@ export type SkillProfileView = {
     readonly type: "git";
     readonly ref: "HEAD";
     readonly path: string;
+    /** The public tap repo the path lives in — the address consumers add. */
+    readonly source: string;
   };
+  /** The in-app report path: the tap repo's issue form, slug + hash prefilled. */
+  readonly reportUrl: string;
 };
 
 export function renderSkillProfile(
@@ -57,6 +62,8 @@ export function renderSkillProfile(
       type: "git",
       ref: "HEAD",
       path: `skills/${publication.slug}`,
+      source: TAP_REPOSITORY_URL,
     },
+    reportUrl: tapSkillReportUrl(publication.slug, publication.contentHash),
   };
 }
