@@ -39,6 +39,7 @@ into a labelled slideout (name = visible text, `aria-label` gone), so a CSS
 |---|---|---|
 | View toggle | buttons `Rendered` / `Source` | two renderers of the same skill; Rendered is default |
 | Quality chip | `button[aria-label^="Quality"]` | pure lint — works offline, zero tokens |
+| Metadata chip | button `Metadata` | editable name, description, category + tags; local → gateway → deterministic ladder |
 | Visualise chip | button `Visualise` | skill IR → Mermaid; deterministic fallback offline |
 | Run chip | button `Run` | test run (evaluation — needs a model) |
 | Triggers chip | button `Triggers` | triggering eval (evaluation — needs a model) |
@@ -147,6 +148,16 @@ precondition: WALK-01 · offline-safe (deterministic fallback)
 |---|---|---|---|
 | 1 | click | button `Visualise` | `Visualise running…` → `Visualise ready.` |
 | 2 | assert | capability panel | Mermaid diagram (or its source block fallback) renders |
+
+### WALK-04B · Metadata suggestion
+
+precondition: WALK-01 · offline-safe (route's deterministic fallback)
+
+| # | action | selector | expect |
+|---|---|---|---|
+| 1 | click | button `Metadata` | `Metadata running…` → `Metadata ready.` |
+| 2 | assert | capability panel | same editable name, description, category, tags + rationale shape on every rung; offline copy is `Metadata suggestion` |
+| 3 | click | button `Apply suggestion` | `Suggestion applied.`; hero returns to the author-owned document |
 
 ### WALK-05 · Export
 
