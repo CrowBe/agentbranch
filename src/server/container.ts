@@ -11,7 +11,7 @@ import type { SkillImportFetcher } from "@/modules/skill-import";
 import type { HarnessVersion, HarnessVersionRepository } from "@/modules/harness-version";
 import { currentHarnessManifest } from "@/modules/harness-version";
 import type { BenchmarkRunRepository } from "@/modules/regression-benchmark";
-import type { PublicationRepository } from "@/modules/publication";
+import type { PublicationRepository, TapSyncTrigger } from "@/modules/publication";
 import type { DomainError, Result } from "@/shared";
 
 import { readConfig, type AppConfig } from "./config";
@@ -48,6 +48,10 @@ import { createClerkAuth } from "@/infra/clerk/clerk-auth";
 import { createStubAuth } from "@/infra/clerk/stub-auth";
 import { createClerkTierResolver } from "@/infra/clerk/tier-resolver";
 import { createGithubSkillImportFetcher } from "@/infra/github/skill-import-fetcher";
+import {
+  createDisabledTapSyncTrigger,
+  createGithubTapSyncTrigger,
+} from "@/infra/github/tap-sync-trigger";
 
 /**
  * The composition root. The one place ports meet adapters; everything else
@@ -81,6 +85,9 @@ export type AppContainer = {
   // route's persistence (ARCHITECTURE §9 harness improvement loop).
   readonly benchmarkRuns: BenchmarkRunRepository;
   readonly publications: PublicationRepository;
+  // Publish → public tap repo fast path (ARCHITECTURE §9.1 bot pipeline):
+  // best-effort repository_dispatch; disabled without a token.
+  readonly tapSync: TapSyncTrigger;
   readonly skillImportFetcher: SkillImportFetcher;
 };
 
@@ -174,6 +181,12 @@ export function getContainer(): AppContainer {
     publications: prisma
       ? createPrismaPublicationRepository(prisma)
       : createMemoryPublicationRepository(memorySkillStore!),
+    tapSync: config.flags.hasTapSync
+      ? createGithubTapSyncTrigger({
+          repository: config.tapSync.repository,
+          token: config.tapSync.token!,
+        })
+      : createDisabledTapSyncTrigger(),
     skillImportFetcher: createGithubSkillImportFetcher(),
   };
   return cached;

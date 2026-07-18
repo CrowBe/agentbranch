@@ -5,6 +5,7 @@ import type {
   ProviderProfile,
   StructuredOutputSupport,
 } from "@/modules/model-router";
+import { TAP_REPOSITORY } from "@/modules/publication";
 
 /**
  * Environment config + feature flags, read once. Missing secrets are not an
@@ -50,10 +51,21 @@ export type AppConfig = {
    * the same posture as the admin allowlist.
    */
   readonly cronSecret: string | undefined;
+  /**
+   * Production bot wiring for the tap publish pipeline (ARCHITECTURE §9.1):
+   * a publish fires a repository_dispatch at the public tap repo. Without a
+   * token the trigger degrades to the disabled adapter — the tap repo's
+   * scheduled reconciliation sweep still picks the publish up.
+   */
+  readonly tapSync: {
+    readonly repository: string;
+    readonly token: string | undefined;
+  };
   readonly flags: {
     readonly hasDatabase: boolean;
     readonly hasModel: boolean;
     readonly hasAuth: boolean;
+    readonly hasTapSync: boolean;
   };
 };
 
@@ -91,6 +103,7 @@ export function readConfig(): AppConfig {
   const clerkConfigured =
     nonEmpty(process.env.CLERK_SECRET_KEY) !== undefined &&
     nonEmpty(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) !== undefined;
+  const tapSyncToken = nonEmpty(process.env.TAP_SYNC_TOKEN);
 
   const nousBaseUrl = nonEmpty(process.env.NOUS_BASE_URL) ?? DEFAULT_NOUS_BASE_URL;
   const nousStructuredOutputs = readStructuredOutputSupport(process.env.NOUS_STRUCTURED_OUTPUTS);
@@ -154,10 +167,15 @@ export function readConfig(): AppConfig {
     clerkConfigured,
     clerkProPlanSlug: nonEmpty(process.env.AGENTBRANCH_PRO_PLAN_SLUG) ?? "pro",
     cronSecret: nonEmpty(process.env.CRON_SECRET),
+    tapSync: {
+      repository: nonEmpty(process.env.TAP_REPOSITORY) ?? TAP_REPOSITORY,
+      token: tapSyncToken,
+    },
     flags: {
       hasDatabase: databaseUrl !== undefined,
       hasModel: modelProvider === "nous" ? nousApiKey !== undefined : anthropicApiKey !== undefined,
       hasAuth: clerkConfigured,
+      hasTapSync: tapSyncToken !== undefined,
     },
   };
 }

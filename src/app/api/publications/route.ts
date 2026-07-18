@@ -58,8 +58,14 @@ export async function POST(request: Request): Promise<Response> {
   );
   if (isErr(publication)) return domainErrorResponse(publication.error);
 
+  // Fast path of the tap bot pipeline (ARCHITECTURE §9.1): ask the public tap
+  // repo to sync now. Best-effort — the tap repo's scheduled reconciliation
+  // sweep covers an "unavailable" outcome, so the publish never fails on it.
+  const tapSync = await container.tapSync.requestSync();
+
   return Response.json(
     {
+      tapSync,
       publication: {
         id: publication.value.id,
         slug: publication.value.slug,

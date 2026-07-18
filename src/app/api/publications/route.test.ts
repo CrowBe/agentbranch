@@ -8,6 +8,7 @@ const currentIdentity = vi.fn();
 const findById = vi.fn();
 const createPublication = vi.fn();
 const consumeRateLimit = vi.fn();
+const requestTapSync = vi.fn();
 
 vi.mock("@/server/container", () => ({
   getContainer: () => ({
@@ -15,6 +16,7 @@ vi.mock("@/server/container", () => ({
     skills: { findById },
     publications: { create: createPublication },
     requestRateLimiter: { consume: consumeRateLimit },
+    tapSync: { requestSync: requestTapSync },
   }),
 }));
 
@@ -29,6 +31,7 @@ describe("POST /api/publications", () => {
     findById.mockReset();
     createPublication.mockReset();
     consumeRateLimit.mockReset();
+    requestTapSync.mockReset();
 
     currentIdentity.mockResolvedValue(ok({ userId: UserId("user-1"), email: "ben@example.com" }));
     findById.mockResolvedValue(ok({
@@ -41,6 +44,7 @@ describe("POST /api/publications", () => {
       updatedAt: new Date("2026-01-05T00:00:00.000Z"),
     }));
     consumeRateLimit.mockResolvedValue(ok({ allowed: true }));
+    requestTapSync.mockResolvedValue("requested");
     createPublication.mockImplementation(async (input) =>
       ok({
         id: PublicationId("publication-1"),
@@ -66,6 +70,7 @@ describe("POST /api/publications", () => {
     const contentHash = `sha256:${createHash("sha256").update(serializeSkillMd(source)).digest("hex")}`;
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toEqual({
+      tapSync: "requested",
       publication: {
         id: "publication-1",
         slug: "ben/invoice-triage",
@@ -100,6 +105,21 @@ describe("POST /api/publications", () => {
     expect(response.status).toBe(401);
     expect(findById).not.toHaveBeenCalled();
     expect(createPublication).not.toHaveBeenCalled();
+  });
+
+  it("publishes even when the tap sync request is unavailable", async () => {
+    requestTapSync.mockResolvedValue("unavailable");
+
+    const response = await POST(
+      new Request("https://example.test/api/publications", {
+        method: "POST",
+        body: JSON.stringify({ skillId: "skill-1", slug: { owner: "ben", name: "inbox-triage" } }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({ tapSync: "unavailable" });
+    expect(createPublication).toHaveBeenCalled();
   });
 
   it("rejects malformed publish requests", async () => {
