@@ -188,6 +188,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **harness-version** | `currentHarnessManifest`, `hashHarnessManifest`, manifest/version types | `HarnessVersionRepository` | real |
 | **auth** | `AuthPort`, `AuthIdentity` | `AuthPort` | port |
 | **baseline-corpus** | `baselineSkillCorpus`, `baselineDistractors`, `BaselineSkillCorpusEntry` + types | — | real |
+| **response-schema-corpus** | `responseSchemaCorpus`, `ResponseSchemaCorpusEntry` | — | real (curated, hash-pinned response-schema fixtures with frozen lint expectations) |
 | **harness-recommendation** | `harnessRecommendationCapability`, `CorpusCohort`, `HarnessRecommendationReport` + types | — | real (Tier-1 static correlation) |
 | **regression-benchmark** | `regressionBenchmarkSet`, `regressionBenchmarkSetHash`, `runRegressionBenchmark`, `BenchmarkRun` + types | `BenchmarkRunRepository` | real |
 
