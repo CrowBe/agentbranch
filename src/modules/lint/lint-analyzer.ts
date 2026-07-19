@@ -572,7 +572,12 @@ export function summarizeLintFindings(findings: readonly LintFinding[]): LintSum
   const counts: Record<LintSeverity, number> = { error: 0, warn: 0, info: 0 };
   for (const finding of findings) counts[finding.severity] += 1;
 
-  const score = Math.max(0, 100 - counts.error * 35 - counts.warn * 12 - counts.info * 3);
+  const defaultPenalty: Readonly<Record<LintSeverity, number>> = { error: 35, warn: 12, info: 3 };
+  const penalty = findings.reduce(
+    (total, finding) => total + (finding.scorePenalty ?? defaultPenalty[finding.severity]),
+    0,
+  );
+  const score = Math.max(0, 100 - penalty);
   const grade: LintSummary["grade"] =
     score >= 90 ? "A" : score >= 75 ? "B" : score >= 60 ? "C" : "D";
   const rules = [...new Set(findings.map((finding) => finding.rule))].sort();

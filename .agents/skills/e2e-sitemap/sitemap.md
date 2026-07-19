@@ -281,3 +281,24 @@ independent · request shapes in §1
 | 4 | `GET /api/tap-repository` | 200 file set (`.claude-plugin/marketplace.json` + `skills/**`) |
 | 5 | `GET /api/cron/retention` without bearer secret | 401 — locked |
 | 6 | `GET /api/model-router` (auth off) | 200 snapshot with no key material in the body |
+
+## 3. Qualitative sensitivity probes
+
+These probes compare a clean artifact with one deliberate defect. A quality
+signal is sensitive when the defect costs more than five points and drops at
+least one grade letter.
+
+### QUAL-03 · Response-schema shape
+
+POST the same titled, described, closed object schema to `/api/response-schema`
+with `surface: "insights"`, changing only the noted field:
+
+| Variant | Expected quality |
+|---|---|
+| clean: all properties required, `additionalProperties: false` | A 100 |
+| all optional: `required: []` | B 85 |
+| open object: `additionalProperties: true` | B 85 |
+| open and all optional | C 70 |
+
+The two single-defect variants clear the sensitivity bar by 15 points and one
+grade letter; combining both structural defects reaches the C band.
