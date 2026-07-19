@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { encodeSse } from "@/shared";
+import { encodeSse, SKILL_NAME_MAX } from "@/shared";
 import type { SkillSource } from "@/modules/skill";
-import { createWorkspace } from "./index";
+import { createDeterministicLocalSuggestionProvider, createWorkspace } from "./index";
 
 const skill: SkillSource = {
   frontmatter: {
@@ -39,6 +39,152 @@ function sseResponse(events: readonly { readonly event: string; readonly data: u
 }
 
 describe("workspace choreography", () => {
+  const metadataSuggestion = {
+    name: "inbox-priority-triage",
+    description: "Prioritise unread email and draft the next action when the inbox needs triage.",
+    category: "email",
+    tags: ["email", "inbox-triage", "prioritisation"],
+    rationale: "The skill sorts unread inbox messages by urgency.",
+  };
+
+  it("uses the local metadata rung and applies only after the author accepts", async () => {
+    const fetchMock = vi.fn();
+    const workspace = createWorkspace(init, {
+      fetch: fetchMock,
+      localSuggestionProvider: createDeterministicLocalSuggestionProvider(metadataSuggestion),
+    });
+
+    await workspace.actions.runTool("metadata");
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(workspace.getSnapshot().current).toEqual(skill);
+    expect(workspace.getSnapshot().capability).toMatchObject({
+      kind: "metadata-suggestion",
+      provenance: "on-device",
+      name: "inbox-priority-triage",
+    });
+
+    await workspace.actions.applyMetadataSuggestion();
+    expect(workspace.getSnapshot().current?.frontmatter).toMatchObject({
+      name: "inbox-priority-triage",
+      description: metadataSuggestion.description,
+      extra: { category: "email", tags: metadataSuggestion.tags },
+    });
+    expect(workspace.getSnapshot().status).toContain("Run Triggers");
+    expect(workspace.getSnapshot().status).toContain("unsaved workspace");
+  });
+
+  it("silently falls through from unavailable local metadata to the gateway route", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+      ...metadataSuggestion,
+      current: { category: null, tags: [] },
+    }));
+    const workspace = createWorkspace(init, {
+      fetch: fetchMock,
+      localSuggestionProvider: createDeterministicLocalSuggestionProvider(null),
+    });
+
+    await workspace.actions.runTool("metadata");
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/metadata-suggest", expect.objectContaining({ method: "POST" }));
+    expect(workspace.getSnapshot().capability).toMatchObject({
+      kind: "metadata-suggestion",
+      provenance: "route",
+    });
+  });
+
+  it("accepts an offline route suggestion with no derived tags", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+      ...metadataSuggestion,
+      tags: [],
+      current: { category: null, tags: [] },
+    }));
+    const workspace = createWorkspace(init, {
+      fetch: fetchMock,
+      localSuggestionProvider: createDeterministicLocalSuggestionProvider(null),
+    });
+
+    await workspace.actions.runTool("metadata");
+
+    expect(workspace.getSnapshot().capability).toMatchObject({
+      kind: "metadata-suggestion",
+      provenance: "route",
+      tags: [],
+    });
+    expect(workspace.getSnapshot().status).toBe("Metadata ready.");
+  });
+
+  it("checkpoints accepted metadata before updating a saved workspace", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({ skill: { id: "skill-1", source: skill }, rendered: init.rendered, source: init.source }),
+      )
+      .mockResolvedValueOnce(Response.json({ source: metadataSuggestion }));
+    const workspace = createWorkspace(init, {
+      fetch: fetchMock,
+      localSuggestionProvider: createDeterministicLocalSuggestionProvider(metadataSuggestion),
+    });
+    await workspace.actions.importSkill("---\nname: inbox-triage\n---\nBody.");
+    await workspace.actions.runTool("metadata");
+
+    await workspace.actions.applyMetadataSuggestion();
+
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/skills/skill-1", expect.objectContaining({
+      method: "PATCH",
+    }));
+    const request = fetchMock.mock.calls.at(-1)?.[1] as RequestInit;
+    expect(JSON.parse(String(request.body))).toMatchObject({
+      skill: { frontmatter: { name: metadataSuggestion.name } },
+    });
+    expect(workspace.getSnapshot().current?.frontmatter.name).toBe(metadataSuggestion.name);
+    expect(workspace.getSnapshot().status).toContain("applied and saved");
+  });
+
+  it("leaves the suggestion unapplied when its checkpoint fails", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({ skill: { id: "skill-1", source: skill }, rendered: init.rendered, source: init.source }),
+      )
+      .mockResolvedValueOnce(Response.json({ error: "Save failed." }, { status: 500 }));
+    const workspace = createWorkspace(init, {
+      fetch: fetchMock,
+      localSuggestionProvider: createDeterministicLocalSuggestionProvider(metadataSuggestion),
+    });
+    await workspace.actions.importSkill("---\nname: inbox-triage\n---\nBody.");
+    await workspace.actions.runTool("metadata");
+
+    await workspace.actions.applyMetadataSuggestion();
+
+    expect(workspace.getSnapshot().current).toEqual(skill);
+    expect(workspace.getSnapshot().capability?.kind).toBe("metadata-suggestion");
+    expect(workspace.getSnapshot().status).toContain("Save failed");
+  });
+
+  it("falls through when local metadata would make the skill invalid", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+      ...metadataSuggestion,
+      current: { category: null, tags: [] },
+    }));
+    const workspace = createWorkspace(init, {
+      fetch: fetchMock,
+      localSuggestionProvider: createDeterministicLocalSuggestionProvider({
+        ...metadataSuggestion,
+        name: "x".repeat(SKILL_NAME_MAX + 1),
+      }),
+    });
+
+    await workspace.actions.runTool("metadata");
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(workspace.getSnapshot().capability).toMatchObject({
+      kind: "metadata-suggestion",
+      provenance: "route",
+      name: metadataSuggestion.name,
+    });
+  });
+
   it("publishes the open skill under the requested public slug", async () => {
     const fetchMock = vi
       .fn()

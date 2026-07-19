@@ -9,6 +9,8 @@ export const suggestionsRenderer: Renderer<SkillMetadataSuggestion, SkillMetadat
   target: "suggestions",
   render(artifact) {
     return {
+      name: artifact.name,
+      description: artifact.description,
       category: artifact.category,
       tags: artifact.tags,
       rationale: artifact.rationale,

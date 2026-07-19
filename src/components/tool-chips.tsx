@@ -9,6 +9,7 @@ import type { ToolAction } from "./workspace";
  * version re-opens its stored rating at no cost.
  */
 const CHIPS: { id: ToolAction; label: string; accent: ChipAccent }[] = [
+  { id: "metadata", label: "Metadata", accent: "secondary" },
   { id: "visualise", label: "Visualise", accent: "primary" },
   { id: "test-run", label: "Run", accent: "primary" },
   { id: "triggering-eval", label: "Triggers", accent: "tertiary" },

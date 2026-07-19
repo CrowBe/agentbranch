@@ -131,7 +131,7 @@ most capabilities read a `Skill`, the equipment primitives (`response-schema`,
 |---|---|---|---|---|---|
 | Hero | analysis | `hero` | hero (sections + spans) | `rendered`, `source` | real |
 | Visualise | analysis | `visualise` | IR extraction | `mermaid` | extraction model-backed (deterministic offline fallback); render real |
-| Metadata suggest | analysis | `metadata-suggest` | category + tag recommendation over the taxonomy | `suggestions` | model-backed (deterministic keyword fallback); the "LLM recommended" leg of metadata authoring |
+| Metadata suggest | analysis | `metadata-suggest` | editable name, description, category + tag recommendation | `suggestions` | local suggestion → metered gateway → deterministic keyword fallback; identical author-owned surface on every rung |
 | Export | analysis | `export` | instruction intent | `claude` (manifest) | real |
 | Lint | analysis | `lint` | frontmatter + body + refs quality rules + static policy rules | `insights`, `breakdown` | real |
 | Response schema quality | analysis | `response-schema` | JSON Schema structure + smell rules (pure, zero tokens) | `insights`, `breakdown` | real |
@@ -170,7 +170,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **skill-analysis** | `defineCapability`, `runCapability`, `Analyzer/Renderer/Capability/SourceSpan/Artifact` | — | real |
 | **hero** | `heroCapability`, `HeroView`, doc types | — | real |
 | **visualise** | `visualiseCapability`, IR + Mermaid types | — | extraction model-backed · deterministic offline fallback · render real |
-| **metadata-suggest** | `metadataSuggestCapability`, `SkillMetadataSuggestion/View` | — | analysis capability · model-backed with deterministic keyword fallback (the visualise posture) · suggests category + tags from the `skill` module's taxonomy; writing stays with the author (`withSkillMetadata` / build-loop frontmatter edits) |
+| **metadata-suggest** | `metadataSuggestCapability`, `SkillMetadataSuggestion/View` | — | analysis capability · suggests editable name, description, category + tags · workspace tries the local provider before this route; the route uses the gateway then deterministic keyword fallback · writing stays with the author (`withSkillMetadata` / build-loop frontmatter edits) |
 | **test-run** | `testRunCapability`, `executeSkill`, `createMockToolRegistry`, `defaultMockToolRegistry`, `emailMockTool`, `registryFromContracts`, `computeContractChecks`, `contractCheckIssues`, `toTestRunAnalysisRecord` | `TestRunRepository` | evaluation capability over a `TestRunInput` bundle · run + world generation real · contract-driven mocks + per-call validation real · email mock = offline fallback |
 | **triggering-eval** | `triggeringEvalCapability`, `runTriggeringEval`, `runBatteryCases`, `generatePromptBattery`, `distractorLibrary`, `toEvalRunAnalysisRecord` | `EvalRunRepository` | evaluation capability · run + battery generation real · adversarial negative battery · distractor library static v1 seed |
 | **safety-review** | `safetyReviewCapability`, `runSafetyReview`, `SafetyRating` + verdict/score types | `SafetyRatingRepository` | evaluation capability · LLM-judge over a full skill folder as structurally untrusted data · caller-tagged (opt-in rating = `account`; a platform-initiated review would tag `platform`) · records persist as safety ratings pinned to the reviewed version — the pin that earns a published version its safety badge (ARCHITECTURE §9.1) |
@@ -321,11 +321,16 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
   filter on the pinned frontmatter metadata, `?slug=` looks up one publication
   (published entries resolve by slug with their safety badge or potentially-unsafe
   label). Pure read; offline-safe.
-- `app/api/metadata-suggest/route.ts` — discovery-metadata suggestions for the
+- `app/api/metadata-suggest/route.ts` — name, description, and discovery-metadata suggestions for the
   skill in the request: auth → parse → `runCapability(metadataSuggestCapability)`
-  with the gateway + an `account` tag (`metadata-suggest` capability, free +
-  pro). Model-backed when configured, deterministic keyword fallback offline;
-  returns a suggestion, never writes.
+  with the gateway + an `account` tag (`metadata-suggest` capability). This is
+  rung two of the workspace ladder: local provider → this
+  gateway route → its deterministic keyword fallback. All rungs return the
+  same suggestion shape; unsupported browsers therefore keep identical UI.
+  Model-backed when configured, deterministic keyword fallback offline;
+  returns a suggestion, never writes. Author acceptance checkpoints the
+  active main or draft lineage through `PATCH /api/skills/[id]`; an unsaved
+  workspace instead labels the accepted change as unsaved.
 - `app/skills/[owner]/[name]/page.tsx` — the public skill profile page
   (ARCHITECTURE §9.1): server-rendered, force-dynamic (a takedown revert or new
   rating must be visible immediately). Resolves the visible publication by
@@ -374,7 +379,7 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
   ([#159](https://github.com/CrowBe/agentbranch/issues/159)): a framework-free
   store owning the HTTP protocol and the request choreography behind a small
   interface — actions (build turn, import, open skill, restore, draft/promote/
-  discard, run tool, lint, equipment, Templates search) over one immutable snapshot. Every route
+  discard, run tool, metadata suggestion/apply, lint, equipment, Templates search) over one immutable snapshot. Every route
   response is decoded once, in `workspace/decoders.ts`, against the domain
   modules' exported types — shape drift breaks there, loudly, not in scattered
   guards. The build loop's SSE stream and the evaluation streams are consumed
@@ -382,6 +387,19 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
   touchpoint; the app shell is composition/JSX only — no fetch calls, no
   `unknown` guards — and workspace behaviour (choreography, decoding, error
   paths) is tested without rendering React (`workspace.test.ts`).
+  `workspace/local-suggestion-provider.ts` owns the browser-side local
+  suggestion port, its Prompt API adapter, and the deterministic adapter used
+  in choreography tests. The Prompt API adapter caches one availability probe
+  per workspace session, accepts only an already-`available` model, creates a
+  short-lived session per suggestion, constrains output with JSON Schema, and
+  truncates long skill source before prompting. `suggestLocallyOrRoute` is the
+  first-available-wins boundary: missing or malformed local output silently
+  falls through to the feature's existing server route. This client-only seam
+  deliberately does not touch the gateway, router, or accounting layers.
+  Metadata is the pilot: its hero action uses this provider first, then
+  `/api/metadata-suggest`; the route retains its deterministic fallback. The
+  suggestion never mutates `SKILL.md` until the author selects **Apply
+  suggestion**, and a changed description nudges them toward Triggering eval.
   The interaction panel's Equipment mode (side-rail entry) accepts both kinds
   of input: a pasted JSON document is checked against the two quality routes
   above, and a plain-language message drives the response-schema authoring

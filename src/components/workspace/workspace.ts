@@ -26,7 +26,21 @@ import {
   sourceRenderer,
   type HeroView,
 } from "@/modules/hero";
-import { applySkillEdit, type SkillSource, type SkillVersionLintSummary } from "@/modules/skill";
+import {
+  applySkillEdit,
+  SKILL_CATEGORIES,
+  isSkillCategory,
+  normalizeSkillTags,
+  parseSkillMd,
+  serializeSkillMd,
+  withSkillMetadata,
+  type SkillSource,
+  type SkillVersionLintSummary,
+} from "@/modules/skill";
+import {
+  createPromptApiLocalSuggestionProvider,
+  suggestLocallyOrRoute,
+} from "./local-suggestion-provider";
 import {
   decodeBranchDetail,
   decodeCapabilityPanel,
@@ -79,6 +93,7 @@ import type {
 export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): Workspace {
   const fetchImpl: typeof globalThis.fetch = deps.fetch ?? ((...args) => globalThis.fetch(...args));
   const confirmImpl = deps.confirm ?? ((message: string) => window.confirm(message));
+  const localSuggestionProvider = deps.localSuggestionProvider ?? createPromptApiLocalSuggestionProvider();
 
   let snapshot: WorkspaceSnapshot = {
     status: null,
@@ -1009,11 +1024,106 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
   // Capabilities on the hero (tools + lint)
 
   async function runToolAction(action: ToolAction): Promise<void> {
+    if (action === "metadata") {
+      await suggestMetadata();
+      return;
+    }
     if (action === "safety-review") {
       await runSafetyRating();
       return;
     }
     await runTool(action, "insights");
+  }
+
+  async function suggestMetadata(): Promise<void> {
+    const skill = snapshot.current;
+    if (!skill || snapshot.toolBusy) return;
+    patch({ activeTool: "metadata", toolBusy: true, capability: null, status: "Metadata running…" });
+
+    try {
+      const result = await suggestLocallyOrRoute({
+        provider: localSuggestionProvider,
+        request: {
+          instruction: METADATA_SUGGESTION_INSTRUCTION,
+          source: serializeSkillMd(skill),
+          responseSchema: METADATA_SUGGESTION_SCHEMA,
+        },
+        decode: (value) => decodeMetadataSuggestion(value, true),
+        route: async () => {
+          const res = await fetchImpl("/api/metadata-suggest", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              skill,
+              currentSkillId: snapshot.currentSkillId ?? undefined,
+              branchId: snapshot.branchId ?? undefined,
+            }),
+          });
+          const body = (await res.json().catch(() => null)) as unknown;
+          if (!res.ok) throw new Error(errorMessage(body, res.status));
+          const decoded = decodeMetadataSuggestion(body, false);
+          if (!decoded) throw new Error("Metadata returned an unexpected response.");
+          return decoded;
+        },
+      });
+      patch({
+        capability: { kind: "metadata-suggestion", ...result.value, provenance: result.provenance },
+        status: "Metadata ready.",
+      });
+    } catch (cause) {
+      fail(friendlyError(String(cause)));
+    } finally {
+      patch({ toolBusy: false });
+    }
+  }
+
+  async function applyMetadataSuggestion(): Promise<void> {
+    const panel = snapshot.capability;
+    const current = snapshot.current;
+    if (!current || panel?.kind !== "metadata-suggestion") return;
+    const descriptionChanged = panel.description !== current.frontmatter.description;
+    const source = withSkillMetadata({
+      ...current,
+      frontmatter: {
+        ...current.frontmatter,
+        name: panel.name,
+        description: panel.description,
+      },
+    }, { category: panel.category, tags: panel.tags });
+
+    if (snapshot.currentSkillId) {
+      patch({ toolBusy: true, status: "Applying suggestion…" });
+      try {
+        const res = await fetchImpl(`/api/skills/${encodeURIComponent(snapshot.currentSkillId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ skill: source, branchId: snapshot.branchId ?? undefined }),
+        });
+        const body = (await res.json().catch(() => null)) as unknown;
+        if (!res.ok) throw new Error(errorMessage(body, res.status));
+      } catch (cause) {
+        fail(friendlyError(String(cause)));
+        patch({ toolBusy: false });
+        return;
+      }
+    }
+
+    patch({
+      current: source,
+      heroDocs: renderHeroDocs(source),
+      capability: null,
+      activeTool: null,
+      lintSummary: null,
+      safetyRating: null,
+      toolBusy: false,
+      status: snapshot.currentSkillId
+        ? descriptionChanged
+          ? "Suggestion applied and saved. Run Triggers to validate the new description."
+          : "Suggestion applied and saved."
+        : descriptionChanged
+          ? "Suggestion applied to this unsaved workspace. Run Triggers to validate the new description."
+          : "Suggestion applied to this unsaved workspace.",
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -1257,6 +1367,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     selectLintSurface,
     selectSafetySurface,
     reviseWithFeedback,
+    applyMetadataSuggestion,
   };
 
   return {
@@ -1280,6 +1391,49 @@ function renderHeroDocs(source: SkillSource): HeroDocs {
   };
 }
 
+type MetadataSuggestionValue = {
+  readonly name: string;
+  readonly description: string;
+  readonly category: string | null;
+  readonly tags: readonly string[];
+  readonly rationale: string;
+};
+
+const METADATA_SUGGESTION_SCHEMA: Readonly<Record<string, unknown>> = {
+  type: "object",
+  properties: {
+    name: { type: "string" },
+    description: { type: "string" },
+    category: { anyOf: [{ type: "string", enum: SKILL_CATEGORIES }, { type: "null" }] },
+    tags: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 8 },
+    rationale: { type: "string" },
+  },
+  required: ["name", "description", "category", "tags", "rationale"],
+  additionalProperties: false,
+};
+
+const METADATA_SUGGESTION_INSTRUCTION = `Suggest editable metadata for this Agent Skill.
+Return only the constrained JSON response. Use a concise lowercase hyphen-case name; a plain-language description that says what the skill does and when to use it; one allowed category or null; 3 to 6 lowercase hyphen-case tags; and one short rationale. Ground every field in the supplied SKILL.md.`;
+
+function decodeMetadataSuggestion(value: unknown, requireTags: boolean): MetadataSuggestionValue | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const item = value as Record<string, unknown>;
+  const name = typeof item.name === "string" ? item.name.trim() : "";
+  const description = typeof item.description === "string" ? item.description.trim() : "";
+  const rationale = typeof item.rationale === "string" ? item.rationale.trim() : "";
+  const category = item.category === null || isSkillCategory(item.category) ? item.category : undefined;
+  const tags = Array.isArray(item.tags) && item.tags.every((tag) => typeof tag === "string")
+    ? normalizeSkillTags(item.tags)
+    : [];
+  if (!name || !description || !rationale || category === undefined || (requireTags && tags.length === 0)) return null;
+  const candidate = parseSkillMd(serializeSkillMd({
+    frontmatter: { name, description, extra: {} },
+    body: "",
+  }));
+  if (!candidate.ok) return null;
+  return { name, description, category, tags, rationale };
+}
+
 function upsertAssistant(entries: readonly InteractionEntry[], label: string): InteractionEntry[] {
   const last = entries.at(-1);
   if (last?.id === "assistant-stream") {
@@ -1293,6 +1447,7 @@ function isLintFeedbackMessage(message: string): boolean {
 }
 
 function toolLabel(action: ToolAction): string {
+  if (action === "metadata") return "Metadata";
   if (action === "visualise") return "Visualise";
   if (action === "test-run") return "Test run";
   if (action === "triggering-eval") return "Triggering eval";

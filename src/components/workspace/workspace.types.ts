@@ -3,6 +3,7 @@ import type { SafetyReviewScore, SafetyReviewVerdict } from "@/modules/safety-re
 import type { SkillSource, SkillVersionLintSummary } from "@/modules/skill";
 import type { TestRunResult } from "@/modules/test-run";
 import type { TriggeringResult } from "@/modules/triggering-eval";
+import type { LocalSuggestionProvider } from "./local-suggestion-provider";
 
 /**
  * The client workspace's interface: one state snapshot + the actions that move
@@ -15,6 +16,7 @@ export type InteractionMode = "build" | "import" | "skills" | "equipment" | "his
 
 /** The tool surfaces reachable from the hero's chips. */
 export type ToolAction =
+  | "metadata"
   | "visualise"
   | "test-run"
   | "triggering-eval"
@@ -86,6 +88,15 @@ export type SafetyRatingState = {
 };
 
 export type CapabilityPanel =
+  | {
+      readonly kind: "metadata-suggestion";
+      readonly name: string;
+      readonly description: string;
+      readonly category: string | null;
+      readonly tags: readonly string[];
+      readonly rationale: string;
+      readonly provenance: "on-device" | "route";
+    }
   | { readonly kind: "visualise"; readonly mermaid: string }
   | {
       readonly kind: "evaluation-progress";
@@ -253,6 +264,7 @@ export type WorkspaceActions = {
   /** Re-render the stored rating on the other surface — local, zero spend. */
   readonly selectSafetySurface: (surface: EvaluationSurface) => void;
   readonly reviseWithFeedback: (result: EvaluationFeedbackResult) => void;
+  readonly applyMetadataSuggestion: () => Promise<void>;
 };
 
 export type Workspace = {
@@ -272,4 +284,5 @@ export type WorkspaceInit = {
 export type WorkspaceDeps = {
   readonly fetch?: typeof globalThis.fetch;
   readonly confirm?: (message: string) => boolean;
+  readonly localSuggestionProvider?: LocalSuggestionProvider;
 };

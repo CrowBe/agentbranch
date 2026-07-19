@@ -85,6 +85,14 @@ await walk("WALK-04 visualise", async () => {
   await status("Visualise ready.");
 });
 
+await walk("WALK-04B metadata suggestion", async () => {
+  await page.getByRole("button", { name: "Metadata", exact: true }).click();
+  await status("Metadata ready.");
+  await page.getByText(/^(Metadata suggestion|Suggested on your device)$/).waitFor();
+  await page.getByRole("button", { name: "Apply suggestion", exact: true }).click();
+  await status("Suggestion applied and saved.");
+});
+
 await walk("WALK-05 export", async () => {
   await page.getByRole("button", { name: "Export", exact: true }).click();
   await status("Export ready.");

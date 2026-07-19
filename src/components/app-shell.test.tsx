@@ -30,6 +30,28 @@ afterEach(() => {
 });
 
 describe("AppShell capability chips", () => {
+  it("renders and explicitly applies the metadata suggestion", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+      name: "inbox-priority-triage",
+      description: "Prioritise unread email when the inbox needs triage.",
+      category: "email",
+      tags: ["email", "inbox-triage"],
+      rationale: "The skill sorts unread messages.",
+      current: { category: null, tags: [] },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<AppShell rendered={rendered} source={source} initialSkill={skill} />);
+    await userEvent.click(screen.getByRole("button", { name: "Metadata" }));
+
+    expect(await screen.findByRole("heading", { name: "inbox-priority-triage" })).toBeInTheDocument();
+    expect(screen.getByText("Metadata suggestion")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Apply suggestion" }));
+
+    expect(await screen.findByRole("heading", { name: "inbox-priority-triage" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Run Triggers");
+  });
+
   it("opens the current skill quality report from the hero chip", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       Response.json({

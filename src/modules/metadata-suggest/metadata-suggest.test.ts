@@ -30,6 +30,8 @@ describe("metadata-suggest capability", () => {
     );
 
     expect(view.category).toBe("email");
+    expect(view.name).toBe("inbox-triage");
+    expect(view.description).toContain("unread email");
     expect(view.tags).toEqual(["triage", "inbox-zero"]);
     expect(view.rationale).toContain("email");
     expect(view.current).toEqual({ category: null, tags: ["triage"] });
@@ -81,6 +83,8 @@ function fakeGateway(): ModelGateway {
     async generate({ schema }) {
       return ok(
         schema.parse({
+          name: "inbox-triage",
+          description: "Triage unread email into reply, delegate, or archive.",
           category: "email",
           tags: ["triage", "Inbox Zero"],
           rationale: "The skill sorts unread email.",
