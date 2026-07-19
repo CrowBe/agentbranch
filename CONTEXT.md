@@ -105,11 +105,11 @@ A label the *caller* declares on every gateway call — **`account`** (user-attr
 _Avoid_: billing flag, cost type, owner
 
 **Free quota**:
-Every account's one-time model-spend budget, granted at sign-up — $1.00 in v1, one tunable constant (`INITIAL_QUOTA_MICROS`). The single spend decision, irrespective of capability: is there quota left. Denominated in money (micro-USD) because the balance is user-visible (price transparency); spent down by pricing each `account` turn's tokens at record time. It never resets — per-account lifetime spend is bounded by construction.
+Every account's one-time model-spend budget, granted at sign-up — $1.00 in v1, one tunable constant (`INITIAL_QUOTA_MICROS`). The single spend decision, irrespective of capability: can the call's conservative maximum cost be atomically reserved from the remaining quota. Actual tokens reconcile the reservation at the resolved model's versioned price; each charge keeps that price key for audit. It never resets — concurrent calls cannot oversubscribe it.
 _Avoid_: tier, plan (there are no tiers), allowance, credits, daily limit
 
 **Usage** (accounting authority):
-The module that decides "may this happen, and who pays" — the free-quota check (`checkQuota`), the token price table, and recording by **accounting tag**. Policy lives here; the gateway is mechanism.
+The module that decides "may this happen, and who pays" — atomic free-quota reservation/reconciliation, resolved-model token price tables, and recording by **accounting tag**. Policy lives here; the gateway is mechanism.
 _Avoid_: meter (the counter is one part; the module is policy), billing
 
 **`cap_reached` vs `model_unavailable`**:

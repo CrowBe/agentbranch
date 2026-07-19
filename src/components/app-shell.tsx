@@ -39,11 +39,11 @@ export function AppShell({
   const [menuExpanded, setMenuExpanded] = useState(false);
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<"chat" | "skill">("chat");
-  const { snapshot, actions } = useWorkspace({ rendered, source, initialSkill, initialLintSummary });
+  const { snapshot, actions } = useWorkspace({ rendered, source, initialSkill, initialLintSummary, quotaLabel });
 
   return (
     <div className="flex h-dvh flex-col">
-      <TopBar onToggleMenu={() => setMenuExpanded((v) => !v)} quotaLabel={quotaLabel} />
+      <TopBar onToggleMenu={() => setMenuExpanded((v) => !v)} quotaLabel={snapshot.quotaLabel} />
       <div className="flex justify-center border-b border-outline-variant bg-surface px-4 py-2 lg:hidden">
         <Segmented
           options={[

@@ -1,10 +1,13 @@
 import {
   checkQuota,
+  maximumTurnCost,
+  pricesForModel,
   REQUEST_RATE_LIMIT,
   type RateLimitPolicy,
   type RequestRateLimiter,
   type TokenUsageBreakdown,
   type UsageRepository,
+  type ModelTokenPrices,
 } from "@/modules/usage";
 import type { ModelRouter, ModelSelection, ResolvedModel } from "@/modules/model-router";
 import {
@@ -31,6 +34,12 @@ import type {
 } from "./gateway.types";
 import type { ModelGatewayPrimitive } from "./model-provider";
 import { PROVIDER_CAP_REACHED_MESSAGE, type RawModelCalls } from "./raw-model-calls";
+
+type Admission = {
+  readonly model: ResolvedModel;
+  readonly reservationMicros: number;
+  readonly prices: ModelTokenPrices | null;
+};
 
 /**
  * The domain accounting shell over the raw model-calls port (#160) — the
@@ -69,7 +78,7 @@ export function createModelGateway(deps: {
     primitive: ModelGatewayPrimitive,
     inputBytes: number,
     target?: ModelSelection,
-  ): Promise<Result<ResolvedModel, DomainError>> {
+  ): Promise<Result<Admission, DomainError>> {
     const resolved = router.resolve(primitive, target);
     if (isErr(resolved)) return resolved;
     if (inputBytes > REQUEST_BYTES_MAX) {
@@ -86,25 +95,43 @@ export function createModelGateway(deps: {
       if (!decision.allowed) {
         return err(domainError("cap_reached", decision.reason));
       }
+      const prices = pricesForModel(resolved.value.modelId);
+      if (!prices) {
+        return err(domainError("model_unavailable", `No quota price is configured for model "${resolved.value.modelId}".`));
+      }
+      const reservationMicros = maximumTurnCost(inputBytes, primitive, prices);
+      const reserved = await usage.reserve(tag.userId, reservationMicros);
+      if (isErr(reserved)) return reserved;
+      if (!reserved.value) return err(domainError("cap_reached", "You've used all of your free quota."));
       if (deps.requestRateLimiter) {
         const rate = await deps.requestRateLimiter.consume(
           tag.userId,
           tag.capability,
           requestRateLimit,
         );
-        if (isErr(rate)) return rate;
+        if (isErr(rate)) {
+          await usage.release(tag.userId, reservationMicros);
+          return rate;
+        }
         if (!rate.value.allowed) {
+          await usage.release(tag.userId, reservationMicros);
           return err(domainError("cap_reached", rate.value.reason));
         }
       }
+      return ok({ model: resolved.value, reservationMicros, prices });
     }
-    return ok(resolved.value);
+    return ok({ model: resolved.value, reservationMicros: 0, prices: null });
   }
 
   /** Record a turn's token cost. `account` → usage stream; `platform`/paid → deferred no-op. */
-  async function record(tag: AccountingTag, modelUsage: TokenUsageBreakdown): Promise<void> {
+  async function record(tag: AccountingTag, admission: Admission, modelUsage: TokenUsageBreakdown): Promise<void> {
     if (tag.kind === "account") {
-      await usage.increment(tag.userId, { usage: modelUsage, turns: 1 });
+      const recorded = await usage.reconcile(tag.userId, admission.reservationMicros, {
+        usage: modelUsage,
+        turns: 1,
+        prices: admission.prices!,
+      });
+      if (isErr(recorded)) throw new Error(recorded.error.message);
     }
     // platform: deferred cost ledger — tag carried, not yet recorded.
   }
@@ -118,12 +145,15 @@ export function createModelGateway(deps: {
       const admitted = await admit(input.tag, "classify", modelInputBytes([input.prompt]), input.target);
       if (isErr(admitted)) return admitted;
 
-      const result = await calls.classify(admitted.value, {
+      const result = await calls.classify(admitted.value.model, {
         prompt: input.prompt,
         choices: input.choices,
       });
-      if (isErr(result)) return result;
-      await record(input.tag, result.value.usage);
+      if (isErr(result)) {
+        if (input.tag.kind === "account") await usage.release(input.tag.userId, admitted.value.reservationMicros);
+        return result;
+      }
+      await record(input.tag, admitted.value, result.value.usage);
 
       // Guard against a hallucinated label outside the allowed set.
       const { choice, rationale } = result.value.value;
@@ -142,13 +172,16 @@ export function createModelGateway(deps: {
       );
       if (isErr(admitted)) return admitted;
 
-      const result = await calls.runAgent(admitted.value, {
+      const result = await calls.runAgent(admitted.value.model, {
         system: input.system,
         messages: input.messages,
         tools: input.tools,
       });
-      if (isErr(result)) return result;
-      await record(input.tag, result.value.usage);
+      if (isErr(result)) {
+        if (input.tag.kind === "account") await usage.release(input.tag.userId, admitted.value.reservationMicros);
+        return result;
+      }
+      await record(input.tag, admitted.value, result.value.usage);
       return ok(result.value.value);
     },
 
@@ -168,7 +201,8 @@ export function createModelGateway(deps: {
         input.target,
       );
       if (isErr(admitted)) return admitted;
-      const model = admitted.value;
+      const model = admitted.value.model;
+      const admission = admitted.value;
       const { tag } = input;
 
       async function* stream(): AsyncGenerator<AgentStreamPart> {
@@ -191,7 +225,8 @@ export function createModelGateway(deps: {
         } finally {
           // Record once even when the consumer disconnects or the stream
           // throws — `usage()` settles to the adapter's best-known cost.
-          if (!skipRecording) await record(tag, await raw.usage());
+          if (!skipRecording) await record(tag, admission, await raw.usage());
+          else if (tag.kind === "account") await usage.release(tag.userId, admission.reservationMicros);
         }
       }
 
@@ -207,13 +242,16 @@ export function createModelGateway(deps: {
       );
       if (isErr(admitted)) return admitted;
 
-      const result = await calls.generate(admitted.value, {
+      const result = await calls.generate(admitted.value.model, {
         system: input.system,
         prompt: input.prompt,
         schema: input.schema,
       });
-      if (isErr(result)) return result;
-      await record(input.tag, result.value.usage);
+      if (isErr(result)) {
+        if (input.tag.kind === "account") await usage.release(input.tag.userId, admitted.value.reservationMicros);
+        return result;
+      }
+      await record(input.tag, admitted.value, result.value.usage);
       return ok(result.value.value);
     },
   };

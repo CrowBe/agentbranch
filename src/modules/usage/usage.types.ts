@@ -24,6 +24,14 @@ export type TokenUsageBreakdown = {
   readonly cacheCreationInputTokens: number;
 };
 
+export type ModelTokenPrices = {
+  readonly key: string;
+  readonly inputPerToken: number;
+  readonly outputPerToken: number;
+  readonly cacheReadPerToken: number;
+  readonly cacheCreationPerToken: number;
+};
+
 export type UsageSnapshot = {
   readonly userId: UserId;
   /** Total model tokens spent. Detailed buckets support the price table. */
@@ -31,6 +39,8 @@ export type UsageSnapshot = {
   readonly turnsUsed: number;
   /** Money spent against the free quota, in micro-USD, priced at record time. */
   readonly costMicrosUsed: number;
+  /** Worst-case spend held by in-flight calls and unavailable to new calls. */
+  readonly costMicrosReserved: number;
   readonly inputTokensUsed: number;
   readonly outputTokensUsed: number;
   readonly cacheReadInputTokensUsed: number;

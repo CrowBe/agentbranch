@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { checkQuota, applyTurn, costOfTurn, quotaRemainingMicros, INITIAL_QUOTA_MICROS } from "./meter";
+import { checkQuota, applyTurn, costOfTurn, quotaRemainingMicros, INITIAL_QUOTA_MICROS, pricesForModel } from "./meter";
 import type { TokenUsageBreakdown, UsageSnapshot } from "./usage.types";
 import { UserId } from "@/shared";
 
@@ -8,6 +8,7 @@ const fresh: UsageSnapshot = {
   tokensUsed: 0,
   turnsUsed: 0,
   costMicrosUsed: 0,
+  costMicrosReserved: 0,
   inputTokensUsed: 0,
   outputTokensUsed: 0,
   cacheReadInputTokensUsed: 0,
@@ -33,6 +34,14 @@ describe("usage meter", () => {
       cacheCreationInputTokens: 2, // 7.5 micros
     };
     expect(costOfTurn(usage)).toBe(459); // ceil(300 + 150 + 1.5 + 7.5)
+  });
+
+  it("selects prices from the resolved model and fails closed for unknown models", () => {
+    expect(pricesForModel("claude-haiku-4-5")?.inputPerToken).toBe(1);
+    expect(pricesForModel("claude-sonnet-4-6")?.inputPerToken).toBe(3);
+    expect(pricesForModel("claude-opus-4-8")?.outputPerToken).toBe(25);
+    expect(pricesForModel("deepseek/deepseek-v4-flash")?.inputPerToken).toBe(0.098);
+    expect(pricesForModel("unknown/model")).toBeNull();
   });
 
   it("reports the remaining quota, floored at zero", () => {

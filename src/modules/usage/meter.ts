@@ -3,6 +3,7 @@ import type {
   CapDecision,
   RateLimitPolicy,
   TokenUsageBreakdown,
+  ModelTokenPrices,
 } from "./usage.types";
 
 /**
@@ -21,21 +22,49 @@ export const INITIAL_QUOTA_MICROS = 1_000_000; // $1.00
  * per-model tables slot in here when the router carries materially different
  * price points.
  */
-export const TOKEN_PRICES_MICROS = {
+export const TOKEN_PRICES_MICROS: ModelTokenPrices = {
+  key: "anthropic:sonnet",
   inputPerToken: 3,
   outputPerToken: 15,
   cacheReadPerToken: 0.3,
   cacheCreationPerToken: 3.75,
 } as const;
 
+const MODEL_PRICE_TABLE: readonly { readonly matches: RegExp; readonly prices: ModelTokenPrices }[] = [
+  { matches: /claude-haiku/i, prices: { key: "anthropic:haiku", inputPerToken: 1, outputPerToken: 5, cacheReadPerToken: 0.1, cacheCreationPerToken: 1.25 } },
+  { matches: /claude-sonnet/i, prices: TOKEN_PRICES_MICROS },
+  { matches: /claude-opus/i, prices: { key: "anthropic:opus", inputPerToken: 5, outputPerToken: 25, cacheReadPerToken: 0.5, cacheCreationPerToken: 6.25 } },
+  { matches: /^deepseek\/deepseek-v4-flash$/i, prices: { key: "nous:deepseek-v4-flash:2026-07-19", inputPerToken: 0.098, outputPerToken: 0.196, cacheReadPerToken: 0.0196, cacheCreationPerToken: 0.098 } },
+];
+
+export function pricesForModel(modelId: string): ModelTokenPrices | null {
+  return MODEL_PRICE_TABLE.find((entry) => entry.matches.test(modelId))?.prices ?? null;
+}
+
 /** A turn's cost in micro-USD, rounded up so fractional turns still spend. */
-export function costOfTurn(usage: TokenUsageBreakdown): number {
+export function costOfTurn(usage: TokenUsageBreakdown, prices: ModelTokenPrices = TOKEN_PRICES_MICROS): number {
   return Math.ceil(
-    usage.inputTokens * TOKEN_PRICES_MICROS.inputPerToken +
-      usage.outputTokens * TOKEN_PRICES_MICROS.outputPerToken +
-      usage.cacheReadInputTokens * TOKEN_PRICES_MICROS.cacheReadPerToken +
-      usage.cacheCreationInputTokens * TOKEN_PRICES_MICROS.cacheCreationPerToken,
+    usage.inputTokens * prices.inputPerToken +
+      usage.outputTokens * prices.outputPerToken +
+      usage.cacheReadInputTokens * prices.cacheReadPerToken +
+      usage.cacheCreationInputTokens * prices.cacheCreationPerToken,
   );
+}
+
+const MAX_OUTPUT_TOKENS = { classify: 2_048, runAgent: 4_096, streamAgent: 16_000, generate: 4_096 } as const;
+
+/** Conservative reservation: UTF-8 bytes upper-bound input tokens. */
+export function maximumTurnCost(
+  inputBytes: number,
+  primitive: keyof typeof MAX_OUTPUT_TOKENS,
+  prices: ModelTokenPrices,
+): number {
+  const maximumInputPrice = Math.max(
+    prices.inputPerToken,
+    prices.cacheReadPerToken,
+    prices.cacheCreationPerToken,
+  );
+  return Math.ceil(inputBytes * maximumInputPrice + MAX_OUTPUT_TOKENS[primitive] * prices.outputPerToken);
 }
 
 /** What's left of the free quota, floored at zero for display. */
@@ -58,14 +87,14 @@ export const REQUEST_RATE_LIMIT: RateLimitPolicy = {
 
 /** May this user spend right now? One question: is there quota left. */
 export function checkQuota(snapshot: UsageSnapshot): CapDecision {
-  if (snapshot.costMicrosUsed >= INITIAL_QUOTA_MICROS) {
+  if (snapshot.costMicrosUsed + snapshot.costMicrosReserved >= INITIAL_QUOTA_MICROS) {
     return { allowed: false, reason: QUOTA_EXHAUSTED_MESSAGE };
   }
   return { allowed: true };
 }
 
 /** Fold a turn's token cost into a snapshot (pure). */
-export function applyTurn(snapshot: UsageSnapshot, usage: TokenUsageBreakdown): UsageSnapshot {
+export function applyTurn(snapshot: UsageSnapshot, usage: TokenUsageBreakdown, prices: ModelTokenPrices = TOKEN_PRICES_MICROS): UsageSnapshot {
   const tokens =
     usage.inputTokens +
     usage.outputTokens +
@@ -75,7 +104,7 @@ export function applyTurn(snapshot: UsageSnapshot, usage: TokenUsageBreakdown): 
     ...snapshot,
     tokensUsed: snapshot.tokensUsed + tokens,
     turnsUsed: snapshot.turnsUsed + 1,
-    costMicrosUsed: snapshot.costMicrosUsed + costOfTurn(usage),
+    costMicrosUsed: snapshot.costMicrosUsed + costOfTurn(usage, prices),
     inputTokensUsed: snapshot.inputTokensUsed + usage.inputTokens,
     outputTokensUsed: snapshot.outputTokensUsed + usage.outputTokens,
     cacheReadInputTokensUsed: snapshot.cacheReadInputTokensUsed + usage.cacheReadInputTokens,

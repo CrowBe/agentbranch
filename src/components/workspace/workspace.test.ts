@@ -449,7 +449,7 @@ describe("workspace choreography", () => {
 
     await workspace.actions.send("Make a calendar planner");
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     const second = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)) as {
       messages: readonly { role: string; content: string }[];
     };
@@ -532,7 +532,7 @@ describe("workspace choreography", () => {
     const workspace = createWorkspace(init, { fetch: fetchMock });
 
     await workspace.actions.runTool("safety-review");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/safety-review",
       expect.objectContaining({ method: "POST" }),
@@ -545,7 +545,7 @@ describe("workspace choreography", () => {
     // rating, and switching surfaces stays local.
     await workspace.actions.runTool("safety-review");
     workspace.actions.selectSafetySurface("breakdown");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(workspace.getSnapshot().capability?.kind).toBe("safety-breakdown");
   });
 

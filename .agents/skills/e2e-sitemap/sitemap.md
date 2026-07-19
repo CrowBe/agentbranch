@@ -74,6 +74,7 @@ Equipment quality routes take `{ "document": "<JSON string>", "surface": "insigh
 | `/api/visualise` | POST | signed-in | works — deterministic fallback |
 | `/api/export` | POST | signed-in | works — pure analysis |
 | `/api/metadata-suggest` | POST | signed-in | works — keyword fallback |
+| `/api/usage` | GET | signed-in | remaining free-quota balance; refreshed after model-bearing workspace actions |
 | `/api/test-run` | POST (SSE/JSON) | signed-in | **503** `model_unavailable` before any stream opens |
 | `/api/triggering-eval` | POST (SSE/JSON) | signed-in | **503** `model_unavailable` |
 | `/api/safety-review` | GET, POST | signed-in | GET works (rating lookup); POST **503** offline |

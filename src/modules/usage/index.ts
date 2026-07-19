@@ -9,6 +9,7 @@
 export type {
   GatedCapability,
   TokenUsageBreakdown,
+  ModelTokenPrices,
   UsageSnapshot,
   CapDecision,
   RateLimitPolicy,
@@ -19,6 +20,8 @@ export {
   QUOTA_EXHAUSTED_MESSAGE,
   REQUEST_RATE_LIMIT,
   costOfTurn,
+  pricesForModel,
+  maximumTurnCost,
   quotaRemainingMicros,
   formatQuotaMicros,
   checkQuota,

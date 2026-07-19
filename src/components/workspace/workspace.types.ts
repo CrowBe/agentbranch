@@ -215,6 +215,7 @@ export type HeroDocs = { readonly rendered: RenderedDoc; readonly source: Source
 
 /** The one immutable snapshot the app shell renders from. */
 export type WorkspaceSnapshot = {
+  readonly quotaLabel: string;
   readonly status: string | null;
   readonly heroDocs: HeroDocs;
   readonly view: HeroView;
@@ -278,6 +279,7 @@ export type WorkspaceInit = {
   readonly source: SourceDoc;
   readonly initialSkill: SkillSource;
   readonly initialLintSummary?: SkillVersionLintSummary | null;
+  readonly quotaLabel?: string;
 };
 
 /** Injectable edges so choreography is testable without a browser. */

@@ -188,6 +188,41 @@ describe("model gateway — accounting guard", () => {
     expect(isErr(result)).toBe(false);
   });
 
+  it("atomically reserves worst-case spend so concurrent calls cannot oversubscribe quota", async () => {
+    let finish!: (value: ReturnType<typeof ok<RawCallResult<Classification>>>) => void;
+    const firstResult = new Promise<ReturnType<typeof ok<RawCallResult<Classification>>>>((resolve) => { finish = resolve; });
+    const calls = fakeCalls({ classify: vi.fn(() => firstResult) });
+    const gateway = gatewayWith({ calls });
+    const prompt = "x".repeat(170_000);
+
+    const first = gateway.classify({ prompt, choices: ["a"], tag: account("concurrent") });
+    await vi.waitFor(() => expect(calls.classify).toHaveBeenCalledOnce());
+    const second = await gateway.classify({ prompt, choices: ["a"], tag: account("concurrent") });
+
+    expect(isErr(second) && second.error.tag).toBe("cap_reached");
+    finish(ok(rawResult(classification)));
+    expect(isErr(await first)).toBe(false);
+  });
+
+  it("releases reserved quota when the provider call fails", async () => {
+    const usage = createMemoryUsageRepository();
+    const calls = fakeCalls({ classify: vi.fn(async () => err(domainError("model_unavailable", "failed"))) });
+    const gateway = gatewayWith({ calls, usage });
+
+    await gateway.classify({ prompt: "x", choices: ["a"], tag: account("release") });
+
+    const snapshot = await usage.get(UserId("release"));
+    if (!isErr(snapshot)) expect(snapshot.value.costMicrosReserved).toBe(0);
+  });
+
+  it("fails closed when the routed model has no quota price", async () => {
+    const calls = fakeCalls();
+    const router = stubRouter({ resolve: () => ok({ ...resolved(), modelId: "custom/unpriced" }) });
+    const result = await gatewayWith({ calls, router }).classify({ prompt: "x", choices: ["a"], tag: account("unknown") });
+    expect(isErr(result) && result.error.tag).toBe("model_unavailable");
+    expect(calls.classify).not.toHaveBeenCalled();
+  });
+
   it("does not quota-gate platform calls (the platform owns that cost)", async () => {
     const usage = createMemoryUsageRepository();
     const userId = "capped";
