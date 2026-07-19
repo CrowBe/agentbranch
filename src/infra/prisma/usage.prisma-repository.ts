@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import type { UsageRepository, UsageSnapshot } from "@/modules/usage";
+import { costOfTurn } from "@/modules/usage";
 import { ok, UserId } from "@/shared";
 
 /** Prisma UsageRepository (real). Upserts the per-user counter row. */
@@ -8,6 +9,7 @@ export function createPrismaUsageRepository(prisma: PrismaClient): UsageReposito
     userId: string;
     tokensUsed: number;
     turnsUsed: number;
+    costMicrosUsed: number;
     inputTokensUsed: number;
     outputTokensUsed: number;
     cacheReadInputTokensUsed: number;
@@ -16,6 +18,7 @@ export function createPrismaUsageRepository(prisma: PrismaClient): UsageReposito
     userId: UserId(row.userId),
     tokensUsed: row.tokensUsed,
     turnsUsed: row.turnsUsed,
+    costMicrosUsed: row.costMicrosUsed,
     inputTokensUsed: row.inputTokensUsed,
     outputTokensUsed: row.outputTokensUsed,
     cacheReadInputTokensUsed: row.cacheReadInputTokensUsed,
@@ -26,6 +29,7 @@ export function createPrismaUsageRepository(prisma: PrismaClient): UsageReposito
     userId,
     tokensUsed: 0,
     turnsUsed: 0,
+    costMicrosUsed: 0,
     inputTokensUsed: 0,
     outputTokensUsed: 0,
     cacheReadInputTokensUsed: 0,
@@ -44,12 +48,14 @@ export function createPrismaUsageRepository(prisma: PrismaClient): UsageReposito
         delta.usage.outputTokens +
         delta.usage.cacheReadInputTokens +
         delta.usage.cacheCreationInputTokens;
+      const costMicros = costOfTurn(delta.usage);
       const row = await prisma.usage.upsert({
         where: { userId },
         create: {
           userId,
           tokensUsed: tokens,
           turnsUsed: delta.turns,
+          costMicrosUsed: costMicros,
           inputTokensUsed: delta.usage.inputTokens,
           outputTokensUsed: delta.usage.outputTokens,
           cacheReadInputTokensUsed: delta.usage.cacheReadInputTokens,
@@ -58,6 +64,7 @@ export function createPrismaUsageRepository(prisma: PrismaClient): UsageReposito
         update: {
           tokensUsed: { increment: tokens },
           turnsUsed: { increment: delta.turns },
+          costMicrosUsed: { increment: costMicros },
           inputTokensUsed: { increment: delta.usage.inputTokens },
           outputTokensUsed: { increment: delta.usage.outputTokens },
           cacheReadInputTokensUsed: { increment: delta.usage.cacheReadInputTokens },

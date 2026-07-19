@@ -44,7 +44,6 @@ export type AppConfig = {
     readonly emails: readonly string[];
   };
   readonly clerkConfigured: boolean;
-  readonly clerkProPlanSlug: string;
   /**
    * Shared secret the scheduled retention job presents (Vercel Cron sends it as
    * `Authorization: Bearer …`). Unset ⇒ the cron route is locked (fail-safe),
@@ -165,7 +164,6 @@ export function readConfig(): AppConfig {
       emails: parseList(process.env.AGENTBRANCH_ADMIN_EMAILS).map((email) => email.toLowerCase()),
     },
     clerkConfigured,
-    clerkProPlanSlug: nonEmpty(process.env.AGENTBRANCH_PRO_PLAN_SLUG) ?? "pro",
     cronSecret: nonEmpty(process.env.CRON_SECRET),
     tapSync: {
       repository: nonEmpty(process.env.TAP_REPOSITORY) ?? TAP_REPOSITORY,

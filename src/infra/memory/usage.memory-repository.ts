@@ -1,4 +1,5 @@
 import type { UsageRepository, UsageSnapshot } from "@/modules/usage";
+import { costOfTurn } from "@/modules/usage";
 import { ok, type UserId } from "@/shared";
 
 /** In-memory UsageRepository — the offline default. */
@@ -10,6 +11,7 @@ export function createMemoryUsageRepository(): UsageRepository {
       userId,
       tokensUsed: 0,
       turnsUsed: 0,
+      costMicrosUsed: 0,
       inputTokensUsed: 0,
       outputTokensUsed: 0,
       cacheReadInputTokensUsed: 0,
@@ -31,6 +33,7 @@ export function createMemoryUsageRepository(): UsageRepository {
         userId,
         tokensUsed: current.tokensUsed + tokens,
         turnsUsed: current.turnsUsed + delta.turns,
+        costMicrosUsed: current.costMicrosUsed + costOfTurn(delta.usage),
         inputTokensUsed: current.inputTokensUsed + delta.usage.inputTokens,
         outputTokensUsed: current.outputTokensUsed + delta.usage.outputTokens,
         cacheReadInputTokensUsed:

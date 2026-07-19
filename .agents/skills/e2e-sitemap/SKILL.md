@@ -54,7 +54,7 @@ await page.goto("http://localhost:3000/");
 4. **State is session-scoped offline.** Memory adapters reset on server
    restart, so walks that need a saved skill depend on WALK-01 (import) having
    run in the same server session. Run walks in spec order unless a walk's
-   `precondition` says it is independent. The free tier caps skills at five —
+   `precondition` says it is independent. Accounts cap at five skills —
    repeated full passes against one server session eventually hit
    `You're at your skill limit…`; restart the dev server for a clean session.
 5. **Offline expectations are assertions, not failures.** With no model key,

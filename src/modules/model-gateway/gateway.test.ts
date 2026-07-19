@@ -11,14 +11,14 @@ import type {
 import type { AccountingTag, Classification } from "./gateway.types";
 import { createMemoryRequestRateLimiter } from "@/infra/memory/rate-limit.memory-repository";
 import { createMemoryUsageRepository } from "@/infra/memory/usage.memory-repository";
-import { TIER_LIMITS } from "@/modules/usage";
+import { INITIAL_QUOTA_MICROS, TOKEN_PRICES_MICROS } from "@/modules/usage";
 import type { TokenUsageBreakdown } from "@/modules/usage";
 import type { ModelRouter, ResolvedModel } from "@/modules/model-router";
 import { ok, err, domainError, isErr, REQUEST_BYTES_MAX, UserId } from "@/shared";
 
 /**
- * Policy tests for the domain accounting shell (#160): admission (cap, rate
- * limit, byte budget), recording, and the stream record-once discipline — run
+ * Policy tests for the domain accounting shell (#160): admission (free quota,
+ * rate limit, byte budget), recording, and the stream record-once discipline — run
  * through the `ModelGateway` interface against memory usage/rate-limit
  * adapters and a fake raw-calls port. No `vi.mock("ai")`: SDK translation is
  * the adapter's concern (`sdk-model-calls.test.ts`).
@@ -107,17 +107,20 @@ const account = (id: string): AccountingTag => ({
 });
 const platform: AccountingTag = { kind: "platform", reason: "test" };
 
+/** Enough input tokens to price past the whole free quota in one turn. */
+const QUOTA_EXHAUSTING_INPUT_TOKENS = Math.ceil(
+  INITIAL_QUOTA_MICROS / TOKEN_PRICES_MICROS.inputPerToken,
+);
+
 function gatewayWith(deps?: {
   calls?: RawModelCalls;
   usage?: ReturnType<typeof createMemoryUsageRepository>;
   router?: ModelRouter;
-  tierFor?: () => Promise<"free" | "pro">;
 }) {
   return createModelGateway({
     router: deps?.router ?? stubRouter(),
     calls: deps?.calls ?? fakeCalls(),
     usage: deps?.usage ?? createMemoryUsageRepository(),
-    tierFor: deps?.tierFor as never,
   });
 }
 
@@ -155,12 +158,12 @@ describe("model gateway — accounting guard", () => {
     expect(calls.generate).not.toHaveBeenCalled();
   });
 
-  it("fails cap_reached when an account call is over its tier cap", async () => {
+  it("fails cap_reached when an account call has used up its free quota", async () => {
     const usage = createMemoryUsageRepository();
     const userId = "capped";
-    // Push the user past the free token cap so checkCap denies.
+    // Spend enough that the priced cost exceeds the whole quota.
     await usage.increment(UserId(userId), {
-      usage: usageOf(TIER_LIMITS.free.maxTokens),
+      usage: usageOf(QUOTA_EXHAUSTING_INPUT_TOKENS),
       turns: 0,
     });
     const calls = fakeCalls();
@@ -172,39 +175,24 @@ describe("model gateway — accounting guard", () => {
     expect(calls.classify).not.toHaveBeenCalled();
   });
 
-  it("gates against the capability the caller declares, not a fixed one", async () => {
-    // A user well under the free token + turn budget, but running a capability
-    // the free tier disallows (triggering-eval, ARCHITECTURE §8). The gateway
-    // must read the cap from the tag — gating it — rather than admitting it
-    // under some hardcoded capability.
+  it("admits every capability while quota remains — admission is capability-blind", async () => {
+    // Under quota, even the most expensive capabilities are open (ARCHITECTURE
+    // §8): the quota, not a per-capability allowlist, is the spend decision.
     const gateway = gatewayWith();
 
     const result = await gateway.classify({
       prompt: "x",
       choices: ["a"],
-      tag: { kind: "account", userId: UserId("free-user"), capability: "triggering-eval" },
+      tag: { kind: "account", userId: UserId("fresh-user"), capability: "triggering-eval" },
     });
-    expect(isErr(result)).toBe(true);
-    if (isErr(result)) expect(result.error.tag).toBe("cap_reached");
-  });
-
-  it("admits Pro users for triggering eval", async () => {
-    const gateway = gatewayWith({ tierFor: async () => "pro" });
-
-    const result = await gateway.classify({
-      prompt: "x",
-      choices: ["a"],
-      tag: { kind: "account", userId: UserId("pro-user"), capability: "triggering-eval" },
-    });
-
     expect(isErr(result)).toBe(false);
   });
 
-  it("does not cap-gate platform calls (the platform owns that cost)", async () => {
+  it("does not quota-gate platform calls (the platform owns that cost)", async () => {
     const usage = createMemoryUsageRepository();
     const userId = "capped";
     await usage.increment(UserId(userId), {
-      usage: usageOf(TIER_LIMITS.free.maxTokens),
+      usage: usageOf(QUOTA_EXHAUSTING_INPUT_TOKENS),
       turns: 0,
     });
     const gateway = gatewayWith({ usage });
@@ -565,7 +553,7 @@ describe("model gateway — stream accounting", () => {
     expect(isErr(opened)).toBe(false);
     if (!isErr(opened)) {
       expect(await collect(opened.value)).toEqual([
-        { kind: "error", message: "cap_reached: Out of free usage today." },
+        { kind: "error", message: PROVIDER_CAP_REACHED_MESSAGE },
       ]);
     }
     const snapshot = await usage.get(UserId("stream-provider-capped"));

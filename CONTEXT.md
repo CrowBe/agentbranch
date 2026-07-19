@@ -101,15 +101,19 @@ The richer future of insight-generation — a tool-using agent (`runAgent` + too
 _Avoid_: insight service, explainer (premature naming)
 
 **Accounting tag**:
-A label the *caller* declares on every gateway call — **`account`** (user-attributable, subject to tier policy) or **`platform`** (the platform's own cost to enable a feature, never charged to a user's allowance). An `account` tag also names the **capability** it spends on, because the cap is capability-specific. The gateway carries it to the **usage** module.
+A label the *caller* declares on every gateway call — **`account`** (user-attributable, spends the user's **free quota**) or **`platform`** (the platform's own cost to enable a feature, never charged to a user's quota). An `account` tag also names the **capability** it spends on — admission is capability-blind, but the capability scopes the request rate limit and cost attribution. The gateway carries it to the **usage** module.
 _Avoid_: billing flag, cost type, owner
 
+**Free quota**:
+Every account's one-time model-spend budget, granted at sign-up — $1.00 in v1, one tunable constant (`INITIAL_QUOTA_MICROS`). The single spend decision, irrespective of capability: is there quota left. Denominated in money (micro-USD) because the balance is user-visible (price transparency); spent down by pricing each `account` turn's tokens at record time. It never resets — per-account lifetime spend is bounded by construction.
+_Avoid_: tier, plan (there are no tiers), allowance, credits, daily limit
+
 **Usage** (accounting authority):
-The module that decides "may this happen, and who pays" — tier caps (`checkCap`) and recording by **accounting tag**. Policy lives here; the gateway is mechanism.
-_Avoid_: meter (too narrow — free tier isn't token-metered), billing, quota
+The module that decides "may this happen, and who pays" — the free-quota check (`checkQuota`), the token price table, and recording by **accounting tag**. Policy lives here; the gateway is mechanism.
+_Avoid_: meter (the counter is one part; the module is policy), billing
 
 **`cap_reached` vs `model_unavailable`**:
-Two distinct members of the closed `DomainError` union. `model_unavailable` = no model configured (offline / no key). `cap_reached` = a model exists but the user hit a tier limit (the §8 graceful-degradation catch — "out of free usage today, back tomorrow"). Don't conflate them.
+Two distinct members of the closed `DomainError` union. `model_unavailable` = no model configured (offline / no key). `cap_reached` = a model exists but the spend was denied — the free quota is used up, a structural bound (skill count, request rate) was hit, or the §8 provider-side cap-catch fired. Don't conflate them.
 _Avoid_: (n/a)
 
 **Evaluation record**:
@@ -179,7 +183,7 @@ _Avoid_: preview/raw, doc/code, formatted/plain
 - An **Analysis capability** wraps an **Analyzer** (`analyze(input)`) — Artifact from the input's source.
 - An **Evaluation capability** wraps an **Evaluator** (`evaluate(input, gateway)`) — it builds its own conditions and runs the input, emitting an Artifact. It owns its **method** (how it builds + runs its world); it does **not** own its **resources** (model access — handed in via the **model gateway**).
 - The **model gateway** is the platform's single entry to the model. It exposes **gateway primitives** (`classify`, `runAgent`), carries a caller-declared **accounting tag**, and **depends on the usage module** for policy. The seam (and its evaluators) **depend on the gateway port**; the gateway is *not* part of the seam.
-- **Usage** is the accounting authority: `account`-tagged calls are subject to tier policy (free = structural caps + provider cap-catch; paid = token stream, deferred), `platform`-tagged calls go to our own cost ledger (deferred). The gateway is mechanism, usage is policy.
+- **Usage** is the accounting authority: `account`-tagged calls spend the **free quota** (admitted while quota remains, priced at record time) alongside the structural bounds + provider cap-catch; `platform`-tagged calls go to our own cost ledger (deferred). The gateway is mechanism, usage is policy.
 - When no model is configured (offline / no key) the gateway can't run a primitive — an Evaluation capability fails with the shared `model_unavailable` **DomainError**, checked once in the seam's evaluation path, not in each evaluator. Analysis capabilities still run offline (pure text). This is evaluation's hard dependency that analysis doesn't have.
 - **Visualise** is an Analysis capability whose Artifact is the **Skill IR**; each IR node carries a **Source-span**.
 - A **Test run** drives the **Mock-tool registry**; a **Triggering eval** drives the **Distractor library** + **Prompt battery**. Both are Evaluation capabilities. A test run's input is a **Bundle**: when it carries **Tool contracts**, they drive the registry (mock output conforms to each contract's — possibly **Response schema**-referenced — output schema) and every observed call is validated against the contract.
@@ -195,9 +199,9 @@ _Avoid_: preview/raw, doc/code, formatted/plain
 > **Dev:** "Does the test-run evaluator get handed the scenario to run?"
 > **Domain expert:** "No — it builds its own **Scenario**. Building the world it runs in is its *method*, and that's what makes it the test-run evaluator. What it's handed is the **model gateway** — model access, metered — because that's a shared, sensitive **resource** it doesn't own. Method in, resource handed in."
 > **Dev:** "But generating a scenario to stress the skill needs a model call."
-> **Domain expert:** "Right — so it calls a **gateway primitive**, `runAgent` or `classify`. The gateway owns the key and the plumbing; the evaluator just expresses intent. And it tags that call `platform` — stressing *the* skill is us enabling the feature, not the user spending their allowance."
+> **Domain expert:** "Right — so it calls a **gateway primitive**, `runAgent` or `classify`. The gateway owns the key and the plumbing; the evaluator just expresses intent. And it tags that call `platform` — stressing *the* skill is us enabling the feature, not the user spending their quota."
 > **Dev:** "When would a call be tagged `account`?"
-> **Domain expert:** "When the user drove it and it counts against their tier — the build loop's turns, their triggering eval against their battery. `account` goes through the **usage** policy; `platform` goes to our own cost ledger. The caller declares the tag because only it knows why it's spending."
+> **Domain expert:** "When the user drove it and it spends their free quota — the build loop's turns, their triggering eval against their battery. `account` goes through the **usage** policy; `platform` goes to our own cost ledger. The caller declares the tag because only it knows why it's spending."
 > **Dev:** "Then it spits out the run data?"
 > **Domain expert:** "It emits an **Evaluation result** — the raw run-record. That's never shown raw. It renders to **Insights**: plain language the user can act on. Same seam, evaluation side."
 > **Dev:** "So when I add trigger-overlap detection later?"
@@ -212,6 +216,6 @@ The easy confusions, stated as rules. Each names a pair people collapse and the 
 - **Evaluation result ≠ Evaluation record.** The result is ephemeral on the seam; the record is the persisted row (§6). Don't render straight from the DB row, and don't persist the render.
 - **An Evaluator owns its method, not its resources.** It builds its own Scenario / distractor field / battery and runs the input (its method); model access is handed in via the **model gateway** (its resource). Building its own conditions is intrinsic to *being* that evaluator; the gateway stays out because the resource is shared + sensitive.
 - **No "harness."** Model *mechanism* and accounting *policy* are two things: the **model gateway** (mechanism — owns the key, exposes `classify`/`runAgent`, knows no evaluation kinds) depends on the **usage** module (policy — caps + recording by tag). "Harness" is banned (also jargon). The gateway is a **platform** concern; evaluation is just its first consumer (portability transform, mock-data generation, the build loop follow).
-- **Not all model spend is user-attributable.** The **accounting tag** splits it: `account` (user-attributable, tier policy) vs `platform` (the platform's own cost — e.g. generating mock data to stress a skill — never charged to a user's allowance). The caller declares the tag because only it knows *why* it's spending.
+- **Not all model spend is user-attributable.** The **accounting tag** splits it: `account` (user-attributable, spends the free quota) vs `platform` (the platform's own cost — e.g. generating mock data to stress a skill — never charged to a user's quota). The caller declares the tag because only it knows *why* it's spending.
 </content>
 </invoke>

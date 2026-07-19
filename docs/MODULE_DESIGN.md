@@ -182,9 +182,9 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **skill-import** | `SkillImportFetcher`, `SkillImportFetchError` | `SkillImportFetcher` | port |
 | **portability** | `portabilityCapability`, `runCrossRuntimeValidation`, runtime-target/result types | — | real cross-runtime validation engine |
 | **build-loop** | `runBuildLoop`, `buildTools`, `BuildToolName`, `BuildLoopEvent`, `formatTestRunFeedback`, `formatTriggeringEvalFeedback`, `runResponseSchemaLoop`, `responseSchemaTools`, `RESPONSE_SCHEMA_AUTHORING_PROMPT`, `formatResponseSchemaLintFeedback` | — (consumes `ModelGateway`) | real |
-| **model-gateway** | `ModelGateway` (`classify`/`runAgent`/`streamAgent`/`generate`), `createModelGateway` (the accounting shell: admission — tier cap, request rate limit, byte budget — and token recording, resolved per call through the model router), `AccountingTag`, `GatewayTool`, `ModelProvider` | `RawModelCalls` (unmetered per-primitive model calls), `ModelProvider` | real |
+| **model-gateway** | `ModelGateway` (`classify`/`runAgent`/`streamAgent`/`generate`), `createModelGateway` (the accounting shell: admission — free quota, request rate limit, byte budget — and token + cost recording, resolved per call through the model router), `AccountingTag`, `GatewayTool`, `ModelProvider` | `RawModelCalls` (unmetered per-primitive model calls), `ModelProvider` | real |
 | **model-router** | `ModelRouter` (`resolve`/`snapshot`/`setActive`/`setCredential`/`clearCredential`), `ProviderProfile`, `ModelSelection`, `RouterSnapshot`, selection helpers | `ModelRouter` | real |
-| **usage** | `checkCap`, `applyTurn`, `TIER_LIMITS`, types | `UsageRepository` | real |
+| **usage** | `checkQuota`, `applyTurn`, `costOfTurn`, `quotaRemainingMicros`, `formatQuotaMicros`, `INITIAL_QUOTA_MICROS`, `TOKEN_PRICES_MICROS`, types | `UsageRepository` | real |
 | **harness-version** | `currentHarnessManifest`, `hashHarnessManifest`, manifest/version types | `HarnessVersionRepository` | real |
 | **auth** | `AuthPort`, `AuthIdentity` | `AuthPort` | port |
 | **baseline-corpus** | `baselineSkillCorpus`, `baselineDistractors`, `BaselineSkillCorpusEntry` + types | — | real |
@@ -434,7 +434,7 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
 | `persistence_failed` | database operation failed |
 | `auth_failed` | identity could not be resolved |
 | `model_unavailable` | no model configured (offline / no key) |
-| `cap_reached` | a model exists, but an `account` call hit a tier cap (the §8 graceful-degradation catch) |
+| `cap_reached` | a model exists, but an `account` call is out of free quota — or hit a structural bound (skill count, request rate) or the §8 provider cap-catch |
 | `input_too_large` | a request payload exceeded a size/depth/count bound ([ARCHITECTURE §6](./ARCHITECTURE.md#6-data-model-sketch)) |
 | `invalid_operation` | a structurally invalid request (e.g. discarding the main lineage, promoting an empty draft) → 409 |
 | `seam_analyze_failed` | analyzer threw during seam execution |

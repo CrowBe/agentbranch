@@ -12,7 +12,6 @@ import {
   type BuildLoopEvent,
 } from "@/modules/build-loop";
 import type { ModelGateway } from "@/modules/model-gateway";
-import type { Tier } from "@/modules/usage";
 
 /**
  * Bridge the build loop's typed event generator to an SSE Response. This is the
@@ -24,7 +23,6 @@ export function buildLoopResponse(
   gateway: ModelGateway,
   skills: SkillRepository,
   userId: UserId,
-  tierFor: (userId: UserId) => Promise<Tier> = async () => "free",
 ): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
@@ -133,8 +131,7 @@ export function buildLoopResponse(
             }
 
             if (!draftSkillId) {
-              const tier = await tierFor(userId);
-              const skillCap = await checkSkillCreateCap({ skills, userId, tier });
+              const skillCap = await checkSkillCreateCap({ skills, userId });
               if (!skillCap.ok) {
                 controller.enqueue(
                   encoder.encode(
@@ -190,8 +187,7 @@ export function buildLoopResponse(
         if (input.branchId) return;
 
         if (!draftSkillId && !input.currentSkillId) {
-          const tier = await tierFor(userId);
-          const skillCap = await checkSkillCreateCap({ skills, userId, tier });
+          const skillCap = await checkSkillCreateCap({ skills, userId });
           if (!skillCap.ok) {
             checkpointingDisabled = true;
             controller.enqueue(

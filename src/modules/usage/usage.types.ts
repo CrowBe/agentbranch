@@ -1,9 +1,10 @@
 import type { UserId } from "@/shared";
 
-/** Subscription tiers (Clerk Billing). v1 = Free + one Pro (ARCHITECTURE §4). */
-export type Tier = "free" | "pro";
-
-/** Capabilities that can be gated by tier. */
+/**
+ * Capabilities a model call can spend on. Carried on the accounting tag for
+ * per-capability request rate limiting and cost attribution — admission itself
+ * is capability-blind: one free quota, every capability (ARCHITECTURE §8).
+ */
 export type GatedCapability =
   | "build"
   | "visualise"
@@ -25,20 +26,15 @@ export type TokenUsageBreakdown = {
 
 export type UsageSnapshot = {
   readonly userId: UserId;
-  /** Total model tokens for cap checks. Detailed buckets support pricing later. */
+  /** Total model tokens spent. Detailed buckets support the price table. */
   readonly tokensUsed: number;
   readonly turnsUsed: number;
+  /** Money spent against the free quota, in micro-USD, priced at record time. */
+  readonly costMicrosUsed: number;
   readonly inputTokensUsed: number;
   readonly outputTokensUsed: number;
   readonly cacheReadInputTokensUsed: number;
   readonly cacheCreationInputTokensUsed: number;
-};
-
-/** Per-tier caps. A free session is bounded by construction (ARCHITECTURE §8). */
-export type TierLimits = {
-  readonly maxTurns: number;
-  readonly maxTokens: number;
-  readonly allowed: ReadonlySet<GatedCapability>;
 };
 
 /** Fixed-window request-rate policy, enforced before model spend. */

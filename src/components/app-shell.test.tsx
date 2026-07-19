@@ -303,10 +303,10 @@ describe("AppShell capability chips", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Visualise ready.");
   });
 
-  it("shows the triggering eval free-plan gate without leaving the chip busy", async () => {
+  it("shows the quota-exhausted message without leaving the chip busy", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       Response.json(
-        { error: "cap reached", code: "cap_reached" },
+        { error: "You've used all of your free quota.", code: "cap_reached" },
         { status: 429 },
       ),
     );
@@ -318,7 +318,7 @@ describe("AppShell capability chips", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("status")).toHaveTextContent(
-        "Triggering eval is not available on the free plan.",
+        "You've used all of your free quota.",
       );
     });
     expect(screen.getByRole("button", { name: "Triggers" })).toBeEnabled();

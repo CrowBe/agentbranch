@@ -13,6 +13,7 @@ import {
   ok,
   unwrap,
   UserId,
+  SKILL_COUNT_MAX,
   type DomainError,
   type Result,
 } from "@/shared";
@@ -133,10 +134,14 @@ describe("buildLoopResponse", () => {
     expect(unwrap(await repo.listVersions(checkpoint!.data.skillId, userId))).toHaveLength(0);
   });
 
-  it("streams a cap error instead of persisting a second free-tier skill", async () => {
+  it("streams a cap error instead of persisting a skill over the account cap", async () => {
     const repo = createMemorySkillRepository();
-    const source = unwrap(parseSkillMd(`---\nname: existing\ndescription: Existing skill\n---\nBody.`));
-    unwrap(await repo.create({ userId, source }));
+    for (let i = 0; i < SKILL_COUNT_MAX; i++) {
+      const source = unwrap(
+        parseSkillMd(`---\nname: existing-${i}\ndescription: Existing skill\n---\nBody.`),
+      );
+      unwrap(await repo.create({ userId, source }));
+    }
 
     const response = buildLoopResponse(
       { messages: [{ role: "user", content: "Make a greeter" }] },
@@ -152,16 +157,15 @@ describe("buildLoopResponse", () => {
       ]),
       repo,
       userId,
-      async () => "free",
     );
 
     const events = await readEvents(response);
 
     expect(events.find((e) => e.event === "error")?.data.message).toBe(
-      "You're at your skill limit - delete a skill to make room, or upgrade for more.",
+      "You're at your skill limit - delete a skill to make room.",
     );
     expect(events.find((e) => e.event === "done")).toBeUndefined();
-    expect(unwrap(await repo.listByUser(userId))).toHaveLength(1);
+    expect(unwrap(await repo.listByUser(userId))).toHaveLength(SKILL_COUNT_MAX);
   });
 
   it("saves an edit turn as the next revision of the existing skill", async () => {

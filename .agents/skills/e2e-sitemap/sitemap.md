@@ -94,9 +94,9 @@ Equipment quality routes take `{ "document": "<JSON string>", "surface": "insigh
 
 Run in order for a full pass. `precondition: WALK-01` means the walk needs the
 imported skill from this server session (memory resets on restart — and the
-free tier caps skills at five, so repeated import runs against one server
+skill-count cap is five per account, so repeated import runs against one server
 session eventually hit `You're at your skill limit - delete a skill to make
-room, or upgrade for more.`; **restart the dev server for a clean session**).
+room.`; **restart the dev server for a clean session**).
 
 Fixture used by WALK-01 (paste as-is):
 

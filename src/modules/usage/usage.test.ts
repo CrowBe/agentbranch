@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { checkCap, applyTurn } from "./meter";
+import { checkQuota, applyTurn, costOfTurn, quotaRemainingMicros, INITIAL_QUOTA_MICROS } from "./meter";
 import type { TokenUsageBreakdown, UsageSnapshot } from "./usage.types";
 import { UserId } from "@/shared";
 
@@ -7,6 +7,7 @@ const fresh: UsageSnapshot = {
   userId: UserId("u1"),
   tokensUsed: 0,
   turnsUsed: 0,
+  costMicrosUsed: 0,
   inputTokensUsed: 0,
   outputTokensUsed: 0,
   cacheReadInputTokensUsed: 0,
@@ -14,26 +15,33 @@ const fresh: UsageSnapshot = {
 };
 
 describe("usage meter", () => {
-  it("allows a build on the free tier when under caps", () => {
-    expect(checkCap(fresh, "free", "build")).toEqual({ allowed: true });
+  it("allows spend while free quota remains", () => {
+    expect(checkQuota(fresh)).toEqual({ allowed: true });
+    expect(checkQuota({ ...fresh, costMicrosUsed: INITIAL_QUOTA_MICROS - 1 }).allowed).toBe(true);
   });
 
-  it("denies triggering-eval on free but allows it on pro", () => {
-    expect(checkCap(fresh, "free", "triggering-eval").allowed).toBe(false);
-    expect(checkCap(fresh, "pro", "triggering-eval").allowed).toBe(true);
-  });
-
-  it("allows import on the free tier because storage is capped separately", () => {
-    expect(checkCap(fresh, "free", "import")).toEqual({ allowed: true });
-  });
-
-  it("denies once the turn cap is hit", () => {
-    const maxed: UsageSnapshot = { ...fresh, turnsUsed: 25 };
-    const decision = checkCap(maxed, "free", "build");
+  it("denies spend once the free quota is used up", () => {
+    const decision = checkQuota({ ...fresh, costMicrosUsed: INITIAL_QUOTA_MICROS });
     expect(decision.allowed).toBe(false);
   });
 
-  it("accumulates tokens, turns, and token buckets", () => {
+  it("prices a turn per token bucket, rounded up", () => {
+    const usage: TokenUsageBreakdown = {
+      inputTokens: 100, // 300 micros
+      outputTokens: 10, // 150 micros
+      cacheReadInputTokens: 5, // 1.5 micros
+      cacheCreationInputTokens: 2, // 7.5 micros
+    };
+    expect(costOfTurn(usage)).toBe(459); // ceil(300 + 150 + 1.5 + 7.5)
+  });
+
+  it("reports the remaining quota, floored at zero", () => {
+    expect(quotaRemainingMicros(fresh)).toBe(INITIAL_QUOTA_MICROS);
+    expect(quotaRemainingMicros({ ...fresh, costMicrosUsed: 400_000 })).toBe(600_000);
+    expect(quotaRemainingMicros({ ...fresh, costMicrosUsed: INITIAL_QUOTA_MICROS + 500 })).toBe(0);
+  });
+
+  it("accumulates tokens, turns, cost, and token buckets", () => {
     const first: TokenUsageBreakdown = {
       inputTokens: 80,
       outputTokens: 20,
@@ -49,6 +57,7 @@ describe("usage meter", () => {
     const next = applyTurn(applyTurn(fresh, first), second);
     expect(next.tokensUsed).toBe(185);
     expect(next.turnsUsed).toBe(2);
+    expect(next.costMicrosUsed).toBe(costOfTurn(first) + costOfTurn(second));
     expect(next.inputTokensUsed).toBe(105);
     expect(next.outputTokensUsed).toBe(35);
     expect(next.cacheReadInputTokensUsed).toBe(35);

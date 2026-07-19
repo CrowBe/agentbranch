@@ -27,11 +27,14 @@ export function AppShell({
   source,
   initialSkill,
   initialLintSummary = null,
+  quotaLabel,
 }: {
   rendered: RenderedDoc;
   source: SourceDoc;
   initialSkill: SkillSource;
   initialLintSummary?: SkillVersionLintSummary | null;
+  /** The top bar's free-quota chip text, computed server-side at page load. */
+  quotaLabel?: string;
 }) {
   const [menuExpanded, setMenuExpanded] = useState(false);
   const [consoleOpen, setConsoleOpen] = useState(false);
@@ -40,7 +43,7 @@ export function AppShell({
 
   return (
     <div className="flex h-dvh flex-col">
-      <TopBar onToggleMenu={() => setMenuExpanded((v) => !v)} />
+      <TopBar onToggleMenu={() => setMenuExpanded((v) => !v)} quotaLabel={quotaLabel} />
       <div className="flex justify-center border-b border-outline-variant bg-surface px-4 py-2 lg:hidden">
         <Segmented
           options={[

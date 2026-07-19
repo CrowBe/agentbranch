@@ -1,10 +1,9 @@
 import {
-  checkCap,
+  checkQuota,
   REQUEST_RATE_LIMIT,
   type RateLimitPolicy,
   type RequestRateLimiter,
   type TokenUsageBreakdown,
-  type Tier,
   type UsageRepository,
 } from "@/modules/usage";
 import type { ModelRouter, ModelSelection, ResolvedModel } from "@/modules/model-router";
@@ -17,7 +16,6 @@ import {
   REQUEST_BYTES_MAX,
   type Result,
   type DomainError,
-  type UserId,
 } from "@/shared";
 import type {
   ModelGateway,
@@ -37,37 +35,34 @@ import { PROVIDER_CAP_REACHED_MESSAGE, type RawModelCalls } from "./raw-model-ca
 /**
  * The domain accounting shell over the raw model-calls port (#160) — the
  * platform's single metered entry to the model (CONTEXT.md → Model gateway).
- * Admission (tier cap, request rate limit, byte budget) and token recording
- * live *here*, applied to every `RawModelCalls` adapter by construction; the
- * adapter owns SDK translation only. The shell resolves the model per call
- * through the **model router** (runtime provider switching keeps working) and
- * depends on the **usage** authority for policy — the gateway is mechanism,
- * usage is policy.
+ * Admission (free quota, request rate limit, byte budget) and token + cost
+ * recording live *here*, applied to every `RawModelCalls` adapter by
+ * construction; the adapter owns SDK translation only. The shell resolves the
+ * model per call through the **model router** (runtime provider switching
+ * keeps working) and depends on the **usage** authority for policy — the
+ * gateway is mechanism, usage is policy.
  *
  * v1 accounting (CONTEXT.md → v1 accounting behaviour): `account` calls run
- * `checkCap` (structural caps) before spending and record tokens after; the
- * paid token-stream and the `platform` cost ledger are deferred — those tags
- * are carried and otherwise no-op.
+ * `checkQuota` before spending and record tokens (priced at record time)
+ * after; the `platform` cost ledger is deferred — that tag is carried and
+ * otherwise no-op.
  */
 export function createModelGateway(deps: {
   router: ModelRouter;
   calls: RawModelCalls;
   usage: UsageRepository;
-  /** Resolves a user's tier. v1 has no paid users, so this is "free" for now. */
-  tierFor?: (userId: UserId) => Promise<Tier>;
   requestRateLimiter?: RequestRateLimiter;
   requestRateLimit?: RateLimitPolicy;
 }): ModelGateway {
   const { router, calls, usage } = deps;
-  const tierFor = deps.tierFor ?? (async () => "free" as Tier);
   const requestRateLimit = deps.requestRateLimit ?? REQUEST_RATE_LIMIT;
 
   /**
    * Gate a call before spending: resolve the model (so `model_unavailable`
    * wins over any policy error), enforce the byte budget, then for `account`
-   * calls clear the tier cap and the request rate limit. `platform` calls skip
-   * the cap (the platform owns that cost). Returns the resolved model to hand
-   * to the raw port, or a DomainError.
+   * calls clear the free quota and the request rate limit. `platform` calls
+   * skip the quota (the platform owns that cost). Returns the resolved model
+   * to hand to the raw port, or a DomainError.
    */
   async function admit(
     tag: AccountingTag,
@@ -83,12 +78,11 @@ export function createModelGateway(deps: {
     if (tag.kind === "account") {
       const snapshot = await usage.get(tag.userId);
       if (isErr(snapshot)) return snapshot;
-      const tier = await tierFor(tag.userId);
-      // The caller declares which capability it is spending on; the cap it must
-      // clear is capability-specific (free allows `test-run` but not
-      // `triggering-eval`, ARCHITECTURE §8). The gateway forwards the tag — it
+      // One admission question, capability-blind: is there quota left
+      // (ARCHITECTURE §8). The capability on the tag still scopes the request
+      // rate limit below and cost attribution — the gateway forwards it and
       // never names an evaluation kind itself (CONTEXT.md → Model gateway).
-      const decision = checkCap(snapshot.value, tier, tag.capability);
+      const decision = checkQuota(snapshot.value);
       if (!decision.allowed) {
         return err(domainError("cap_reached", decision.reason));
       }

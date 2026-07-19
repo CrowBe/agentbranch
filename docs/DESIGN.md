@@ -276,7 +276,7 @@ Behaviour identical across themes; colors resolve from §4 roles. Copy is **sent
 - **Trust & safety marks** (publish surfaces) — the **safety badge** renders as a success pill; **"potentially unsafe — not validated"** renders as a warn pill, copy kept blunt (ARCHITECTURE §9.1). Trust tier, category, and `#tags` are neutral pills. Safety verdicts on the hero: passed / needs review / blocked as headline + per-class score cards in the breakdown.
 - **Nav rail** — active item = `primary`/10 fill + `primary` text, `radius-md`; inactive = muted with `surface-high` hover. The icon bar stays in flow; the expanded slideout is an **overlay** (`menu-width`, `elevation-overlay`, scrim on compact viewports) so the main window keeps its width. Labels appear only when expanded; collapsed buttons keep `aria-label`s.
 - **Mobile tabs** — the compact arrangement's Chat | Skill switch is the standard segmented control (§5.1), centred in a slim bar under the top bar; it disappears at `lg`.
-- **Plan chip** (top bar) — the free-tier status as a **neutral** pill; it flips to warn only when usage is actually exhausted ("out of free usage today"). Plan identity is metadata, not a success state.
+- **Free-quota chip** (top bar) — the remaining balance in dollars as a **neutral** pill (e.g. "$0.87 free quota"); it flips to warn only when the quota is actually exhausted. The balance is metadata, not a success state.
 - **Status line** — the shell's one `role="status"` live region, below the hero: `label` type in `on-surface-variant`. Every action lands a sentence there; errors repeat as an error-toned entry in the interaction drawer.
 - **Streaming indicator** — `secondary` (teal) dot + label while writing; settles to `on-surface-variant` idle.
 

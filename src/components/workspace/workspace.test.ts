@@ -337,12 +337,17 @@ describe("workspace choreography", () => {
   it("maps evaluation error codes to friendly copy and clears the busy flag", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(Response.json({ error: "cap reached", code: "cap_reached" }, { status: 429 }));
+      .mockResolvedValue(
+        Response.json(
+          { error: "You've used all of your free quota.", code: "cap_reached" },
+          { status: 429 },
+        ),
+      );
     const workspace = createWorkspace(init, { fetch: fetchMock });
 
     await workspace.actions.runTool("triggering-eval");
 
-    expect(workspace.getSnapshot().status).toBe("Triggering eval is not available on the free plan.");
+    expect(workspace.getSnapshot().status).toBe("You've used all of your free quota.");
     expect(workspace.getSnapshot().toolBusy).toBe(false);
   });
 

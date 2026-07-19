@@ -1179,7 +1179,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       });
       const body = (await res.json().catch(() => null)) as unknown;
       if (!res.ok) {
-        fail(toolErrorMessage(body, res.status, "safety-review"));
+        fail(toolErrorMessage(body, res.status));
         return null;
       }
       const rating = decodeSafetyRating(body);
@@ -1298,7 +1298,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
         // Return the hero to the document — a progress panel must never
         // outlive its failed run.
         patch({ capability: null });
-        fail(toolErrorMessage(body, res.status, action));
+        fail(toolErrorMessage(body, res.status));
         return;
       }
       patch({
@@ -1337,7 +1337,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
         });
       } else if (event.event === "error") {
         failed = true;
-        fail(toolErrorMessage(event.data, 500, action));
+        fail(toolErrorMessage(event.data, 500));
       }
     }
 

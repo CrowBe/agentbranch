@@ -94,7 +94,7 @@ function Primitives() {
           <Pill tone="success">safety badge</Pill>
           <Pill tone="warn">potentially unsafe</Pill>
           <Pill tone="error">failing</Pill>
-          <Pill tone="neutral">Free plan</Pill>
+          <Pill tone="neutral">$1.00 free quota</Pill>
         </div>
         <div className="flex items-center gap-3">
           <Segmented
@@ -193,7 +193,7 @@ describe("shell chrome", () => {
     render(
       <Frame>
         <div className="flex flex-col gap-4">
-          <TopBar onToggleMenu={() => {}} />
+          <TopBar onToggleMenu={() => {}} quotaLabel="$1.00 free quota" />
           <ToolChips active={null} onSelect={() => {}} />
           <DraftControls
             onDraft

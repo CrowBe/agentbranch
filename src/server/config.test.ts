@@ -29,7 +29,6 @@ describe("readConfig", () => {
       runAgent: DEFAULT_ANTHROPIC_MODEL,
       streamAgent: DEFAULT_ANTHROPIC_MODEL,
     });
-    expect(config.clerkProPlanSlug).toBe("pro");
     expect(config.flags.hasModel).toBe(false);
   });
 
@@ -103,16 +102,6 @@ describe("readConfig", () => {
       runAgent: "claude-run-custom",
       streamAgent: "claude-stream-custom",
     });
-  });
-
-  it("lets the Clerk Pro plan slug override the default", () => {
-    replaceEnv({
-      AGENTBRANCH_PRO_PLAN_SLUG: "agentbranch-pro",
-    });
-
-    const config = readConfig();
-
-    expect(config.clerkProPlanSlug).toBe("agentbranch-pro");
   });
 
   it("rejects unsupported model providers", () => {

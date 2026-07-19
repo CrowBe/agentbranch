@@ -16,7 +16,8 @@ import type {
  * both the shell (stream error parts) and the raw adapter (thrown-call mapping)
  * say the same thing. `cap_reached` semantics: ARCHITECTURE §8.
  */
-export const PROVIDER_CAP_REACHED_MESSAGE = "cap_reached: Out of free usage today.";
+export const PROVIDER_CAP_REACHED_MESSAGE =
+  "cap_reached: Free usage is at capacity right now — try again later.";
 
 /** The retryable message for provider throttling that is not a spend cap. */
 export const PROVIDER_TRANSIENT_MESSAGE =
