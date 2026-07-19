@@ -111,6 +111,49 @@ describe("response-schema lint", () => {
     expect(rules).toContain("schema.object.no-properties");
   });
 
+  it("drops structurally weak object schemas out of the A band", () => {
+    const reportFor = (overrides: Readonly<Record<string, unknown>>) =>
+      createResponseSchemaLintReport(
+        unwrap(parseResponseSchema(JSON.stringify({ ...INVOICE_SCHEMA, ...overrides }))),
+      ).summary;
+
+    expect(reportFor({ required: [] })).toMatchObject({ grade: "B", score: 85 });
+    expect(reportFor({ additionalProperties: true })).toMatchObject({ grade: "B", score: 85 });
+    expect(reportFor({ required: [], additionalProperties: true })).toMatchObject({
+      grade: "C",
+      score: 70,
+    });
+  });
+
+  it("scales missing-description cost with the share of undescribed properties", () => {
+    const partiallyDescribed = {
+      ...INVOICE_SCHEMA,
+      properties: {
+        ...INVOICE_SCHEMA.properties,
+        overdue: { type: "boolean" },
+      },
+    };
+    const whollyUndescribed = {
+      ...INVOICE_SCHEMA,
+      properties: {
+        invoiceId: { type: "string" },
+        amount: { type: "number" },
+        overdue: { type: "boolean" },
+      },
+    };
+
+    expect(
+      createResponseSchemaLintReport(
+        unwrap(parseResponseSchema(JSON.stringify(partiallyDescribed))),
+      ).summary.score,
+    ).toBe(99);
+    expect(
+      createResponseSchemaLintReport(
+        unwrap(parseResponseSchema(JSON.stringify(whollyUndescribed))),
+      ).summary.score,
+    ).toBe(97);
+  });
+
   it("renders through the seam to insights and breakdown", async () => {
     const source = unwrap(parseResponseSchema(JSON.stringify(INVOICE_SCHEMA)));
     const insights = unwrap(await runCapability(responseSchemaCapability, "insights", source));

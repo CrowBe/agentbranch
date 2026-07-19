@@ -353,15 +353,13 @@ grade letter is a finding — report both scores as evidence.
 | Probe | Clean input | Flawed input | Route |
 |---|---|---|---|
 | Skill lint | the WALK-01 fixture | same, description `Does stuff.`, one-line body | `POST /api/lint` |
-| Response schema | the WALK-10 step-3 schema (titled, described, closed, required fields) | `required: []` variant · `additionalProperties: true` variant | `POST /api/response-schema` |
+| Response schema | the WALK-10 step-3 schema (titled, described, closed, required fields) — A 100 | `required: []` — B 85 · `additionalProperties: true` — B 85 · both defects — C 70 | `POST /api/response-schema` |
 | Tool contract | the WALK-10 step-4 contract | same minus description + failure modes | `POST /api/tool-contract` |
 
-Known baseline: the `response-schema-corpus` module freezes the current
-analyzer's behaviour — all-optional and open-object schemas grade **A 97/100**
-against a clean **A 100** — which is exactly the insensitivity this probe
-exists to surface (recorded as #223; skill lint passes the same probe,
-B 82 clean → D 58 flawed). A frozen characterisation is a fact about the
-analyzer, not a defence of it: the probe's verdict stands independently.
+Known baseline: the `response-schema-corpus` module freezes the expected
+response-schema sensitivity: either single structural defect costs 15 points
+and one grade letter; combining both costs 30 points and reaches C. Skill lint
+also passes the probe (B 82 clean → D 58 flawed).
 
 ### QUAL-04 · Judgment screenshots
 

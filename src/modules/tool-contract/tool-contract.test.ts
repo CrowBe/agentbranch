@@ -131,6 +131,22 @@ describe("tool-contract lint", () => {
     expect(rules).toContain("contract.example.input-mismatch");
   });
 
+  it("applies response-schema structural penalties to inline I/O", () => {
+    const report = createToolContractLintReport(
+      unwrap(
+        parseToolContract(
+          JSON.stringify({
+            ...SEND_INVOICE,
+            input: { ...SEND_INVOICE.input, required: [] },
+          }),
+        ),
+      ),
+    );
+
+    expect(report.summary).toMatchObject({ grade: "B", score: 85 });
+    expect(report.summary.rules).toContain("schema.required.missing");
+  });
+
   it("renders through the seam to insights and breakdown", async () => {
     const source = unwrap(parseToolContract(JSON.stringify(SEND_INVOICE)));
     const insights = unwrap(await runCapability(toolContractCapability, "insights", source));
