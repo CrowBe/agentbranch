@@ -31,6 +31,7 @@ import {
   SKILL_CATEGORIES,
   isSkillCategory,
   normalizeSkillTags,
+  parseSkillMd,
   serializeSkillMd,
   withSkillMetadata,
   type SkillSource,
@@ -1402,6 +1403,11 @@ function decodeMetadataSuggestion(value: unknown): MetadataSuggestionValue | nul
     ? normalizeSkillTags(item.tags)
     : [];
   if (!name || !description || !rationale || category === undefined || tags.length === 0) return null;
+  const candidate = parseSkillMd(serializeSkillMd({
+    frontmatter: { name, description, extra: {} },
+    body: "",
+  }));
+  if (!candidate.ok) return null;
   return { name, description, category, tags, rationale };
 }
 

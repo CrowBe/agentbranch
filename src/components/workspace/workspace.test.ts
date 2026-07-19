@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { encodeSse } from "@/shared";
+import { encodeSse, SKILL_NAME_MAX } from "@/shared";
 import type { SkillSource } from "@/modules/skill";
 import { createDeterministicLocalSuggestionProvider, createWorkspace } from "./index";
 
@@ -89,6 +89,29 @@ describe("workspace choreography", () => {
     expect(workspace.getSnapshot().capability).toMatchObject({
       kind: "metadata-suggestion",
       provenance: "route",
+    });
+  });
+
+  it("falls through when local metadata would make the skill invalid", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+      ...metadataSuggestion,
+      current: { category: null, tags: [] },
+    }));
+    const workspace = createWorkspace(init, {
+      fetch: fetchMock,
+      localSuggestionProvider: createDeterministicLocalSuggestionProvider({
+        ...metadataSuggestion,
+        name: "x".repeat(SKILL_NAME_MAX + 1),
+      }),
+    });
+
+    await workspace.actions.runTool("metadata");
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(workspace.getSnapshot().capability).toMatchObject({
+      kind: "metadata-suggestion",
+      provenance: "route",
+      name: metadataSuggestion.name,
     });
   });
 
