@@ -2,6 +2,7 @@ import {
   checkQuota,
   maximumTurnCost,
   pricesForModel,
+  QUOTA_REQUEST_TOO_LARGE_MESSAGE,
   REQUEST_RATE_LIMIT,
   type RateLimitPolicy,
   type RequestRateLimiter,
@@ -62,6 +63,7 @@ export function createModelGateway(deps: {
   usage: UsageRepository;
   requestRateLimiter?: RequestRateLimiter;
   requestRateLimit?: RateLimitPolicy;
+  onAccountingError?: (error: DomainError) => void;
 }): ModelGateway {
   const { router, calls, usage } = deps;
   const requestRateLimit = deps.requestRateLimit ?? REQUEST_RATE_LIMIT;
@@ -102,7 +104,7 @@ export function createModelGateway(deps: {
       const reservationMicros = maximumTurnCost(inputBytes, primitive, prices);
       const reserved = await usage.reserve(tag.userId, reservationMicros);
       if (isErr(reserved)) return reserved;
-      if (!reserved.value) return err(domainError("cap_reached", "You've used all of your free quota."));
+      if (!reserved.value) return err(domainError("cap_reached", QUOTA_REQUEST_TOO_LARGE_MESSAGE));
       if (deps.requestRateLimiter) {
         const rate = await deps.requestRateLimiter.consume(
           tag.userId,
@@ -123,17 +125,28 @@ export function createModelGateway(deps: {
     return ok({ model: resolved.value, reservationMicros: 0, prices: null });
   }
 
-  /** Record a turn's token cost. `account` → usage stream; `platform`/paid → deferred no-op. */
-  async function record(tag: AccountingTag, admission: Admission, modelUsage: TokenUsageBreakdown): Promise<void> {
+  /** Record a turn's token cost. `account` → usage stream; `platform` → deferred no-op. */
+  async function record(
+    tag: AccountingTag,
+    admission: Admission,
+    modelUsage: TokenUsageBreakdown,
+  ): Promise<Result<void, DomainError>> {
     if (tag.kind === "account") {
       const recorded = await usage.reconcile(tag.userId, admission.reservationMicros, {
         usage: modelUsage,
         turns: 1,
         prices: admission.prices!,
       });
-      if (isErr(recorded)) throw new Error(recorded.error.message);
+      if (isErr(recorded)) {
+        // Reconcile is atomic, so a failure leaves the hold in place. Best-
+        // effort cleanup avoids turning an accounting outage into a permanent
+        // reservation; preserve the original persistence error for callers.
+        await usage.release(tag.userId, admission.reservationMicros).catch(() => undefined);
+        return recorded;
+      }
     }
     // platform: deferred cost ledger — tag carried, not yet recorded.
+    return ok(undefined);
   }
 
   return {
@@ -153,7 +166,8 @@ export function createModelGateway(deps: {
         if (input.tag.kind === "account") await usage.release(input.tag.userId, admitted.value.reservationMicros);
         return result;
       }
-      await record(input.tag, admitted.value, result.value.usage);
+      const recorded = await record(input.tag, admitted.value, result.value.usage);
+      if (isErr(recorded)) return recorded;
 
       // Guard against a hallucinated label outside the allowed set.
       const { choice, rationale } = result.value.value;
@@ -181,7 +195,8 @@ export function createModelGateway(deps: {
         if (input.tag.kind === "account") await usage.release(input.tag.userId, admitted.value.reservationMicros);
         return result;
       }
-      await record(input.tag, admitted.value, result.value.usage);
+      const recorded = await record(input.tag, admitted.value, result.value.usage);
+      if (isErr(recorded)) return recorded;
       return ok(result.value.value);
     },
 
@@ -205,6 +220,10 @@ export function createModelGateway(deps: {
       const admission = admitted.value;
       const { tag } = input;
 
+      // Ownership contract: a successful result transfers the reservation to
+      // the returned generator. Callers must consume it or call return(); all
+      // current HTTP/SSE callers do. JavaScript cannot finalize a generator
+      // that is never started, so future early-return paths must close it.
       async function* stream(): AsyncGenerator<AgentStreamPart> {
         const raw = calls.streamAgent(model, {
           system: input.system,
@@ -225,7 +244,13 @@ export function createModelGateway(deps: {
         } finally {
           // Record once even when the consumer disconnects or the stream
           // throws — `usage()` settles to the adapter's best-known cost.
-          if (!skipRecording) await record(tag, admission, await raw.usage());
+          if (!skipRecording) {
+            // The response may already be delivered. Do not turn an accounting
+            // persistence failure into a late stream exception. Report the
+            // DomainError envelope through the gateway's observability seam.
+            const recorded = await record(tag, admission, await raw.usage());
+            if (isErr(recorded)) deps.onAccountingError?.(recorded.error);
+          }
           else if (tag.kind === "account") await usage.release(tag.userId, admission.reservationMicros);
         }
       }
@@ -251,7 +276,8 @@ export function createModelGateway(deps: {
         if (input.tag.kind === "account") await usage.release(input.tag.userId, admitted.value.reservationMicros);
         return result;
       }
-      await record(input.tag, admitted.value, result.value.usage);
+      const recorded = await record(input.tag, admitted.value, result.value.usage);
+      if (isErr(recorded)) return recorded;
       return ok(result.value.value);
     },
   };

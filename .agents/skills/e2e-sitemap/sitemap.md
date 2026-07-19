@@ -49,6 +49,13 @@ into a labelled slideout (name = visible text, `aria-label` gone), so a CSS
 | Publish | button `Publish` (main version only) | opens `Publish skill` form for the public `owner/name` address; submit reaches `/api/publications` |
 | Status line | `[role="status"]` | the synchronisation point for every step |
 
+### Top bar
+
+| Identity state | Quota pill |
+|---|---|
+| signed out | `Create account for $1 credit` — no anonymous platform-funded model allowance |
+| signed in | remaining dollar balance, e.g. `$1.00 free quota`; refreshed after model-bearing actions |
+
 ### Confirm dialogs (native `confirm()`)
 
 | Trigger | Message starts with | Offline policy |

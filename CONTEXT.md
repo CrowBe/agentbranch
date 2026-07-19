@@ -105,7 +105,7 @@ A label the *caller* declares on every gateway call — **`account`** (user-attr
 _Avoid_: billing flag, cost type, owner
 
 **Free quota**:
-Every account's one-time model-spend budget, granted at sign-up — $1.00 in v1, one tunable constant (`INITIAL_QUOTA_MICROS`). The single spend decision, irrespective of capability: can the call's conservative maximum cost be atomically reserved from the remaining quota. Actual tokens reconcile the reservation at the resolved model's versioned price; each charge keeps that price key for audit. It never resets — concurrent calls cannot oversubscribe it.
+Every authenticated account's one-time model-spend budget, granted at sign-up — $1.00 in v1, one tunable constant (`INITIAL_QUOTA_MICROS`). Anonymous visitors receive no platform-funded model calls. The single spend decision, irrespective of capability: can the call's estimated maximum cost be atomically reserved from the remaining quota. Actual tokens reconcile the reservation at the resolved model's versioned price; each charge keeps that price key for audit. It never resets — concurrent calls cannot oversubscribe it.
 _Avoid_: tier, plan (there are no tiers), allowance, credits, daily limit
 
 **Usage** (accounting authority):

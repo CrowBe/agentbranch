@@ -52,28 +52,5 @@ export function createMemoryUsageRepository(): UsageRepository {
       snapshots.set(userId, next);
       return ok(next);
     },
-    async increment(userId, delta) {
-      const current = read(userId);
-      const tokens =
-        delta.usage.inputTokens +
-        delta.usage.outputTokens +
-        delta.usage.cacheReadInputTokens +
-        delta.usage.cacheCreationInputTokens;
-      const next: UsageSnapshot = {
-        userId,
-        tokensUsed: current.tokensUsed + tokens,
-        turnsUsed: current.turnsUsed + delta.turns,
-        costMicrosUsed: current.costMicrosUsed + costOfTurn(delta.usage),
-        costMicrosReserved: current.costMicrosReserved,
-        inputTokensUsed: current.inputTokensUsed + delta.usage.inputTokens,
-        outputTokensUsed: current.outputTokensUsed + delta.usage.outputTokens,
-        cacheReadInputTokensUsed:
-          current.cacheReadInputTokensUsed + delta.usage.cacheReadInputTokens,
-        cacheCreationInputTokensUsed:
-          current.cacheCreationInputTokensUsed + delta.usage.cacheCreationInputTokens,
-      };
-      snapshots.set(userId, next);
-      return ok(next);
-    },
   };
 }

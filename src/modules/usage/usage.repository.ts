@@ -14,13 +14,4 @@ export interface UsageRepository {
     reservationMicros: number,
     delta: { usage: TokenUsageBreakdown; turns: number; prices: ModelTokenPrices },
   ): Promise<Result<UsageSnapshot, DomainError>>;
-  /**
-   * Atomically add a turn's tokens — priced into `costMicrosUsed` at record
-   * time via `costOfTurn`, so recording a turn always spends quota — and
-   * return the new snapshot.
-   */
-  increment(
-    userId: UserId,
-    delta: { usage: TokenUsageBreakdown; turns: number },
-  ): Promise<Result<UsageSnapshot, DomainError>>;
 }

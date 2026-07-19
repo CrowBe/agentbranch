@@ -12,7 +12,7 @@ import type { AccountingTag, Classification } from "./gateway.types";
 import { createMemoryRequestRateLimiter } from "@/infra/memory/rate-limit.memory-repository";
 import { createMemoryUsageRepository } from "@/infra/memory/usage.memory-repository";
 import { INITIAL_QUOTA_MICROS, TOKEN_PRICES_MICROS } from "@/modules/usage";
-import type { TokenUsageBreakdown } from "@/modules/usage";
+import type { TokenUsageBreakdown, UsageRepository } from "@/modules/usage";
 import type { ModelRouter, ResolvedModel } from "@/modules/model-router";
 import { ok, err, domainError, isErr, REQUEST_BYTES_MAX, UserId } from "@/shared";
 
@@ -114,7 +114,7 @@ const QUOTA_EXHAUSTING_INPUT_TOKENS = Math.ceil(
 
 function gatewayWith(deps?: {
   calls?: RawModelCalls;
-  usage?: ReturnType<typeof createMemoryUsageRepository>;
+  usage?: UsageRepository;
   router?: ModelRouter;
 }) {
   return createModelGateway({
@@ -162,9 +162,10 @@ describe("model gateway — accounting guard", () => {
     const usage = createMemoryUsageRepository();
     const userId = "capped";
     // Spend enough that the priced cost exceeds the whole quota.
-    await usage.increment(UserId(userId), {
+    await usage.reconcile(UserId(userId), 0, {
       usage: usageOf(QUOTA_EXHAUSTING_INPUT_TOKENS),
       turns: 0,
+      prices: TOKEN_PRICES_MICROS,
     });
     const calls = fakeCalls();
     const gateway = gatewayWith({ usage, calls });
@@ -189,19 +190,55 @@ describe("model gateway — accounting guard", () => {
   });
 
   it("atomically reserves worst-case spend so concurrent calls cannot oversubscribe quota", async () => {
-    let finish!: (value: ReturnType<typeof ok<RawCallResult<Classification>>>) => void;
-    const firstResult = new Promise<ReturnType<typeof ok<RawCallResult<Classification>>>>((resolve) => { finish = resolve; });
-    const calls = fakeCalls({ classify: vi.fn(() => firstResult) });
+    const calls = fakeCalls();
     const gateway = gatewayWith({ calls });
-    const prompt = "x".repeat(170_000);
+    const system = "x".repeat(REQUEST_BYTES_MAX);
 
-    const first = gateway.classify({ prompt, choices: ["a"], tag: account("concurrent") });
-    await vi.waitFor(() => expect(calls.classify).toHaveBeenCalledOnce());
-    const second = await gateway.classify({ prompt, choices: ["a"], tag: account("concurrent") });
+    const first = await gateway.streamAgent({ system, messages: [], tools: [], tag: account("concurrent") });
+    const second = await gateway.streamAgent({ system, messages: [], tools: [], tag: account("concurrent") });
+    const third = await gateway.streamAgent({ system, messages: [], tools: [], tag: account("concurrent") });
 
-    expect(isErr(second) && second.error.tag).toBe("cap_reached");
-    finish(ok(rawResult(classification)));
-    expect(isErr(await first)).toBe(false);
+    expect(isErr(first)).toBe(false);
+    expect(isErr(second)).toBe(false);
+    expect(isErr(third) && third.error.tag).toBe("cap_reached");
+    if (!isErr(first)) await collect(first.value);
+    if (!isErr(second)) await collect(second.value);
+  });
+
+  it("admits a maximum-size Sonnet build request for a fresh account", async () => {
+    const calls = fakeCalls();
+    const gateway = gatewayWith({ calls });
+
+    const opened = await gateway.streamAgent({
+      system: "x".repeat(REQUEST_BYTES_MAX),
+      messages: [],
+      tools: [],
+      tag: account("max-build"),
+    });
+
+    expect(isErr(opened)).toBe(false);
+    if (!isErr(opened)) await collect(opened.value);
+    expect(calls.streamAgent).toHaveBeenCalledOnce();
+  });
+
+  it("distinguishes insufficient remaining quota from an exhausted balance", async () => {
+    const usage = createMemoryUsageRepository();
+    await usage.reconcile(UserId("low-balance"), 0, {
+      usage: usageOf(266_667),
+      turns: 1,
+      prices: TOKEN_PRICES_MICROS,
+    });
+    const gateway = gatewayWith({ usage });
+
+    const result = await gateway.streamAgent({
+      system: "x".repeat(100_000),
+      messages: [],
+      tools: [],
+      tag: account("low-balance"),
+    });
+
+    expect(isErr(result) && result.error.tag).toBe("cap_reached");
+    if (isErr(result)) expect(result.error.message).toContain("request this size");
   });
 
   it("releases reserved quota when the provider call fails", async () => {
@@ -226,9 +263,10 @@ describe("model gateway — accounting guard", () => {
   it("does not quota-gate platform calls (the platform owns that cost)", async () => {
     const usage = createMemoryUsageRepository();
     const userId = "capped";
-    await usage.increment(UserId(userId), {
+    await usage.reconcile(UserId(userId), 0, {
       usage: usageOf(QUOTA_EXHAUSTING_INPUT_TOKENS),
       turns: 0,
+      prices: TOKEN_PRICES_MICROS,
     });
     const gateway = gatewayWith({ usage });
 
@@ -429,6 +467,21 @@ describe("model gateway — recording", () => {
     if (!isErr(snapshot)) expect(snapshot.value).toMatchObject({ tokensUsed: 0, turnsUsed: 0 });
   });
 
+  it("returns reconciliation failures inside the DomainError envelope", async () => {
+    const usage = createMemoryUsageRepository();
+    const failedUsage: UsageRepository = {
+      ...usage,
+      reconcile: vi.fn(async () => err(domainError("persistence_failed", "accounting unavailable"))),
+    };
+    const result = await gatewayWith({ usage: failedUsage }).classify({
+      prompt: "x",
+      choices: ["a"],
+      tag: account("record-failure"),
+    });
+
+    expect(isErr(result) && result.error.tag).toBe("persistence_failed");
+  });
+
   it("passes a provider cap failure through without recording usage", async () => {
     const usage = createMemoryUsageRepository();
     const userId = UserId("provider-capped");
@@ -511,6 +564,34 @@ describe("model gateway — stream accounting", () => {
     const snapshot = await usage.get(UserId("stream-clean"));
     expect(isErr(snapshot)).toBe(false);
     if (!isErr(snapshot)) expect(snapshot.value).toMatchObject({ tokensUsed: 31, turnsUsed: 1 });
+  });
+
+  it("reports and swallows a reconciliation failure after stream delivery", async () => {
+    const usage = createMemoryUsageRepository();
+    const failedUsage: UsageRepository = {
+      ...usage,
+      reconcile: vi.fn(async () => err(domainError("persistence_failed", "accounting unavailable"))),
+    };
+    const onAccountingError = vi.fn();
+    const gateway = createModelGateway({
+      router: stubRouter(),
+      calls: fakeCalls(),
+      usage: failedUsage,
+      onAccountingError,
+    });
+
+    const opened = await gateway.streamAgent({
+      system: "",
+      messages: [],
+      tools: [],
+      tag: accountTag("stream-record-failure"),
+    });
+
+    expect(isErr(opened)).toBe(false);
+    if (!isErr(opened)) await expect(collect(opened.value)).resolves.toEqual([
+      { kind: "finish", finishReason: "stop" },
+    ]);
+    expect(onAccountingError).toHaveBeenCalledWith(expect.objectContaining({ tag: "persistence_failed" }));
   });
 
   it("records the best-known stream usage when the stream throws", async () => {

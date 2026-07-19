@@ -53,7 +53,14 @@ export function costOfTurn(usage: TokenUsageBreakdown, prices: ModelTokenPrices 
 
 const MAX_OUTPUT_TOKENS = { classify: 2_048, runAgent: 4_096, streamAgent: 16_000, generate: 4_096 } as const;
 
-/** Conservative reservation: UTF-8 bytes upper-bound input tokens. */
+const ESTIMATED_BYTES_PER_TOKEN = 4;
+
+/**
+ * Conservative-enough admission estimate: common model tokenisers average
+ * roughly four UTF-8 bytes per token. The request byte ceiling remains the
+ * hard resource bound; reservations protect concurrent quota without making
+ * a maximum-size request impossible for a fresh account.
+ */
 export function maximumTurnCost(
   inputBytes: number,
   primitive: keyof typeof MAX_OUTPUT_TOKENS,
@@ -64,7 +71,8 @@ export function maximumTurnCost(
     prices.cacheReadPerToken,
     prices.cacheCreationPerToken,
   );
-  return Math.ceil(inputBytes * maximumInputPrice + MAX_OUTPUT_TOKENS[primitive] * prices.outputPerToken);
+  const estimatedInputTokens = Math.ceil(inputBytes / ESTIMATED_BYTES_PER_TOKEN);
+  return Math.ceil(estimatedInputTokens * maximumInputPrice + MAX_OUTPUT_TOKENS[primitive] * prices.outputPerToken);
 }
 
 /** What's left of the free quota, floored at zero for display. */
@@ -78,6 +86,7 @@ export function formatQuotaMicros(micros: number): string {
 }
 
 export const QUOTA_EXHAUSTED_MESSAGE = "You've used all of your free quota.";
+export const QUOTA_REQUEST_TOO_LARGE_MESSAGE = "There isn't enough free quota left for a request this size.";
 
 /** Burst guard: per-user, per-capability requests admitted each minute. */
 export const REQUEST_RATE_LIMIT: RateLimitPolicy = {

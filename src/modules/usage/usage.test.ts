@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { checkQuota, applyTurn, costOfTurn, quotaRemainingMicros, INITIAL_QUOTA_MICROS, pricesForModel } from "./meter";
+import { checkQuota, applyTurn, costOfTurn, maximumTurnCost, quotaRemainingMicros, INITIAL_QUOTA_MICROS, pricesForModel, TOKEN_PRICES_MICROS } from "./meter";
 import type { TokenUsageBreakdown, UsageSnapshot } from "./usage.types";
 import { UserId } from "@/shared";
 
@@ -42,6 +42,10 @@ describe("usage meter", () => {
     expect(pricesForModel("claude-opus-4-8")?.outputPerToken).toBe(25);
     expect(pricesForModel("deepseek/deepseek-v4-flash")?.inputPerToken).toBe(0.098);
     expect(pricesForModel("unknown/model")).toBeNull();
+  });
+
+  it("keeps the maximum-size Sonnet stream reservation below the initial grant", () => {
+    expect(maximumTurnCost(256_000, "streamAgent", TOKEN_PRICES_MICROS)).toBeLessThan(INITIAL_QUOTA_MICROS);
   });
 
   it("reports the remaining quota, floored at zero", () => {

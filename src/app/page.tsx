@@ -36,12 +36,11 @@ Never auto-send a reply. Always leave drafts for the user to review and send.
 /** The free-quota chip text: the remaining balance in dollars (ARCHITECTURE §8). */
 async function readQuotaLabel(): Promise<string> {
   const container = getContainer();
-  let remaining = INITIAL_QUOTA_MICROS;
   const identity = await container.auth.currentIdentity();
-  if (identity.ok && identity.value) {
-    const snapshot = await container.usage.get(identity.value.userId);
-    if (snapshot.ok) remaining = quotaRemainingMicros(snapshot.value);
-  }
+  if (!identity.ok || !identity.value) return "Create account for $1 credit";
+  let remaining = INITIAL_QUOTA_MICROS;
+  const snapshot = await container.usage.get(identity.value.userId);
+  if (snapshot.ok) remaining = quotaRemainingMicros(snapshot.value);
   return `${formatQuotaMicros(remaining)} free quota`;
 }
 
