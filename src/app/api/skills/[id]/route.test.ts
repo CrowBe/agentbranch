@@ -1,17 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { domainError, ok, UserId } from "@/shared";
-import { DELETE, GET } from "./route";
+import { DELETE, GET, PATCH } from "./route";
 
 const currentIdentity = vi.fn();
 const deleteSkill = vi.fn();
 const findById = vi.fn();
 const listVersions = vi.fn();
 const restoreSkill = vi.fn();
+const saveSkill = vi.fn();
+const saveToBranch = vi.fn();
 
 vi.mock("@/server/container", () => ({
   getContainer: () => ({
     auth: { currentIdentity },
-    skills: { delete: deleteSkill, findById, listVersions, restore: restoreSkill },
+    skills: {
+      delete: deleteSkill,
+      findById,
+      listVersions,
+      restore: restoreSkill,
+      save: saveSkill,
+      saveToBranch,
+    },
   }),
 }));
 
@@ -98,6 +107,58 @@ describe("GET /api/skills/:id", () => {
     expect(listVersions).not.toHaveBeenCalled();
   });
 });
+
+describe("PATCH /api/skills/:id", () => {
+  beforeEach(() => {
+    currentIdentity.mockReset();
+    saveSkill.mockReset();
+    saveToBranch.mockReset();
+  });
+
+  it("appends accepted metadata to the main lineage", async () => {
+    currentIdentity.mockResolvedValue(ok({ userId: UserId("user-1") }));
+    saveSkill.mockResolvedValue(ok({ source: skillSource() }));
+
+    const response = await PATCH(jsonRequest({ skill: skillSource() }), { params: { id: "skill-1" } });
+
+    expect(response.status).toBe(200);
+    expect(saveSkill).toHaveBeenCalledWith({ id: "skill-1", userId: "user-1", source: skillSource() });
+    expect(saveToBranch).not.toHaveBeenCalled();
+  });
+
+  it("appends accepted metadata to the active draft", async () => {
+    currentIdentity.mockResolvedValue(ok({ userId: UserId("user-1") }));
+    saveToBranch.mockResolvedValue(ok({ source: skillSource() }));
+
+    const response = await PATCH(jsonRequest({ skill: skillSource(), branchId: "draft-1" }), {
+      params: { id: "skill-1" },
+    });
+
+    expect(response.status).toBe(200);
+    expect(saveToBranch).toHaveBeenCalledWith({
+      id: "skill-1",
+      userId: "user-1",
+      branchId: "draft-1",
+      source: skillSource(),
+    });
+    expect(saveSkill).not.toHaveBeenCalled();
+  });
+});
+
+function skillSource() {
+  return {
+    frontmatter: { name: "inbox-triage", description: "Sort mail.", extra: { tags: [] } },
+    body: "# Goal",
+  };
+}
+
+function jsonRequest(body: unknown): Request {
+  return new Request("https://example.test/api/skills/skill-1", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
 
 describe("DELETE /api/skills/:id", () => {
   beforeEach(() => {

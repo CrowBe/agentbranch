@@ -69,6 +69,7 @@ Equipment quality routes take `{ "document": "<JSON string>", "surface": "insigh
 |---|---|---|---|
 | `/api/build` | POST (SSE) | signed-in | stream opens; model error surfaces as streamed error event |
 | `/api/import` | POST | signed-in | works (GitHub URL fetch needs a token; paste always works) |
+| `/api/skills/[id]` | GET, PATCH, DELETE | signed-in | works — PATCH appends an accepted metadata revision to main or the active draft |
 | `/api/lint` | POST | signed-in | works — pure analysis |
 | `/api/visualise` | POST | signed-in | works — deterministic fallback |
 | `/api/export` | POST | signed-in | works — pure analysis |
@@ -151,13 +152,13 @@ precondition: WALK-01 · offline-safe (deterministic fallback)
 
 ### WALK-04B · Metadata suggestion
 
-precondition: WALK-01 · offline-safe (route's deterministic fallback)
+precondition: WALK-01 · offline-safe; the documented runner has no local model, while a compatible Chrome installation may serve the local rung
 
 | # | action | selector | expect |
 |---|---|---|---|
 | 1 | click | button `Metadata` | `Metadata running…` → `Metadata ready.` |
-| 2 | assert | capability panel | same editable name, description, category, tags + rationale shape on every rung; offline copy is `Metadata suggestion` |
-| 3 | click | button `Apply suggestion` | `Suggestion applied.`; hero returns to the author-owned document |
+| 2 | assert | capability panel | same editable name, description, category, tags + rationale shape on every rung; provenance is `Metadata suggestion` for the route or `Suggested on your device` for the local rung |
+| 3 | click | button `Apply suggestion` | `Suggestion applied and saved.`; hero returns to the author-owned document |
 
 ### WALK-05 · Export
 

@@ -1,6 +1,7 @@
 import { getContainer } from "@/server/container";
-import { isErr, SkillId } from "@/shared";
-import { domainErrorResponse } from "../../_shared/skill-request";
+import { isErr, SkillBranchId, SkillId } from "@/shared";
+import { parseJsonRequest } from "../../_shared/request-body";
+import { domainErrorResponse, parseSkillRequest } from "../../_shared/skill-request";
 
 export const runtime = "nodejs";
 
@@ -41,6 +42,31 @@ export async function GET(
       createdAt: version.createdAt.toISOString(),
     })),
   });
+}
+
+export async function PATCH(
+  request: Request,
+  context: { params: Promise<{ id: string }> | { id: string } },
+): Promise<Response> {
+  const container = getContainer();
+  const identity = await container.auth.currentIdentity();
+  if (!identity.ok) return domainErrorResponse(identity.error);
+  if (identity.value === null) {
+    return Response.json({ error: "Sign in to save a skill." }, { status: 401 });
+  }
+
+  const body = await parseJsonRequest(request);
+  if (!body.ok) return body.response;
+  const parsed = parseSkillRequest(body.value);
+  if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 });
+
+  const params = await context.params;
+  const input = { id: SkillId(params.id), userId: identity.value.userId, source: parsed.value.source };
+  const result = parsed.value.branchId
+    ? await container.skills.saveToBranch({ ...input, branchId: SkillBranchId(parsed.value.branchId) })
+    : await container.skills.save(input);
+  if (!result.ok) return domainErrorResponse(result.error);
+  return Response.json({ source: result.value.source });
 }
 
 export async function DELETE(

@@ -264,7 +264,7 @@ export type WorkspaceActions = {
   /** Re-render the stored rating on the other surface — local, zero spend. */
   readonly selectSafetySurface: (surface: EvaluationSurface) => void;
   readonly reviseWithFeedback: (result: EvaluationFeedbackResult) => void;
-  readonly applyMetadataSuggestion: () => void;
+  readonly applyMetadataSuggestion: () => Promise<void>;
 };
 
 export type Workspace = {

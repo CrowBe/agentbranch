@@ -323,12 +323,14 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
   label). Pure read; offline-safe.
 - `app/api/metadata-suggest/route.ts` — name, description, and discovery-metadata suggestions for the
   skill in the request: auth → parse → `runCapability(metadataSuggestCapability)`
-  with the gateway + an `account` tag (`metadata-suggest` capability, free +
-  pro). This is rung two of the workspace ladder: local provider → this
+  with the gateway + an `account` tag (`metadata-suggest` capability). This is
+  rung two of the workspace ladder: local provider → this
   gateway route → its deterministic keyword fallback. All rungs return the
   same suggestion shape; unsupported browsers therefore keep identical UI.
   Model-backed when configured, deterministic keyword fallback offline;
-  returns a suggestion, never writes.
+  returns a suggestion, never writes. Author acceptance checkpoints the
+  active main or draft lineage through `PATCH /api/skills/[id]`; an unsaved
+  workspace instead labels the accepted change as unsaved.
 - `app/skills/[owner]/[name]/page.tsx` — the public skill profile page
   (ARCHITECTURE §9.1): server-rendered, force-dynamic (a takedown revert or new
   rating must be visible immediately). Resolves the visible publication by
