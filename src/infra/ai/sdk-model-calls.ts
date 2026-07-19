@@ -440,7 +440,24 @@ function modelCallError(kind: ProviderKind, message: string, cause: unknown): Do
   if (classification === "transient") {
     return domainError("model_unavailable", PROVIDER_TRANSIENT_MESSAGE, cause);
   }
-  return domainError("model_unavailable", message, cause);
+  const detail = causeMessage(cause);
+  return domainError("model_unavailable", detail ? `${message} ${detail}` : message, cause);
+}
+
+/** Pull a human-readable detail out of a thrown provider error, if one exists. */
+function causeMessage(cause: unknown): string | undefined {
+  if (cause instanceof Error) return cause.message;
+  if (cause && typeof cause === "object") {
+    for (const key of ["message", "error"]) {
+      const value = (cause as Record<string, unknown>)[key];
+      if (typeof value === "string" && value.trim()) return value;
+      if (value && typeof value === "object") {
+        const nested = (value as Record<string, unknown>).message;
+        if (typeof nested === "string" && nested.trim()) return nested;
+      }
+    }
+  }
+  return undefined;
 }
 
 export function classifyProviderError(

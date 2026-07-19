@@ -146,7 +146,10 @@ export function getContainer(): AppContainer {
 
   cached = {
     config,
-    auth: prisma && config.flags.hasAuth ? createUserProvisioningAuth(auth, prisma) : auth,
+    // Prisma-backed writes (usage, skills, …) carry a foreign key to `users`,
+    // so any prisma-backed identity — the stub dev user included — needs a
+    // backing row, not just a Clerk-sourced one.
+    auth: prisma ? createUserProvisioningAuth(auth, prisma) : auth,
     modelGateway,
     modelRouter,
     skills: prisma

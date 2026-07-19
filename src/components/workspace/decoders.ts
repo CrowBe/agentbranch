@@ -53,11 +53,15 @@ export function importErrorMessage(body: unknown, status: number): string {
   return friendlyError(error || `Import failed (${status}).`);
 }
 
+const MODEL_UNAVAILABLE_FALLBACK = "No model is configured.";
+
 export function toolErrorMessage(body: unknown, status: number): string {
   const error = body && typeof body === "object" && "error" in body ? String(body.error) : "";
   const code = body && typeof body === "object" && "code" in body ? String(body.code) : "";
   if (code === "cap_reached") return error ? friendlyError(error) : CAP_REACHED_FALLBACK;
-  if (code === "model_unavailable" || code === "not_configured") return "No model is configured.";
+  if (code === "model_unavailable" || code === "not_configured") {
+    return error ? friendlyError(error) : MODEL_UNAVAILABLE_FALLBACK;
+  }
   return friendlyError(error || `Request failed (${status}).`);
 }
 

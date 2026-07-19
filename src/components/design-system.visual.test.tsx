@@ -149,6 +149,7 @@ describe("hero document", () => {
     onViewChange: noop,
     onToolSelect: noop,
     onLintSelect: noop,
+    onCapabilityClose: noop,
     onEvaluationSurfaceChange: noop,
     onLintSurfaceChange: noop,
     onSafetySurfaceChange: noop,
@@ -193,7 +194,7 @@ describe("shell chrome", () => {
     render(
       <Frame>
         <div className="flex flex-col gap-4">
-          <TopBar onToggleMenu={() => {}} quotaLabel="$1.00 free quota" />
+          <TopBar onToggleMenu={() => {}} onQuotaSelect={() => {}} quotaLabel="$1.00 free quota" />
           <ToolChips active={null} onSelect={() => {}} />
           <DraftControls
             onDraft

@@ -299,7 +299,11 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
   // Rail views
 
   function setView(view: HeroView) {
-    patch({ view });
+    patch({ view, capability: null, activeTool: null });
+  }
+
+  function closeCapability(): void {
+    patch({ capability: null, activeTool: null });
   }
 
   function showBuild() {
@@ -1360,6 +1364,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
 
   const actions = {
     setView,
+    closeCapability,
     showBuild,
     showImport,
     showSkills,

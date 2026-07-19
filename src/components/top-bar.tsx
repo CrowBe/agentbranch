@@ -1,15 +1,19 @@
-import { Pill } from "./ui/pill";
+import { PillButton } from "./ui/pill";
 
 /**
  * Thin branded top bar — chrome only, no nav links (ARCHITECTURE §7, DESIGN
  * §3.4 topbar-height 48px). Hamburger + mark + the free-quota chip: the
  * remaining balance in dollars, the price-transparency surface (ARCHITECTURE §8).
+ * The chip is a button — signed out it offers account creation, signed in it
+ * opens the account panel (ARCHITECTURE §8).
  */
 export function TopBar({
   onToggleMenu,
+  onQuotaSelect,
   quotaLabel = "Free quota",
 }: {
   onToggleMenu: () => void;
+  onQuotaSelect: () => void;
   quotaLabel?: string;
 }) {
   return (
@@ -28,7 +32,9 @@ export function TopBar({
         </button>
         <span className="text-headline-md select-none">agent.branch</span>
       </div>
-      <Pill tone="neutral">{quotaLabel}</Pill>
+      <PillButton tone="neutral" onClick={onQuotaSelect}>
+        {quotaLabel}
+      </PillButton>
     </header>
   );
 }

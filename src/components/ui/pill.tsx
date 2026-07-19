@@ -19,3 +19,24 @@ export function Pill({ children, tone = "neutral" }: { children: ReactNode; tone
     </span>
   );
 }
+
+/** An interactive `Pill` — same look, but a real click target. */
+export function PillButton({
+  children,
+  tone = "neutral",
+  onClick,
+}: {
+  children: ReactNode;
+  tone?: Tone;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`text-label inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 transition-opacity hover:opacity-80 ${TONE[tone]}`}
+    >
+      {children}
+    </button>
+  );
+}

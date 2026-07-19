@@ -34,6 +34,7 @@ export function SideRail({
   onHistory,
   onTemplates,
   onModels,
+  onAccount,
 }: {
   expanded: boolean;
   active?: SideRailView;
@@ -46,6 +47,7 @@ export function SideRail({
   onHistory?: () => void;
   onTemplates?: () => void;
   onModels?: () => void;
+  onAccount?: () => void;
 }) {
   const [hoverOpen, setHoverOpen] = useState(false);
   const open = expanded || hoverOpen;
@@ -109,6 +111,10 @@ export function SideRail({
           <button
             type="button"
             aria-label={open ? undefined : "Account"}
+            onClick={() => {
+              onAccount?.();
+              onCollapse?.();
+            }}
             className="flex w-full items-center gap-3 rounded-[var(--radius-md)] px-2.5 py-2 text-on-surface-variant hover:bg-surface-high"
           >
             <span className="text-label flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-high">

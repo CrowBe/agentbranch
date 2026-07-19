@@ -6,6 +6,7 @@ import type { SkillSource, SkillVersionLintSummary } from "@/modules/skill";
 import { TopBar } from "./top-bar";
 import { SideRail } from "./side-rail";
 import { ModelConsole } from "./model-console";
+import { AccountPanel } from "./account-panel";
 import { HeroPanel } from "./hero-panel";
 import { InteractionPanel } from "./interaction-panel";
 import { DraftControls } from "./draft-controls";
@@ -38,12 +39,17 @@ export function AppShell({
 }) {
   const [menuExpanded, setMenuExpanded] = useState(false);
   const [consoleOpen, setConsoleOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<"chat" | "skill">("chat");
   const { snapshot, actions } = useWorkspace({ rendered, source, initialSkill, initialLintSummary, quotaLabel });
 
   return (
     <div className="flex h-dvh flex-col">
-      <TopBar onToggleMenu={() => setMenuExpanded((v) => !v)} quotaLabel={snapshot.quotaLabel} />
+      <TopBar
+        onToggleMenu={() => setMenuExpanded((v) => !v)}
+        onQuotaSelect={() => setAccountOpen(true)}
+        quotaLabel={snapshot.quotaLabel}
+      />
       <div className="flex justify-center border-b border-outline-variant bg-surface px-4 py-2 lg:hidden">
         <Segmented
           options={[
@@ -62,6 +68,7 @@ export function AppShell({
           onBuild={actions.showBuild}
           onImport={actions.showImport}
           onModels={() => setConsoleOpen(true)}
+          onAccount={() => setAccountOpen(true)}
           onSkills={() => void actions.showSkills()}
           onEquipment={actions.showEquipment}
           onHistory={() => void actions.showHistory()}
@@ -98,6 +105,7 @@ export function AppShell({
             }
             onToolSelect={(action) => void actions.runTool(action)}
             onLintSelect={() => void actions.selectLintSurface("insights")}
+            onCapabilityClose={actions.closeCapability}
             onEvaluationSurfaceChange={(surface) => void actions.selectEvaluationSurface(surface)}
             onLintSurfaceChange={(surface) => void actions.selectLintSurface(surface)}
             onSafetySurfaceChange={(surface) => actions.selectSafetySurface(surface)}
@@ -130,6 +138,7 @@ export function AppShell({
         />
       </div>
       {consoleOpen && <ModelConsole onClose={() => setConsoleOpen(false)} />}
+      {accountOpen && <AccountPanel onClose={() => setAccountOpen(false)} />}
     </div>
   );
 }

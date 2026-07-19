@@ -243,6 +243,7 @@ export type EvaluationSurface = "insights" | "breakdown";
 
 export type WorkspaceActions = {
   readonly setView: (view: HeroView) => void;
+  readonly closeCapability: () => void;
   readonly showBuild: () => void;
   readonly showImport: () => void;
   readonly showSkills: () => Promise<void>;

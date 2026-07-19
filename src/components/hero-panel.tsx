@@ -34,6 +34,7 @@ export function HeroPanel({
   banner,
   onToolSelect,
   onLintSelect,
+  onCapabilityClose,
   onEvaluationSurfaceChange,
   onLintSurfaceChange,
   onSafetySurfaceChange,
@@ -54,6 +55,7 @@ export function HeroPanel({
   banner?: ReactNode;
   onToolSelect: (action: ToolAction) => void;
   onLintSelect: () => void;
+  onCapabilityClose: () => void;
   onEvaluationSurfaceChange: (surface: "insights" | "breakdown") => void;
   onLintSurfaceChange: (surface: "insights" | "breakdown") => void;
   onSafetySurfaceChange: (surface: "insights" | "breakdown") => void;
@@ -74,6 +76,7 @@ export function HeroPanel({
           <CapabilityView
             panel={capability}
             busy={toolBusy}
+            onClose={onCapabilityClose}
             onEvaluationSurfaceChange={onEvaluationSurfaceChange}
             onLintSurfaceChange={onLintSurfaceChange}
             onSafetySurfaceChange={onSafetySurfaceChange}
@@ -146,6 +149,53 @@ function SourceView({ doc }: { doc: SourceDoc }) {
 }
 
 function CapabilityView({
+  panel,
+  busy,
+  onClose,
+  onEvaluationSurfaceChange,
+  onLintSurfaceChange,
+  onSafetySurfaceChange,
+  onReviseWithFeedback,
+  onApplyMetadataSuggestion,
+  feedbackBusy,
+}: {
+  panel: CapabilityPanel;
+  busy: boolean;
+  onClose: () => void;
+  onEvaluationSurfaceChange: (surface: "insights" | "breakdown") => void;
+  onLintSurfaceChange: (surface: "insights" | "breakdown") => void;
+  onSafetySurfaceChange: (surface: "insights" | "breakdown") => void;
+  onReviseWithFeedback: (result: EvaluationFeedbackResult) => void;
+  onApplyMetadataSuggestion?: () => void;
+  feedbackBusy: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={onClose}
+          className="rounded-[var(--radius-sm)] px-2 py-1 text-on-surface-variant hover:bg-surface-high"
+        >
+          ✕
+        </button>
+      </div>
+      <CapabilityBody
+        panel={panel}
+        busy={busy}
+        onEvaluationSurfaceChange={onEvaluationSurfaceChange}
+        onLintSurfaceChange={onLintSurfaceChange}
+        onSafetySurfaceChange={onSafetySurfaceChange}
+        onReviseWithFeedback={onReviseWithFeedback}
+        onApplyMetadataSuggestion={onApplyMetadataSuggestion}
+        feedbackBusy={feedbackBusy}
+      />
+    </div>
+  );
+}
+
+function CapabilityBody({
   panel,
   busy,
   onEvaluationSurfaceChange,
