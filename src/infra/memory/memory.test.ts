@@ -177,9 +177,9 @@ describe("in-memory adapters", () => {
     unwrap(await repo.restore({ id: created.id, userId: created.userId, revision: 1 }));
   });
 
-  it("usage repository accumulates across increments", async () => {
+  it("usage repository accumulates across reconciled turns", async () => {
     const repo = createMemoryUsageRepository();
-    await repo.increment(UserId("u1"), {
+    await repo.reconcile(UserId("u1"), 0, {
       usage: {
         inputTokens: 70,
         outputTokens: 20,
@@ -187,9 +187,10 @@ describe("in-memory adapters", () => {
         cacheCreationInputTokens: 10,
       },
       turns: 1,
+      prices: { key: "test", inputPerToken: 3, outputPerToken: 15, cacheReadPerToken: 0.3, cacheCreationPerToken: 3.75 },
     });
     const snap = unwrap(
-      await repo.increment(UserId("u1"), {
+      await repo.reconcile(UserId("u1"), 0, {
         usage: {
           inputTokens: 25,
           outputTokens: 25,
@@ -197,6 +198,7 @@ describe("in-memory adapters", () => {
           cacheCreationInputTokens: 0,
         },
         turns: 1,
+        prices: { key: "test", inputPerToken: 3, outputPerToken: 15, cacheReadPerToken: 0.3, cacheCreationPerToken: 3.75 },
       }),
     );
     expect(snap.tokensUsed).toBe(200);

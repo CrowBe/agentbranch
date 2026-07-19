@@ -5,7 +5,7 @@
 //   node .agents/skills/e2e-sitemap/walk-runner.mjs
 //
 // Expects a fresh `npm run dev` session (memory adapters empty — see
-// sitemap.md §2 on the five-skill free-tier cap) and no model key, so the
+// sitemap.md §2 on the five-skill account cap) and no model key, so the
 // offline expectations apply. Override the browser with CHROMIUM_PATH.
 import { chromium } from "playwright-core";
 

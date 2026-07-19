@@ -58,7 +58,7 @@ Edit in `.agents/skills/e2e-sitemap/`:
 ## 4. Prove it
 
 A spec update isn't done until the runner is green against a **fresh** dev
-server (memory adapters must be empty — five-skill free-tier cap):
+server (memory adapters must be empty — five-skill account cap):
 
 ```bash
 npm run db:generate   # fresh clone only

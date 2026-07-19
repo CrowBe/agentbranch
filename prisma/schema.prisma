@@ -23,6 +23,7 @@ model User {
   evalRuns      EvalRun[]
   safetyRatings SafetyRating[]
   publications  Publication[]
+  usageCharges  UsageCharge[]
 
   @@map("users")
 }
@@ -175,21 +176,42 @@ model Publication {
   @@map("publications")
 }
 
-/// Per-user token + turn counters. Drives caps now; PAYG metering later.
+/// Per-user token + turn + cost counters. Cost (micro-USD, priced at record
+/// time) is what the free quota spends down; the token buckets stay for
+/// attribution and future paid metering.
 model Usage {
   userId                       String   @id @map("user_id")
   tokensUsed                   Int      @default(0) @map("tokens_used")
   turnsUsed                    Int      @default(0) @map("turns_used")
+  costMicrosUsed               Int      @default(0) @map("cost_micros_used")
+  costMicrosReserved           Int      @default(0) @map("cost_micros_reserved")
   inputTokensUsed              Int      @default(0) @map("input_tokens_used")
   outputTokensUsed             Int      @default(0) @map("output_tokens_used")
   cacheReadInputTokensUsed     Int      @default(0) @map("cache_read_input_tokens_used")
   cacheCreationInputTokensUsed Int      @default(0) @map("cache_creation_input_tokens_used")
-  periodStart                  DateTime @default(now()) @map("period_start")
   updatedAt                    DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("usage")
+}
+
+/// Append-only audit of the price schedule applied to each account turn.
+model UsageCharge {
+  id                       String   @id @default(cuid())
+  userId                   String   @map("user_id")
+  priceKey                 String   @map("price_key")
+  costMicros               Int      @map("cost_micros")
+  inputTokens              Int      @map("input_tokens")
+  outputTokens             Int      @map("output_tokens")
+  cacheReadInputTokens     Int      @map("cache_read_input_tokens")
+  cacheCreationInputTokens Int      @map("cache_creation_input_tokens")
+  createdAt                DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("usage_charges")
 }
 
 /// Fixed-window request-rate limiter, scoped per user and capability.

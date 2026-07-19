@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { err, ok, SkillId, UserId } from "@/shared";
+import { err, ok, SkillId, UserId, SKILL_COUNT_MAX } from "@/shared";
 import { makeSkill } from "@/modules/skill";
 import { POST } from "./route";
 
@@ -7,7 +7,6 @@ const currentIdentity = vi.fn();
 const createSkill = vi.fn();
 const listSkills = vi.fn();
 const consumeRateLimit = vi.fn();
-const tierFor = vi.fn();
 const fetchSkillMd = vi.fn();
 
 vi.mock("@/server/container", () => ({
@@ -15,7 +14,6 @@ vi.mock("@/server/container", () => ({
     auth: { currentIdentity },
     skills: { create: createSkill, listByUser: listSkills },
     requestRateLimiter: { consume: consumeRateLimit },
-    tierFor,
     skillImportFetcher: { fetchSkillMd },
   }),
 }));
@@ -26,11 +24,9 @@ describe("POST /api/import", () => {
     createSkill.mockReset();
     listSkills.mockReset();
     consumeRateLimit.mockReset();
-    tierFor.mockReset();
     fetchSkillMd.mockReset();
     listSkills.mockResolvedValue(ok([]));
     consumeRateLimit.mockResolvedValue(ok({ allowed: true }));
-    tierFor.mockResolvedValue("free");
   });
 
   it("fetches and persists a public GitHub SKILL.md URL", async () => {
@@ -146,20 +142,22 @@ describe("POST /api/import", () => {
     expect(createSkill).not.toHaveBeenCalled();
   });
 
-  it("rejects a second free-tier skill with friendly cap copy", async () => {
+  it("rejects a skill over the account cap with friendly cap copy", async () => {
     currentIdentity.mockResolvedValue(ok({ userId: UserId("user-1"), email: "u@example.test" }));
-    listSkills.mockResolvedValue(ok([
-      makeSkill({
-        id: SkillId("existing"),
-        userId: UserId("user-1"),
-        source: {
-          frontmatter: { name: "existing", description: "Existing skill.", extra: {} },
-          body: "Existing.",
-        },
-        createdAt: new Date(0),
-        updatedAt: new Date(0),
-      }),
-    ]));
+    listSkills.mockResolvedValue(ok(
+      Array.from({ length: SKILL_COUNT_MAX }, (_, i) =>
+        makeSkill({
+          id: SkillId(`existing-${i}`),
+          userId: UserId("user-1"),
+          source: {
+            frontmatter: { name: `existing-${i}`, description: "Existing skill.", extra: {} },
+            body: "Existing.",
+          },
+          createdAt: new Date(0),
+          updatedAt: new Date(0),
+        }),
+      ),
+    ));
 
     const response = await POST(new Request("https://example.test/api/import", {
       method: "POST",
@@ -168,7 +166,7 @@ describe("POST /api/import", () => {
 
     expect(response.status).toBe(429);
     await expect(response.json()).resolves.toEqual({
-      error: "You're at your skill limit - delete a skill to make room, or upgrade for more.",
+      error: "You're at your skill limit - delete a skill to make room.",
       code: "cap_reached",
     });
     expect(createSkill).not.toHaveBeenCalled();

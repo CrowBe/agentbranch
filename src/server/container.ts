@@ -1,6 +1,6 @@
 import "server-only";
 import type { SkillRepository, SkillRetentionRepository } from "@/modules/skill";
-import type { RequestRateLimiter, Tier, UsageRepository } from "@/modules/usage";
+import type { RequestRateLimiter, UsageRepository } from "@/modules/usage";
 import type { TestRunRepository } from "@/modules/test-run";
 import type { EvalRunRepository } from "@/modules/triggering-eval";
 import type { SafetyRatingRepository } from "@/modules/safety-review";
@@ -46,7 +46,6 @@ import { createModelRouter } from "@/infra/ai/model-router";
 import { createSdkModelCalls } from "@/infra/ai/sdk-model-calls";
 import { createClerkAuth } from "@/infra/clerk/clerk-auth";
 import { createStubAuth } from "@/infra/clerk/stub-auth";
-import { createClerkTierResolver } from "@/infra/clerk/tier-resolver";
 import { createGithubSkillImportFetcher } from "@/infra/github/skill-import-fetcher";
 import {
   createDisabledTapSyncTrigger,
@@ -73,7 +72,6 @@ export type AppContainer = {
   readonly skillRetention: SkillRetentionRepository;
   readonly usage: UsageRepository;
   readonly requestRateLimiter: RequestRateLimiter;
-  readonly tierFor: (userId: import("@/shared").UserId) => Promise<Tier>;
   readonly testRuns: TestRunRepository;
   readonly evalRuns: EvalRunRepository;
   // Recorded safety ratings — the opt-in safety review's Evaluation records
@@ -112,9 +110,6 @@ export function getContainer(): AppContainer {
   const requestRateLimiter = prisma
     ? createPrismaRequestRateLimiter(prisma)
     : createMemoryRequestRateLimiter();
-  const tierFor = config.flags.hasAuth
-    ? createClerkTierResolver(config.clerkProPlanSlug)
-    : undefined;
 
   // The model gateway is the platform's single metered entry to the model:
   // the domain accounting shell over the raw SDK-translation adapter (#160).
@@ -126,7 +121,6 @@ export function getContainer(): AppContainer {
     calls: createSdkModelCalls(),
     usage,
     requestRateLimiter,
-    tierFor,
   });
 
   const auth = config.flags.hasAuth ? createClerkAuth() : createStubAuth();
@@ -163,7 +157,6 @@ export function getContainer(): AppContainer {
       : createMemorySkillRetentionRepository(memorySkillStore!),
     usage,
     requestRateLimiter,
-    tierFor: tierFor ?? (async () => "free" as Tier),
     testRuns: prisma
       ? createPrismaTestRunRepository(prisma)
       : createMemoryTestRunRepository({ resolveLintSummary }),

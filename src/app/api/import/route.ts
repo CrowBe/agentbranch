@@ -43,11 +43,9 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const tier = await container.tierFor(identity.value.userId);
   const skillCap = await checkSkillCreateCap({
     skills: container.skills,
     userId: identity.value.userId,
-    tier,
   });
   if (isErr(skillCap)) return domainErrorResponse(skillCap.error);
 

@@ -29,8 +29,16 @@ import type {
 // ---------------------------------------------------------------------------
 // Error bodies (shared by every route)
 
+/** Shown when a cap_reached response carries no friendlier detail of its own. */
+const CAP_REACHED_FALLBACK = "You've used all of your free quota.";
+
 export function friendlyError(message: string): string {
-  if (message.includes("cap_reached")) return "Out of free usage today.";
+  if (message.includes("cap_reached")) {
+    // The server's detail (personal quota vs the provider-side capacity catch)
+    // is already friendly copy — surface it, minus any machine prefix.
+    const detail = message.split("cap_reached:")[1]?.trim();
+    return detail || CAP_REACHED_FALLBACK;
+  }
   if (message.includes("model_unavailable")) return "No model is configured.";
   return message;
 }
@@ -45,16 +53,10 @@ export function importErrorMessage(body: unknown, status: number): string {
   return friendlyError(error || `Import failed (${status}).`);
 }
 
-export function toolErrorMessage(body: unknown, status: number, action: ToolAction): string {
+export function toolErrorMessage(body: unknown, status: number): string {
   const error = body && typeof body === "object" && "error" in body ? String(body.error) : "";
   const code = body && typeof body === "object" && "code" in body ? String(body.code) : "";
-  if (code === "cap_reached" && action === "triggering-eval") {
-    return "Triggering eval is not available on the free plan.";
-  }
-  if (code === "cap_reached" && action === "safety-review") {
-    return "Safety rating is not available on the free plan.";
-  }
-  if (code === "cap_reached") return "Out of free usage today.";
+  if (code === "cap_reached") return error ? friendlyError(error) : CAP_REACHED_FALLBACK;
   if (code === "model_unavailable" || code === "not_configured") return "No model is configured.";
   return friendlyError(error || `Request failed (${status}).`);
 }

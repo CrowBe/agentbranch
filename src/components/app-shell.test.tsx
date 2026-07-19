@@ -261,7 +261,7 @@ describe("AppShell capability chips", () => {
     await userEvent.type(screen.getByRole("textbox"), "Make a calendar planner");
     await userEvent.click(screen.getByRole("button", { name: "Build skill" }));
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     const lintRequest = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body));
     expect(lintRequest.messages).toEqual([
       { role: "user", content: "Make a calendar planner" },
@@ -303,10 +303,10 @@ describe("AppShell capability chips", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Visualise ready.");
   });
 
-  it("shows the triggering eval free-plan gate without leaving the chip busy", async () => {
+  it("shows the quota-exhausted message without leaving the chip busy", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       Response.json(
-        { error: "cap reached", code: "cap_reached" },
+        { error: "You've used all of your free quota.", code: "cap_reached" },
         { status: 429 },
       ),
     );
@@ -318,7 +318,7 @@ describe("AppShell capability chips", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("status")).toHaveTextContent(
-        "Triggering eval is not available on the free plan.",
+        "You've used all of your free quota.",
       );
     });
     expect(screen.getByRole("button", { name: "Triggers" })).toBeEnabled();
@@ -335,6 +335,7 @@ describe("AppShell capability chips", () => {
           watch: [],
         }),
       )
+      .mockResolvedValueOnce(Response.json({ label: "$0.99 free quota" }))
       .mockResolvedValueOnce(
         Response.json({
           scenario: { prompt: "Triage a calendar-heavy inbox.", seedData: {} },
@@ -343,7 +344,8 @@ describe("AppShell capability chips", () => {
             { kind: "tool-call", tool: "email.search", input: { query: "unread" } },
           ],
         }),
-      );
+      )
+      .mockResolvedValueOnce(Response.json({ label: "$0.98 free quota" }));
     vi.stubGlobal("fetch", fetchMock);
 
     render(<AppShell rendered={rendered} source={source} initialSkill={skill} />);
@@ -351,7 +353,8 @@ describe("AppShell capability chips", () => {
     await userEvent.click(screen.getByRole("button", { name: "Run" }));
 
     await screen.findByText("The skill missed one tool call.");
-    expect(fetchMock).toHaveBeenLastCalledWith(
+    expect(await screen.findByText("$0.99 free quota")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/test-run",
       expect.objectContaining({
         method: "POST",
@@ -366,7 +369,7 @@ describe("AppShell capability chips", () => {
     await userEvent.click(screen.getByRole("button", { name: "Breakdown" }));
 
     await screen.findByText("Triage a calendar-heavy inbox.");
-    expect(fetchMock).toHaveBeenLastCalledWith(
+    expect(fetchMock).toHaveBeenCalledWith(
       "/api/test-run",
       expect.objectContaining({
         method: "POST",
@@ -492,6 +495,7 @@ describe("AppShell capability chips", () => {
           },
         ]),
       )
+      .mockResolvedValueOnce(Response.json({ label: "$0.99 free quota" }))
       .mockResolvedValueOnce(sseResponse([{ event: "done", data: { skillId: "skill-1" } }]));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -503,12 +507,13 @@ describe("AppShell capability chips", () => {
     await userEvent.click(screen.getByRole("button", { name: "Revise with this feedback" }));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenLastCalledWith(
+      expect(fetchMock).toHaveBeenCalledWith(
         "/api/build",
         expect.objectContaining({ method: "POST" }),
       );
     });
-    const buildRequest = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+    const buildCall = fetchMock.mock.calls.find(([url]) => url === "/api/build");
+    const buildRequest = JSON.parse(String(buildCall?.[1]?.body));
     expect(buildRequest.messages).toEqual([
       expect.objectContaining({
         role: "user",

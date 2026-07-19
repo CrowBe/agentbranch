@@ -337,12 +337,17 @@ describe("workspace choreography", () => {
   it("maps evaluation error codes to friendly copy and clears the busy flag", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(Response.json({ error: "cap reached", code: "cap_reached" }, { status: 429 }));
+      .mockResolvedValue(
+        Response.json(
+          { error: "You've used all of your free quota.", code: "cap_reached" },
+          { status: 429 },
+        ),
+      );
     const workspace = createWorkspace(init, { fetch: fetchMock });
 
     await workspace.actions.runTool("triggering-eval");
 
-    expect(workspace.getSnapshot().status).toBe("Triggering eval is not available on the free plan.");
+    expect(workspace.getSnapshot().status).toBe("You've used all of your free quota.");
     expect(workspace.getSnapshot().toolBusy).toBe(false);
   });
 
@@ -444,7 +449,7 @@ describe("workspace choreography", () => {
 
     await workspace.actions.send("Make a calendar planner");
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     const second = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)) as {
       messages: readonly { role: string; content: string }[];
     };
@@ -527,7 +532,7 @@ describe("workspace choreography", () => {
     const workspace = createWorkspace(init, { fetch: fetchMock });
 
     await workspace.actions.runTool("safety-review");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/safety-review",
       expect.objectContaining({ method: "POST" }),
@@ -540,7 +545,7 @@ describe("workspace choreography", () => {
     // rating, and switching surfaces stays local.
     await workspace.actions.runTool("safety-review");
     workspace.actions.selectSafetySurface("breakdown");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(workspace.getSnapshot().capability?.kind).toBe("safety-breakdown");
   });
 
