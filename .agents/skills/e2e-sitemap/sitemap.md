@@ -282,23 +282,104 @@ independent · request shapes in §1
 | 5 | `GET /api/cron/retention` without bearer secret | 401 — locked |
 | 6 | `GET /api/model-router` (auth off) | 200 snapshot with no key material in the body |
 
-## 3. Qualitative sensitivity probes
+## 3. Qualitative audit — gaps the walks can't see
 
-These probes compare a clean artifact with one deliberate defect. A quality
-signal is sensitive when the defect costs more than five points and drops at
-least one grade letter.
+The walks in §2 assert *structure*: exact copy, selectors, status transitions.
+They stay green while the experience quietly degrades — a merged module no
+user can reach, a primitive that ships second-class, a quality signal that
+grades everything A. This section is the **agent-judged pass** for those gaps.
+The walk runner cannot execute it; you read source, probe routes, take
+screenshots, and judge.
 
-### QUAL-03 · Response-schema shape
+Run it on every full validation pass, and whenever a change adds a domain
+module or touches the workspace. Each audit reports `OK` or a named
+**finding** with evidence. Findings never flip a walk red — they go in the
+report, and on an autonomous pass they get filed as GitHub issues (one per
+distinct gap, referencing the audit id and evidence) after checking open
+issues for a duplicate. A finding that is a *deliberate, recorded* gap — an
+issue link in the tables below — is not re-reported.
 
-POST the same titled, described, closed object schema to `/api/response-schema`
-with `surface: "insights"`, changing only the noted field:
+### QUAL-01 · Surface-parity matrix
 
-| Variant | Expected quality |
+Every primitive should meet the core experience, or the gap should be a
+recorded decision. Re-derive this matrix from the running app and
+`src/components/workspace/workspace.ts` + `hero-panel.tsx`, then diff it
+against the recorded state below. A new primitive row, a regressed cell, or
+an unrecorded `no` is a finding.
+
+Recorded state (update in the same change that truly moves a cell):
+
+| Core experience | Skill | Response schema | Tool contract |
+|---|---|---|---|
+| Hero document view (Rendered/Source) | yes | no — panel list entry only (name + `Remove`) — recorded, #219 | no — same, #219 |
+| Quality Insights panel | yes (chip + panel) | yes, after check/authoring | yes |
+| Quality Breakdown panel | yes | **no — the Breakdown tab on an equipment Insights panel re-fetches the *skill's* lint (`selectLintSurface` always posts the skill): silent subject swap** — recorded, #219 | same, #219 |
+| Chat authoring loop | yes | yes | yes |
+| Persistence beyond the session | yes (skill records + drafts) | no — session-kept — recorded, #220 | no — session-kept, #220 |
+| History / past runs | yes | no — accepted gap (#218 non-goals) | no |
+| Export | yes | no — accepted gap (#218 non-goals) | no |
+| Publish / Skill library | yes | no — accepted gap (#218 non-goals) | no |
+
+### QUAL-02 · Module-reachability ledger
+
+Every domain module in MODULE_DESIGN §4 must either reach a node in §1 (page,
+nav mode, chip, or API route) or appear in this ledger. A module in neither
+place — the signature of a backend-only PR shipping a capability no user can
+touch — is a finding naming the module and the change that added it. Adding a
+ledger row requires stating why no surface is expected, not just listing the
+module.
+
+Internal by design (no user surface expected):
+
+| Module | Why internal |
 |---|---|
-| clean: all properties required, `additionalProperties: false` | A 100 |
-| all optional: `required: []` | B 85 |
-| open object: `additionalProperties: true` | B 85 |
-| open and all optional | C 70 |
+| `skill-analysis` | the seam itself |
+| `model-gateway` · `model-router` | platform plumbing; the model console is the router's surface |
+| `usage` | accounting authority behind the quota pill |
+| `auth` · `skill-import` | ports (import reached via `/api/import`) |
+| `harness-version` | identity stamping for evaluation records |
+| `baseline-corpus` | frozen ground for the regression benchmark |
+| `response-schema-corpus` | frozen characterisation ground for schema lint (#211); feeds the benchmark, not a surface |
+| `regression-benchmark` · `harness-recommendation` | admin surfaces (`/api/admin/*`) |
+| `build-loop` | reached through `/api/build` + the equipment authoring routes |
 
-The two single-defect variants clear the sensitivity bar by 15 points and one
-grade letter; combining both structural defects reaches the C band.
+### QUAL-03 · Quality-signal sensitivity probes
+
+A quality capability that grades nearly everything the same is decorative.
+Probe each lint surface with one clean and one deliberately flawed input; a
+flawed input scoring within 5 points of the clean one **and** keeping its
+grade letter is a finding — report both scores as evidence.
+
+| Probe | Clean input | Flawed input | Route |
+|---|---|---|---|
+| Skill lint | the WALK-01 fixture | same, description `Does stuff.`, one-line body | `POST /api/lint` |
+| Response schema | the WALK-10 step-3 schema (titled, described, closed, required fields) — A 100 | `required: []` — B 85 · `additionalProperties: true` — B 85 · both defects — C 70 | `POST /api/response-schema` |
+| Tool contract | the WALK-10 step-4 contract | same minus description + failure modes | `POST /api/tool-contract` |
+
+Known baseline: the `response-schema-corpus` module freezes the expected
+response-schema sensitivity: either single structural defect costs 15 points
+and one grade letter; combining both costs 30 points and reaches C. Skill lint
+also passes the probe (B 82 clean → D 58 flawed).
+
+### QUAL-04 · Judgment screenshots
+
+Screenshot each nav mode's panel plus the hero in both views, and judge:
+
+- **Domain language** — glossary terms only in user copy: "test run" never
+  "sandbox", "draft" never "branch", "Set as main version" never "promote"
+  (CONTEXT.md).
+- **Tone** — warm-pro, sentence case, no data walls (DESIGN §1); numbers are
+  always accompanied by meaning.
+- **Empty states** — every mode's empty state says what to do next, not just
+  that nothing is there.
+- **Degradation copy** — offline/error states read as friendly assertions
+  (`No model is configured.`), never stack traces or raw error tags.
+
+Report drifted copy verbatim (old → judged problem).
+
+### Reporting
+
+Append a `QUAL` section to the walk matrix — one line per audit:
+`QUAL-01 OK` or `QUAL-01 FINDING: <one line + evidence pointer>`. On an
+autonomous pass, file each new finding as a GitHub issue and link it from the
+relevant table above in the same change.
