@@ -311,14 +311,14 @@ Recorded state (update in the same change that truly moves a cell):
 
 | Core experience | Skill | Response schema | Tool contract |
 |---|---|---|---|
-| Hero document view (Rendered/Source) | yes | no — panel list entry only (name + `Remove`) | no — same |
+| Hero document view (Rendered/Source) | yes | no — panel list entry only (name + `Remove`) — recorded, #219 | no — same, #219 |
 | Quality Insights panel | yes (chip + panel) | yes, after check/authoring | yes |
-| Quality Breakdown panel | yes | **no — the Breakdown tab on an equipment Insights panel re-fetches the *skill's* lint (`selectLintSurface` always posts the skill): silent subject swap** | same |
+| Quality Breakdown panel | yes | **no — the Breakdown tab on an equipment Insights panel re-fetches the *skill's* lint (`selectLintSurface` always posts the skill): silent subject swap** — recorded, #219 | same, #219 |
 | Chat authoring loop | yes | yes | yes |
-| Persistence beyond the session | yes (skill records + drafts) | no — session-kept | no — session-kept |
-| History / past runs | yes | no | no |
-| Export | yes | no | no |
-| Publish / Skill library | yes | no | no |
+| Persistence beyond the session | yes (skill records + drafts) | no — session-kept — recorded, #220 | no — session-kept, #220 |
+| History / past runs | yes | no — accepted gap (#218 non-goals) | no |
+| Export | yes | no — accepted gap (#218 non-goals) | no |
+| Publish / Skill library | yes | no — accepted gap (#218 non-goals) | no |
 
 ### QUAL-02 · Module-reachability ledger
 
@@ -359,8 +359,9 @@ grade letter is a finding — report both scores as evidence.
 Known baseline: the `response-schema-corpus` module freezes the current
 analyzer's behaviour — all-optional and open-object schemas grade **A 97/100**
 against a clean **A 100** — which is exactly the insensitivity this probe
-exists to surface. A frozen characterisation is a fact about the analyzer,
-not a defence of it: the probe's verdict stands independently.
+exists to surface (recorded as #223; skill lint passes the same probe,
+B 82 clean → D 58 flawed). A frozen characterisation is a fact about the
+analyzer, not a defence of it: the probe's verdict stands independently.
 
 ### QUAL-04 · Judgment screenshots
 
