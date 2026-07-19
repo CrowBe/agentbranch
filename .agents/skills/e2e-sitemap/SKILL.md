@@ -1,6 +1,6 @@
 ---
 name: e2e-sitemap
-description: Agent-driven end-to-end validation of agent.branch — a bot-friendly sitemap (sitemap.md) enumerating every page, API route, and UI walk path with concrete selectors, actions, and expected status-line copy, executable as a spec. Use when asked to E2E-test the app, validate the full client surface, smoke-test before a release, or check which routes/flows a change touches.
+description: Agent-driven end-to-end validation of agent.branch — a bot-friendly sitemap (sitemap.md) enumerating every page, API route, and UI walk path with concrete selectors, actions, and expected status-line copy, executable as a spec, plus an agent-judged qualitative audit (surface parity, module reachability, quality-signal sensitivity, copy judgment) for gaps string assertions can't see. Use when asked to E2E-test the app, validate the full client surface, smoke-test before a release, review a change for experience gaps, or check which routes/flows a change touches.
 ---
 
 # Agent-driven E2E testing
@@ -70,6 +70,27 @@ await page.goto("http://localhost:3000/");
   `skipped` (their preconditions are unmet), and independent walks still run.
 - Report per walk: `PASS` / `FAIL (step N: expected …, saw …)` / `SKIPPED`,
   plus a final matrix of walk × result. Screenshot on every failure.
+
+## Qualitative audit — run it, don't skip it
+
+Green walks are necessary, not sufficient: they assert exact strings, so a
+merged module no user can reach, a primitive shipping second-class, or a
+quality score that barely moves between clean and broken input all pass
+silently. **Sitemap §3** is the audit for that class of gap — four checks
+(QUAL-01 surface-parity matrix, QUAL-02 module-reachability ledger, QUAL-03
+quality-signal sensitivity probes, QUAL-04 judgment screenshots), each
+reporting `OK` or a named finding with evidence.
+
+- The walk runner cannot execute §3 — it is agent-judged by design. Read the
+  source files §3 names, curl the probe routes, screenshot, and judge.
+- Run §3 on every full validation pass. On a change-scoped pass, run the
+  audits the change can move: any new `src/modules/*` folder → QUAL-02; any
+  workspace/hero/panel change → QUAL-01 + QUAL-04; any lint/analyzer or
+  corpus change → QUAL-03.
+- Findings are **reported, never walk failures**. Autonomously (a post-merge
+  or scheduled pass): search open GitHub issues for a duplicate first, then
+  file one issue per distinct finding with the audit id and evidence, and
+  link it from the §3 table it belongs to.
 
 ## Keeping the spec honest
 

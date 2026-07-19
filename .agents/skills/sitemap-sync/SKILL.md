@@ -16,11 +16,13 @@ check that decides.
 ## 1. Find what changed
 
 ```bash
-git diff --name-only origin/main...HEAD -- src/app src/components
-git diff --name-only HEAD -- src/app src/components   # uncommitted work too
+git diff --name-only origin/main...HEAD -- src/app src/components src/modules
+git diff --name-only HEAD -- src/app src/components src/modules   # uncommitted work too
 ```
 
-No hits → report "no UI change; sitemap untouched" and stop.
+No hits → report "no UI change; sitemap untouched" and stop. Hits only under
+`src/modules` → the walks can't drift, but the qualitative audit can: run the
+§3 rows of the map below and stop there.
 
 ## 2. Map changed files to spec sections
 
@@ -40,6 +42,9 @@ Ground-truth map — each source file feeds specific parts of `sitemap.md` and
 | `src/app/api/**/route.ts` | API surface table (§1), WALK-14 probes, request shapes |
 | `src/app/**/page.tsx` | pages table (§1), WALK-13 |
 | `src/app/api/_shared/*.ts` | request/response shapes in the API table |
+| new `src/modules/<m>/` folder | §3 QUAL-02 ledger — the module must reach a §1 node or get a justified ledger row |
+| `src/components/workspace/*`, `hero-panel.tsx` | §3 QUAL-01 surface-parity matrix (moved cells must be updated in the same change) |
+| lint/analyzer rules or a `*-corpus` module | §3 QUAL-03 probes — re-check the sensitivity baseline |
 
 For each hit, re-read the file and diff its labels/copy/routes against what
 the spec asserts. Added surfaces (a new nav entry, chip, route, dialog) need
