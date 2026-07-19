@@ -115,7 +115,7 @@ const seeds = [
     },
     required: ["subject", "body"],
     additionalProperties: true,
-    expectedLint: expected("A", 97, ["schema.object.open"]),
+    expectedLint: expected("B", 85, ["schema.object.open"]),
     note: "Intentionally permits undeclared fields to freeze the open-object smell.",
   }),
   schema({
@@ -128,7 +128,7 @@ const seeds = [
       currency: field("string", "The ISO 4217 currency code for the total."),
     },
     required: [],
-    expectedLint: expected("A", 97, ["schema.required.missing"]),
+    expectedLint: expected("B", 85, ["schema.required.missing"]),
     note: "Intentionally leaves every field optional so an empty object validates.",
   }),
   schema({

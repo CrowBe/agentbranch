@@ -122,14 +122,16 @@ export function schemaShapeFindings(
       if (!Array.isArray(schema.required) || schema.required.length === 0) {
         findings.push({
           rule: "schema.required.missing",
-          severity: "info",
+          severity: "warn",
+          scorePenalty: 15,
           message: `\`${path}\` marks no properties \`required\`, so an empty object would validate.`,
         });
       }
       if (schema.additionalProperties !== false) {
         findings.push({
           rule: "schema.object.open",
-          severity: "info",
+          severity: "warn",
+          scorePenalty: 15,
           message: `\`${path}\` allows undeclared properties. Set \`additionalProperties: false\` to keep the output bounded.`,
         });
       }
@@ -144,6 +146,7 @@ export function schemaShapeFindings(
         findings.push({
           rule: "schema.property.description-missing",
           severity: "info",
+          scorePenalty: Math.ceil((undescribed.length / propertyNames.length) * 3),
           message: `\`${path}\` has ${undescribed.length === 1 ? "a property" : `${undescribed.length} properties`} without a description (\`${undescribed[0]}\`${undescribed.length > 1 ? ", …" : ""}). Describe each field so agents fill it correctly.`,
         });
       }

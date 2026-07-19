@@ -5,6 +5,8 @@ export type LintSeverity = "error" | "warn" | "info";
 export type LintFinding = {
   readonly rule: string;
   readonly severity: LintSeverity;
+  /** Optional rule-specific score cost; severity still drives counts and copy. */
+  readonly scorePenalty?: number;
   readonly message: string;
   readonly sourceSpan?: SourceSpan;
 };
