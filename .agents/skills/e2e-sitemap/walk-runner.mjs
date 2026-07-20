@@ -152,6 +152,17 @@ await walk("WALK-10 equipment", async () => {
     );
   await page.getByRole("button", { name: "Send", exact: true }).click();
   await status('Tool contract "fetch_unread_email" checked — it runs with your next test run.');
+  const schemaCard = page.getByText("Response schema: Invoice summary").locator("..");
+  await schemaCard.getByRole("button", { name: "Open" }).click();
+  await status('Response schema "Invoice summary" opened.');
+  await page.getByRole("heading", { name: "Invoice summary" }).waitFor();
+  await page.getByRole("button", { name: /^Quality / }).click();
+  await status("Quality ready.");
+  await page.getByRole("button", { name: "Breakdown" }).click();
+  await status("Quality ready.");
+  await page.getByText("Response schema quality").waitFor();
+  await page.getByRole("button", { name: "Back to skill" }).click();
+  await status("Skill opened.");
 });
 
 await walk("WALK-11 templates", async () => {

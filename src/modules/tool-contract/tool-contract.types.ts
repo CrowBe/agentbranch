@@ -47,6 +47,7 @@ export type ToolContractError =
  * artifact on the seam, with its own `ArtifactKind`.
  */
 export type ToolContractLintReport = Artifact<"tool-contract-lint"> & {
+  readonly source?: ToolContractSource;
   readonly summary: LintSummary;
   readonly findings: readonly LintFinding[];
 };

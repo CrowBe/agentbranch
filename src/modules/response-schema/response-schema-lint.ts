@@ -56,7 +56,7 @@ export function createResponseSchemaLintReport(
 
   findings.push(...schemaShapeFindings(document, "schema"));
 
-  return { kind: "response-schema-lint", summary: summarizeLintFindings(findings), findings };
+  return { kind: "response-schema-lint", source, summary: summarizeLintFindings(findings), findings };
 }
 
 /**

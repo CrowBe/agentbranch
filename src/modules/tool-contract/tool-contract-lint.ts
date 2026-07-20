@@ -102,7 +102,7 @@ export function createToolContractLintReport(source: ToolContractSource): ToolCo
     });
   }
 
-  return { kind: "tool-contract-lint", summary: summarizeLintFindings(findings), findings };
+  return { kind: "tool-contract-lint", source, summary: summarizeLintFindings(findings), findings };
 }
 
 function ioFindings(io: ToolContractIo | undefined, side: "input" | "output"): LintFinding[] {

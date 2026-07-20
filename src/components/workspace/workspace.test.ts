@@ -637,8 +637,22 @@ describe("workspace choreography", () => {
     expect(body.toolContracts).toEqual([contract]);
 
     // The entry's Remove action drops it from the session.
-    workspace.getSnapshot().entries[0]?.onAction?.();
+    workspace.getSnapshot().entries[0]?.onSecondaryAction?.();
     expect(workspace.getSnapshot().equipment.contracts).toHaveLength(0);
+  });
+
+  it("opens equipment in the hero and keeps its quality Breakdown on the equipment route", async () => {
+    const schema = JSON.stringify({ title: "invoice-summary", description: "One invoice summary.", type: "object", properties: { amount: { type: "number", description: "Total due." } } });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({ score: 92, grade: "A", summary: "Solid schema.", findings: [], watch: [] }))
+      .mockResolvedValueOnce(Response.json({ summary: { score: 92, grade: "A", counts: { error: 0, warn: 0, info: 0 }, rules: [] }, findings: [] }));
+    const workspace = createWorkspace(init, { fetch: fetchMock });
+    await workspace.actions.submitEquipment(schema);
+    workspace.getSnapshot().entries[0]?.onAction?.();
+    expect(workspace.getSnapshot().heroFocus).toMatchObject({ kind: "response-schema", name: "invoice-summary" });
+    await workspace.actions.selectLintSurface("breakdown");
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/response-schema", expect.objectContaining({ body: JSON.stringify({ document: schema, surface: "breakdown" }) }));
+    expect(workspace.getSnapshot().capability?.kind).toBe("lint-breakdown");
   });
 
   it("routes a plain-language equipment message into the authoring loop and keeps the drafted schema", async () => {

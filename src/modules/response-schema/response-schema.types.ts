@@ -24,6 +24,7 @@ export type ResponseSchemaError =
  * its own `ArtifactKind`, because it is a distinct capability on the seam.
  */
 export type ResponseSchemaLintReport = Artifact<"response-schema-lint"> & {
+  readonly source?: ResponseSchemaSource;
   readonly summary: LintSummary;
   readonly findings: readonly LintFinding[];
 };

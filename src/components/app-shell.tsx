@@ -104,6 +104,8 @@ export function AppShell({
             onReviseWithFeedback={actions.reviseWithFeedback}
             onApplyMetadataSuggestion={actions.applyMetadataSuggestion}
             feedbackBusy={snapshot.busy || snapshot.toolBusy}
+            equipmentFocus={snapshot.heroFocus.kind !== "skill"}
+            onBackToSkill={actions.focusSkill}
           />
           {snapshot.mode === "build" && snapshot.currentSkillId && snapshot.branchId === null && (
             <PublishControls

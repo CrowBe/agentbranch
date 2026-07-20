@@ -10,7 +10,7 @@
  */
 import { defineCapability } from "@/modules/skill-analysis";
 import { toolContractLintAnalyzer } from "./tool-contract-lint";
-import { toolContractBreakdownRenderer, toolContractInsightsRenderer } from "./renderers";
+import { toolContractBreakdownRenderer, toolContractInsightsRenderer, toolContractRenderedRenderer, toolContractSourceRenderer } from "./renderers";
 
 export const toolContractCapability = defineCapability({
   name: "tool contract quality",
@@ -18,6 +18,8 @@ export const toolContractCapability = defineCapability({
   renderers: {
     insights: toolContractInsightsRenderer,
     breakdown: toolContractBreakdownRenderer,
+    rendered: toolContractRenderedRenderer,
+    source: toolContractSourceRenderer,
   },
 });
 
@@ -28,7 +30,7 @@ export {
   TOOL_CONTRACT_LINT_RULESET_VERSION,
   TOOL_NAME_PATTERN,
 } from "./tool-contract-lint";
-export { toolContractBreakdownRenderer, toolContractInsightsRenderer } from "./renderers";
+export { toolContractBreakdownRenderer, toolContractInsightsRenderer, toolContractRenderedRenderer, toolContractSourceRenderer } from "./renderers";
 export type {
   ToolContractError,
   ToolContractExample,

@@ -105,9 +105,10 @@ function InteractionEntryView({ entry }: { entry: InteractionEntry }) {
     return (
       <div className="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-outline-variant p-3">
         <p className={className}>{entry.label}</p>
-        <Button onClick={entry.onAction} variant="secondary">
-          {entry.actionLabel ?? "Open"}
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={entry.onAction} variant="secondary">{entry.actionLabel ?? "Open"}</Button>
+          {entry.onSecondaryAction && <Button onClick={entry.onSecondaryAction} variant="secondary">{entry.secondaryActionLabel ?? "Remove"}</Button>}
+        </div>
       </div>
     );
   }
