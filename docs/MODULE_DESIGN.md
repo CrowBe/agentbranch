@@ -191,6 +191,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **auth** | `AuthPort`, `AuthIdentity` | `AuthPort` | port |
 | **baseline-corpus** | `baselineSkillCorpus`, `baselineDistractors`, `BaselineSkillCorpusEntry` + types | — | real |
 | **response-schema-corpus** | `responseSchemaCorpus`, `ResponseSchemaCorpusEntry` | — | real (curated, hash-pinned response-schema fixtures with frozen lint expectations) |
+| **adversarial-safety-battery** | `adversarialSafetyBattery`, `adversarialTriggeringNegativePrompts`, `AdversarialCase` + types | — | real (curated, hash-pinned malicious/deceptive whole-folder fixtures across the §9.1 threat classes; freezes static policy expectations and documented latent non-detection) |
 | **harness-recommendation** | `harnessRecommendationCapability`, `CorpusCohort`, `HarnessRecommendationReport` + types | — | real (Tier-1 static correlation) |
 | **regression-benchmark** | `regressionBenchmarkSet`, `regressionBenchmarkSetHash`, `runRegressionBenchmark`, `BenchmarkRun` + types | `BenchmarkRunRepository` | real |
 
