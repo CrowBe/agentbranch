@@ -235,6 +235,9 @@ independent · offline-safe for the paste path
 | 2 | fill plain language (e.g. `a schema for invoice summaries`), click | `textarea`, then button `Send` | routes to the chat authoring loop; **offline** it fails with `No API key for "<provider>". Add one in the model console or .env.local.` |
 | 3 | fill a JSON Schema (`{"title":"Invoice summary","type":"object",…}`), click | `textarea`, then button `Send` | `Checking response schema…` → `Response schema "Invoice summary" checked and kept for tool contracts to reference.` |
 | 4 | fill a tool contract (`{"name":"fetch_unread_email","description":…,"input":…,"output":…}`), click | `textarea`, then button `Send` | `Checking tool contract…` → `Tool contract "fetch_unread_email" checked — it runs with your next test run.` |
+| 5 | click the response schema card's `Open` | response schema card button `Open` | `Response schema "Invoice summary" opened.`; hero heading `Invoice summary`; Rendered/Source toggle remains available |
+| 6 | click the hero quality chip, then `Breakdown` | `button[aria-label^="Quality"]`, then button `Breakdown` | `Quality ready.`; Breakdown heading remains `Response schema quality` and posts the schema to `/api/response-schema` |
+| 7 | click | button `Back to skill` | `Skill opened.` and the skill-only chips return |
 
 Routing rule: JSON object with string `name` + `description` → tool contract;
 other JSON object → response schema (named by `title`); anything that isn't a
@@ -311,9 +314,9 @@ Recorded state (update in the same change that truly moves a cell):
 
 | Core experience | Skill | Response schema | Tool contract |
 |---|---|---|---|
-| Hero document view (Rendered/Source) | yes | no — panel list entry only (name + `Remove`) — recorded, #219 | no — same, #219 |
+| Hero document view (Rendered/Source) | yes | yes | yes |
 | Quality Insights panel | yes (chip + panel) | yes, after check/authoring | yes |
-| Quality Breakdown panel | yes | **no — the Breakdown tab on an equipment Insights panel re-fetches the *skill's* lint (`selectLintSurface` always posts the skill): silent subject swap** — recorded, #219 | same, #219 |
+| Quality Breakdown panel | yes | yes | yes |
 | Chat authoring loop | yes | yes | yes |
 | Persistence beyond the session | yes (skill records + drafts) | no — session-kept — recorded, #220 | no — session-kept, #220 |
 | History / past runs | yes | no — accepted gap (#218 non-goals) | no |

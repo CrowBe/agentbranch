@@ -11,7 +11,7 @@
  */
 import { defineCapability } from "@/modules/skill-analysis";
 import { responseSchemaLintAnalyzer } from "./response-schema-lint";
-import { responseSchemaBreakdownRenderer, responseSchemaInsightsRenderer } from "./renderers";
+import { responseSchemaBreakdownRenderer, responseSchemaInsightsRenderer, responseSchemaRenderedRenderer, responseSchemaSourceRenderer } from "./renderers";
 
 export const responseSchemaCapability = defineCapability({
   name: "response schema quality",
@@ -19,6 +19,8 @@ export const responseSchemaCapability = defineCapability({
   renderers: {
     insights: responseSchemaInsightsRenderer,
     breakdown: responseSchemaBreakdownRenderer,
+    rendered: responseSchemaRenderedRenderer,
+    source: responseSchemaSourceRenderer,
   },
 });
 
@@ -42,7 +44,7 @@ export {
   JSON_SCHEMA_TYPES,
 } from "./schema-validate";
 export type { JsonSchemaType } from "./schema-validate";
-export { responseSchemaBreakdownRenderer, responseSchemaInsightsRenderer } from "./renderers";
+export { responseSchemaBreakdownRenderer, responseSchemaInsightsRenderer, responseSchemaRenderedRenderer, responseSchemaSourceRenderer } from "./renderers";
 export type {
   ResponseSchemaError,
   ResponseSchemaLintReport,

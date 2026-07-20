@@ -11,12 +11,20 @@ import {
 } from "@/modules/build-loop/feedback-formatters";
 import {
   applyResponseSchemaEdit,
+  createResponseSchemaLintReport,
+  parseResponseSchema,
+  responseSchemaRenderedRenderer,
+  responseSchemaSourceRenderer,
   responseSchemaName,
   serializeResponseSchema,
   type ResponseSchemaSource,
 } from "@/modules/response-schema";
 import {
   applyToolContractEdit,
+  createToolContractLintReport,
+  parseToolContract,
+  toolContractRenderedRenderer,
+  toolContractSourceRenderer,
   serializeToolContract,
   type ToolContractSource,
 } from "@/modules/tool-contract";
@@ -26,6 +34,7 @@ import {
   sourceRenderer,
   type HeroView,
 } from "@/modules/hero";
+import { createLintSummary } from "@/modules/lint";
 import {
   applySkillEdit,
   SKILL_CATEGORIES,
@@ -99,6 +108,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     quotaLabel: init.quotaLabel ?? "Free quota",
     status: null,
     heroDocs: { rendered: init.rendered, source: init.source },
+    heroFocus: { kind: "skill" },
     view: "rendered",
     mode: "build",
     current: init.initialSkill,
@@ -302,7 +312,33 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     patch({ view });
   }
 
+  function focusSkill() {
+    const current = snapshot.current;
+    if (!current) return;
+    patch({ heroFocus: { kind: "skill" }, heroDocs: renderHeroDocs(current), capability: null, activeTool: null, lintSummary: createLintSummary(current), view: "rendered", status: "Skill opened." });
+  }
+
+  function focusEquipment(kind: EquipmentKind, name: string, raw: string) {
+    const rendered = renderEquipmentDocs(kind, raw);
+    if (!rendered) return;
+    patch({ heroFocus: { kind, name, raw }, heroDocs: rendered.docs, lintSummary: rendered.summary, capability: null, activeTool: null, view: "rendered", status: `${kind === "tool-contract" ? "Tool contract" : "Response schema"} "${name}" opened.` });
+  }
+
+  function renderEquipmentDocs(kind: EquipmentKind, raw: string): { docs: HeroDocs; summary: SkillVersionLintSummary } | null {
+    if (kind === "response-schema") {
+      const parsed = parseResponseSchema(raw);
+      if (!parsed.ok) return null;
+      const report = createResponseSchemaLintReport(parsed.value);
+      return { docs: { rendered: responseSchemaRenderedRenderer.render(report), source: responseSchemaSourceRenderer.render(report) }, summary: report.summary };
+    }
+    const parsed = parseToolContract(raw);
+    if (!parsed.ok) return null;
+    const report = createToolContractLintReport(parsed.value);
+    return { docs: { rendered: toolContractRenderedRenderer.render(report), source: toolContractSourceRenderer.render(report) }, summary: report.summary };
+  }
+
   function showBuild() {
+    focusSkill();
     patch({ mode: "build", entries: [], status: null });
   }
 
@@ -616,8 +652,10 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       entries: docs.map(({ doc, kind }) => ({
         id: `${kind}-${doc.name}`,
         label: `${kind === "tool-contract" ? "Tool contract" : "Response schema"}: ${doc.name}`,
-        actionLabel: "Remove",
-        onAction: () => {
+        actionLabel: "Open",
+        onAction: () => focusEquipment(kind, doc.name, doc.raw),
+        secondaryActionLabel: "Remove",
+        onSecondaryAction: () => {
           const updated = removeEquipment(state, kind, doc.name);
           patch({ equipment: updated });
           refreshEquipmentEntries(updated);
@@ -684,6 +722,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
         kind: "lint-insights",
         title: isContract ? "Tool contract quality" : "Response schema quality",
         insight,
+        subject: { kind, raw },
       },
       equipment: next,
     });
@@ -754,6 +793,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
           });
         } else if (event.event === "response-schema") {
           responseSchemaDraft = event.data.source;
+          focusEquipment("response-schema", responseSchemaName(responseSchemaDraft) || "Working draft", serializeResponseSchema(responseSchemaDraft));
         } else if (event.event === "response-schema-edit") {
           if (!responseSchemaDraft) {
             appendEntry(entry("No draft exists to edit yet.", "error"));
@@ -769,8 +809,10 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
             continue;
           }
           responseSchemaDraft = edited.value;
+          focusEquipment("response-schema", responseSchemaName(responseSchemaDraft) || "Working draft", serializeResponseSchema(responseSchemaDraft));
         } else if (event.event === "tool-contract") {
           toolContractDraft = event.data.source;
+          focusEquipment("tool-contract", toolContractDraft.name || "Working draft", serializeToolContract(toolContractDraft));
         } else if (event.event === "tool-contract-edit") {
           if (!toolContractDraft) {
             appendEntry(entry("No draft exists to edit yet.", "error"));
@@ -786,6 +828,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
             continue;
           }
           toolContractDraft = edited.value;
+          focusEquipment("tool-contract", toolContractDraft.name || "Working draft", serializeToolContract(toolContractDraft));
         } else if (event.event === "lint-feedback") {
           pendingLintFeedback = event.data.feedback;
         } else if (event.event === "error") {
@@ -1228,6 +1271,22 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
   }
 
   async function selectLintSurface(surface: EvaluationSurface): Promise<void> {
+    const subject = snapshot.capability?.kind === "lint-insights" || snapshot.capability?.kind === "lint-breakdown"
+      ? snapshot.capability.subject
+      : snapshot.heroFocus.kind === "skill" ? undefined : { kind: snapshot.heroFocus.kind, raw: snapshot.heroFocus.raw };
+    if (subject) {
+      if (snapshot.lintBusy) return;
+      patch({ activeTool: null, lintBusy: true, status: "Quality running…" });
+      try {
+        const res = await fetchImpl(subject.kind === "tool-contract" ? "/api/tool-contract" : "/api/response-schema", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ document: subject.raw, surface }) });
+        const body = (await res.json().catch(() => null)) as unknown;
+        if (!res.ok) { fail(errorMessage(body, res.status)); return; }
+        const panel = decodeLintPanel(surface, body);
+        if (panel.kind !== "lint-insights" && panel.kind !== "lint-breakdown") { fail("Equipment check returned an unexpected response."); return; }
+        patch({ capability: { ...panel, title: subject.kind === "tool-contract" ? "Tool contract quality" : "Response schema quality", subject }, status: "Quality ready." });
+      } catch (cause) { fail(friendlyError(String(cause))); } finally { patch({ lintBusy: false }); }
+      return;
+    }
     const skill = snapshot.current;
     if (!skill || snapshot.lintBusy) return;
 
@@ -1364,6 +1423,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     showImport,
     showSkills,
     showEquipment,
+    focusSkill,
     showHistory,
     showTemplates,
     send,

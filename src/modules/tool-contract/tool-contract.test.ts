@@ -7,6 +7,8 @@ import {
   parseToolContract,
   serializeToolContract,
   toolContractCapability,
+  toolContractRenderedRenderer,
+  toolContractSourceRenderer,
 } from "./index";
 
 const SEND_INVOICE = {
@@ -28,6 +30,11 @@ const SEND_INVOICE = {
 } as const;
 
 describe("tool-contract source model", () => {
+  it("renders the job, shapes, examples, failures, safety notes, and source", () => {
+    const report = createToolContractLintReport(unwrap(parseToolContract(JSON.stringify(SEND_INVOICE))));
+    expect(toolContractRenderedRenderer.render(report).sections.map((section) => section.heading)).toEqual(["Input", "Output", "Examples", "Failure modes", "Safety notes"]);
+    expect(toolContractSourceRenderer.render(report).markdown).toContain('"name": "send_invoice_reminder"');
+  });
   it("round-trips losslessly, preserving unknown keys and $ref I/O", () => {
     const raw = JSON.stringify({ ...SEND_INVOICE, "x-team": "billing" });
     const source = unwrap(parseToolContract(raw));

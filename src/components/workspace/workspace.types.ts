@@ -33,6 +33,8 @@ export type InteractionEntry = {
   readonly tone?: "muted" | "error";
   readonly actionLabel?: string;
   readonly onAction?: () => void;
+  readonly secondaryActionLabel?: string;
+  readonly onSecondaryAction?: () => void;
 };
 
 /** A draft in progress, summarised for the resume affordance (ARCHITECTURE §9.3). */
@@ -44,7 +46,7 @@ export type DraftSummary = {
 };
 
 /** One checked equipment document kept for the session (raw JSON text). */
-type EquipmentDoc = { readonly name: string; readonly raw: string };
+export type EquipmentDoc = { readonly name: string; readonly raw: string };
 
 export type EquipmentState = {
   readonly contracts: readonly EquipmentDoc[];
@@ -52,6 +54,7 @@ export type EquipmentState = {
 };
 
 export type EquipmentKind = "tool-contract" | "response-schema";
+export type HeroFocus = { readonly kind: "skill" } | { readonly kind: EquipmentKind; readonly name: string; readonly raw: string };
 
 export type SkillLibraryEntryPanel = {
   readonly name: string;
@@ -122,11 +125,13 @@ export type CapabilityPanel =
       readonly kind: "lint-insights";
       readonly title: string;
       readonly insight: LintInsightPanel;
+      readonly subject?: { readonly kind: EquipmentKind; readonly raw: string };
     }
   | {
       readonly kind: "lint-breakdown";
       readonly title: string;
       readonly breakdown: LintBreakdownPanel;
+      readonly subject?: { readonly kind: EquipmentKind; readonly raw: string };
     }
   | {
       readonly kind: "safety-insights";
@@ -218,6 +223,7 @@ export type WorkspaceSnapshot = {
   readonly quotaLabel: string;
   readonly status: string | null;
   readonly heroDocs: HeroDocs;
+  readonly heroFocus: HeroFocus;
   readonly view: HeroView;
   readonly mode: InteractionMode;
   readonly current: SkillSource | null;
@@ -247,6 +253,7 @@ export type WorkspaceActions = {
   readonly showImport: () => void;
   readonly showSkills: () => Promise<void>;
   readonly showEquipment: () => void;
+  readonly focusSkill: () => void;
   readonly showHistory: () => Promise<void>;
   readonly showTemplates: (query?: string) => Promise<void>;
   readonly send: (message: string) => Promise<void>;

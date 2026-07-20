@@ -40,6 +40,8 @@ export function HeroPanel({
   onReviseWithFeedback,
   onApplyMetadataSuggestion,
   feedbackBusy,
+  equipmentFocus = false,
+  onBackToSkill,
 }: {
   rendered: RenderedDoc;
   source: SourceDoc;
@@ -60,12 +62,14 @@ export function HeroPanel({
   onReviseWithFeedback: (result: EvaluationFeedbackResult) => void;
   onApplyMetadataSuggestion?: () => void;
   feedbackBusy: boolean;
+  equipmentFocus?: boolean;
+  onBackToSkill?: () => void;
 }) {
   return (
     <section className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-3 px-4 py-4 lg:gap-4 lg:px-6 lg:py-8">
       {banner}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <ToolChips active={activeTool} busy={toolBusy} onSelect={onToolSelect} />
+        {equipmentFocus ? <Button type="button" variant="secondary" onClick={onBackToSkill}>Back to skill</Button> : <ToolChips active={activeTool} busy={toolBusy} onSelect={onToolSelect} />}
         <ViewToggle value={view} onChange={onViewChange} />
       </div>
 

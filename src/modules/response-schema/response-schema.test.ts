@@ -8,6 +8,8 @@ import {
   parseResponseSchema,
   responseSchemaCapability,
   responseSchemaName,
+  responseSchemaRenderedRenderer,
+  responseSchemaSourceRenderer,
   serializeResponseSchema,
   validateAgainstSchema,
 } from "./index";
@@ -62,6 +64,11 @@ describe("response-schema source model", () => {
 });
 
 describe("response-schema lint", () => {
+  it("renders friendly property cards and the serialized source", () => {
+    const report = createResponseSchemaLintReport(unwrap(parseResponseSchema(JSON.stringify(INVOICE_SCHEMA))));
+    expect(responseSchemaRenderedRenderer.render(report).sections[0]?.heading).toBe("invoiceId · required");
+    expect(responseSchemaSourceRenderer.render(report).markdown).toContain('"title": "invoice-summary"');
+  });
   it("passes a well-formed schema without errors", () => {
     const report = createResponseSchemaLintReport(unwrap(parseResponseSchema(JSON.stringify(INVOICE_SCHEMA))));
     expect(report.kind).toBe("response-schema-lint");
