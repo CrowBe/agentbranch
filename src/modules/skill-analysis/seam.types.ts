@@ -22,6 +22,7 @@ export type ArtifactKind =
   | "lint"
   | "response-schema-lint"
   | "tool-contract-lint"
+  | "subagent-definition-lint"
   | "test-run"
   | "triggering-eval"
   | "cross-runtime-validation"

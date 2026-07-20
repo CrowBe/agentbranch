@@ -140,6 +140,10 @@ _Avoid_: output schema (ambiguous with a tool's output side), JSON file, spec
 The second equipment primitive — a tool's typed input/output plus description, examples, failure modes, and safety notes. I/O is an inline schema or a `$ref` to a response schema by title. Drives the test run's mock tools and per-call validation when bundled.
 _Avoid_: tool definition (the runtime artifact, not the reviewed contract), API spec, tool schema
 
+**Subagent definition**:
+The third equipment primitive — a markdown file with YAML frontmatter (`name`, `description`, optional `tools` and `model`) plus a system-prompt body. Its description controls when a specialist should receive delegated work; its body defines the role, workflow, and boundaries. Analysis only: it does not run or route subagents.
+_Avoid_: agent profile, persona, bot, agent file
+
 **Bundle**:
 The test run's composed input — the Skill plus selected Tool contracts and the Response schemas they reference. The smallest useful composition (§9.2): does the Skill call the Tool correctly and produce valid output?
 _Avoid_: package, kit, workspace (all name other things), input set

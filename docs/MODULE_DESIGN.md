@@ -99,7 +99,7 @@ most capabilities read a `Skill`, the equipment primitives (`response-schema`,
 `tool-contract`) read their own source models, and the test run reads a
 `TestRunInput` bundle (ARCHITECTURE §9.2).
 
-- **`ArtifactKind`** — closed union of valid kind strings (`"hero" | "skill-ir" | "skill-metadata" | "export" | "lint" | "response-schema-lint" | "tool-contract-lint" | "test-run" | "triggering-eval" | "cross-runtime-validation" | "harness-recommendation"`). Add a new member here when a new capability needs its own artifact type. Free-string kinds are a compile error.
+- **`ArtifactKind`** — closed union of valid kind strings (`"hero" | "skill-ir" | "skill-metadata" | "export" | "lint" | "response-schema-lint" | "tool-contract-lint" | "subagent-definition-lint" | "test-run" | "triggering-eval" | "cross-runtime-validation" | "safety-review" | "harness-recommendation"`). Add a new member here when a new capability needs its own artifact type. Free-string kinds are a compile error.
 - **`Artifact<K>`** — the base artifact type; `K` must be an `ArtifactKind`. Each capability extends this with its own fields.
 - **`Analyzer<Input, A>`** — read an input, emit a structured artifact. Async +
   `Result` (some analyzers call the model).
@@ -136,6 +136,7 @@ most capabilities read a `Skill`, the equipment primitives (`response-schema`,
 | Lint | analysis | `lint` | frontmatter + body + refs quality rules + static policy rules | `insights`, `breakdown` | real |
 | Response schema quality | analysis | `response-schema` | JSON Schema structure + smell rules (pure, zero tokens) | `insights`, `breakdown` | real |
 | Tool contract quality | analysis | `tool-contract` | I/O typing, description/example quality, failure modes, safety notes (pure) | `insights`, `breakdown` | real |
+| Subagent definition quality | analysis | `subagent-definition` | delegation description, role/instruction depth, tool boundaries, metadata smells (pure) | `insights`, `breakdown` | real |
 | Test run | evaluation | `test-run` | composes `gateway.runAgent` + mock-tool registry over a `TestRunInput` bundle; contracts drive the mocks + per-call validation | `insights`, `breakdown` | run + world generation real (scenario + mock tools generated, cached); contract-driven mocks + checks real; email mock = offline fallback |
 | Triggering eval | evaluation | `triggering-eval` | composes `gateway.classify` over the field | `insights`, `breakdown` | run + battery generation real (cached); distractor library a static v1 seed |
 | Harness recommendation | analysis | `harness-recommendation` | Tier-1 correlation over a corpus cohort (fired lint rules × eval outcomes) | `report` | real; the first capability whose `Input` is not a `Skill` |
@@ -179,6 +180,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **lint** | `lintCapability`, `summarizeLintFindings`, `LintReport`, `LintFinding` | — | real (quality + pure policy rules; `summarizeLintFindings` is the shared scorer every LintReport-shaped artifact uses) |
 | **response-schema** | `responseSchemaCapability`, `parseResponseSchema`, `serializeResponseSchema`, `applyResponseSchemaEdit`, `responseSchemaName`, `schemaShapeFindings`, `validateAgainstSchema`, `exampleValueForSchema` + types | — | real (first equipment primitive: lossless source model + pure lint + offline schema-subset validation) |
 | **tool-contract** | `toolContractCapability`, `parseToolContract`, `serializeToolContract` + types | — | real (second equipment primitive: lossless source model + pure lint; I/O `$ref`s response schemas) |
+| **subagent-definition** | `subagentDefinitionCapability`, `parseSubagentDefinition`, `serializeSubagentDefinition`, `createSubagentDefinitionLintReport`, `subagentDefinitionLintAnalyzer`, `SUBAGENT_DEFINITION_LINT_RULESET_VERSION`, `renderSubagentDefinition`, `renderSubagentDefinitionSource`, `subagentDefinitionInsightsRenderer`, `subagentDefinitionBreakdownRenderer` + types | — | real (third equipment primitive: lossless frontmatter + body source model, pure delegation-quality lint, and seam renderers; no execution or routing) |
 | **skill-import** | `SkillImportFetcher`, `SkillImportFetchError` | `SkillImportFetcher` | port |
 | **portability** | `portabilityCapability`, `runCrossRuntimeValidation`, runtime-target/result types | — | real cross-runtime validation engine |
 | **build-loop** | `runBuildLoop`, `buildTools`, `BuildToolName`, `BuildLoopEvent`, `formatTestRunFeedback`, `formatTriggeringEvalFeedback`, `runResponseSchemaLoop`, `responseSchemaTools`, `RESPONSE_SCHEMA_AUTHORING_PROMPT`, `formatResponseSchemaLintFeedback` | — (consumes `ModelGateway`) | real |
