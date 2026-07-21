@@ -487,7 +487,7 @@ npm test           # vitest (run once)     npm run test:watch
 npm run test:conformance # opt-in live provider check; set CONFORMANCE_PROVIDER + provider API key
 npm run test:visual # browser-mode screenshot suite (baselines in __screenshots__;
                     # refresh with test:visual:update)  — DESIGN.md §5.3
-npm run db:generate / db:push / db:migrate # Prisma (needs DATABASE_URL)
+npm run db:generate / db:push / db:migrate / db:seed # Prisma (needs DATABASE_URL)
 ```
 
 - **Boots with no secrets.** Missing `DATABASE_URL` / Clerk keys / selected

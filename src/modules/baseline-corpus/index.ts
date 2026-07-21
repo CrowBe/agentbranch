@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { SkillCategory } from "@/modules/skill";
+import { serializeSkillMd, type SkillCategory } from "@/modules/skill";
 
 export type BaselinePromptCase = {
   readonly prompt: string;
@@ -744,12 +744,20 @@ function skill(input: {
   readonly positives: readonly string[];
   readonly negatives: readonly string[];
 }): CorpusSeed {
+  const body = input.body.join("\n");
   return {
     id: input.id,
     version: 1,
     name: input.name,
     description: input.description,
-    source: `---\nname: ${input.name}\ndescription: ${input.description}\ncategory: ${input.category}\ntags:\n${input.tags.map((tag) => `  - ${tag}`).join("\n")}\n---\n\n${input.body.join("\n")}\n`,
+    source: serializeSkillMd({
+      frontmatter: {
+        name: input.name,
+        description: input.description,
+        extra: { category: input.category, tags: [...input.tags] },
+      },
+      body,
+    }),
     promptBattery: [
       ...input.positives.map((prompt) => ({ prompt, expected: "fire" as const })),
       ...input.negatives.map((prompt) => ({ prompt, expected: "silent" as const })),
