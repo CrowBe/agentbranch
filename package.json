@@ -21,10 +21,12 @@
     "prepare": "git config core.hooksPath .githooks || true",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "db:migrate": "prisma migrate dev"
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "tsx prisma/seed.ts"
   },
   "prisma": {
-    "schema": "prisma/schema.prisma"
+    "schema": "prisma/schema.prisma",
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.81",
