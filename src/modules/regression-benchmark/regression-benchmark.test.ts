@@ -6,13 +6,22 @@ import { HarnessVersionId, isErr, unwrap } from "@/shared";
 import {
   regressionBenchmarkSet,
   regressionBenchmarkSetHash,
+  responseSchemaBenchmarkSet,
+  responseSchemaBenchmarkSetHash,
+  safetyBenchmarkSet,
+  safetyBenchmarkSetHash,
+  toolContractBenchmarkSet,
+  toolContractBenchmarkSetHash,
   runRegressionBenchmark,
 } from "./index";
 import { ok } from "@/shared";
 
 /** A gateway that answers classify from the corpus's own expectations —
  * a perfect harness, so the frozen set scores 1. */
-function perfectGateway(observed: { tags: AccountingTag[]; choiceFields: string[][] }): ModelGateway {
+function perfectGateway(observed: {
+  tags: AccountingTag[];
+  choiceFields: string[][];
+}): ModelGateway {
   return {
     hasModel: true,
     async classify({ prompt, choices, tag }) {
@@ -21,8 +30,13 @@ function perfectGateway(observed: { tags: AccountingTag[]; choiceFields: string[
       const candidate = choices[0] ?? "";
       const name = candidate.split(":")[0] ?? "";
       const entry = baselineSkillCorpus.find((e) => e.name === name);
-      const fires = entry?.promptBattery.some((c) => c.prompt === prompt && c.expected === "fire");
-      return ok({ choice: fires ? candidate : null, rationale: "corpus oracle" });
+      const fires = entry?.promptBattery.some(
+        (c) => c.prompt === prompt && c.expected === "fire",
+      );
+      return ok({
+        choice: fires ? candidate : null,
+        rationale: "corpus oracle",
+      });
     },
     async streamAgent() {
       async function* empty() {}
@@ -53,15 +67,36 @@ describe("regression benchmark", () => {
       tags: [],
       choiceFields: [],
     };
-    const score = unwrap(await runRegressionBenchmark(perfectGateway(observed)));
+    const score = unwrap(
+      await runRegressionBenchmark(perfectGateway(observed)),
+    );
 
     expect(score.benchmarkSetHash).toBe(regressionBenchmarkSetHash);
     expect(score.totalCases).toBe(
-      regressionBenchmarkSet.reduce((sum, entry) => sum + entry.battery.length, 0),
+      regressionBenchmarkSet.reduce(
+        (sum, entry) => sum + entry.battery.length,
+        0,
+      ),
     );
     expect(score.passedCases).toBe(score.totalCases);
     expect(score.score).toBe(1);
     expect(score.perSkill).toHaveLength(regressionBenchmarkSet.length);
+    expect(score.dimensions.responseSchema).toMatchObject({
+      benchmarkSetHash: responseSchemaBenchmarkSetHash,
+      totalCases: responseSchemaBenchmarkSet.length,
+      passedCases: responseSchemaBenchmarkSet.length,
+      score: 1,
+    });
+    expect(score.dimensions.toolContract).toMatchObject({
+      benchmarkSetHash: toolContractBenchmarkSetHash,
+      totalCases: toolContractBenchmarkSet.length,
+      passedCases: toolContractBenchmarkSet.length,
+      score: 1,
+    });
+    expect(score.dimensions.safety).toMatchObject({
+      benchmarkSetHash: safetyBenchmarkSetHash,
+      totalCases: safetyBenchmarkSet.length,
+    });
 
     // Measuring our own harness is platform spend, never a user's.
     expect(observed.tags.every((tag) => tag.kind === "platform")).toBe(true);
@@ -73,9 +108,14 @@ describe("regression benchmark", () => {
   });
 
   it("fails model_unavailable offline, like every evaluation surface", async () => {
-    const offline = { ...perfectGateway({ tags: [], choiceFields: [] }), hasModel: false };
+    const offline = {
+      ...perfectGateway({ tags: [], choiceFields: [] }),
+      hasModel: false,
+    };
     const result = await runRegressionBenchmark(offline);
-    expect(isErr(result) && result.error.tag === "model_unavailable").toBe(true);
+    expect(isErr(result) && result.error.tag === "model_unavailable").toBe(
+      true,
+    );
   });
 
   it("records runs pinned to a harness version and lists them newest first", async () => {
@@ -87,20 +127,45 @@ describe("regression benchmark", () => {
       passedCases: 54,
       score: 0.9,
       perSkill: [],
+      dimensions: {
+        responseSchema: emptyDimension(responseSchemaBenchmarkSetHash),
+        toolContract: emptyDimension(toolContractBenchmarkSetHash),
+        safety: emptyDimension(safetyBenchmarkSetHash),
+      },
     };
     vi.setSystemTime(new Date("2026-07-01T00:00:00Z"));
-    const first = unwrap(await repo.record({ harnessVersionId: HarnessVersionId("h1"), ...score }));
+    const first = unwrap(
+      await repo.record({ harnessVersionId: HarnessVersionId("h1"), ...score }),
+    );
     vi.setSystemTime(new Date("2026-07-02T00:00:00Z"));
     const second = unwrap(
-      await repo.record({ harnessVersionId: HarnessVersionId("h2"), ...score, passedCases: 57 }),
+      await repo.record({
+        harnessVersionId: HarnessVersionId("h2"),
+        ...score,
+        passedCases: 57,
+      }),
     );
 
     const listed = unwrap(await repo.list());
     expect(listed.map((run) => run.id)).toEqual([second.id, first.id]);
-    expect(listed.every((run) => run.benchmarkSetHash === regressionBenchmarkSetHash)).toBe(true);
+    expect(
+      listed.every(
+        (run) => run.benchmarkSetHash === regressionBenchmarkSetHash,
+      ),
+    ).toBe(true);
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 });
+
+function emptyDimension(benchmarkSetHash: string) {
+  return {
+    benchmarkSetHash,
+    totalCases: 0,
+    passedCases: 0,
+    score: 0,
+    entries: [],
+  };
+}

@@ -8,8 +8,19 @@
  * scores the seam's triggering eval from outside.
  */
 export type { BenchmarkEntry } from "./benchmark-set";
-export { regressionBenchmarkSet, regressionBenchmarkSetHash } from "./benchmark-set";
+export {
+  regressionBenchmarkSet,
+  regressionBenchmarkSetHash,
+  responseSchemaBenchmarkSet,
+  responseSchemaBenchmarkSetHash,
+  toolContractBenchmarkSet,
+  toolContractBenchmarkSetHash,
+  safetyBenchmarkSet,
+  safetyBenchmarkSetHash,
+} from "./benchmark-set";
 export type {
+  BenchmarkDimensionEntryScore,
+  BenchmarkDimensionScore,
   BenchmarkRun,
   BenchmarkScore,
   BenchmarkSkillScore,

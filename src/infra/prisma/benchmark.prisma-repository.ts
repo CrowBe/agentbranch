@@ -4,7 +4,13 @@ import type {
   BenchmarkRunRepository,
   BenchmarkScore,
 } from "@/modules/regression-benchmark";
-import { BenchmarkRunId, HarnessVersionId, domainError, err, ok } from "@/shared";
+import {
+  BenchmarkRunId,
+  HarnessVersionId,
+  domainError,
+  err,
+  ok,
+} from "@/shared";
 
 type BenchmarkRunRow = {
   id: string;
@@ -24,12 +30,15 @@ function toBenchmarkRun(row: BenchmarkRunRow): BenchmarkRun {
     passedCases: score.passedCases,
     score: score.score,
     perSkill: score.perSkill,
+    dimensions: score.dimensions,
     createdAt: row.createdAt,
   };
 }
 
 /** Prisma BenchmarkRunRepository (real). Persists frozen-set scorings. */
-export function createPrismaBenchmarkRunRepository(prisma: PrismaClient): BenchmarkRunRepository {
+export function createPrismaBenchmarkRunRepository(
+  prisma: PrismaClient,
+): BenchmarkRunRepository {
   return {
     async record(run) {
       try {
@@ -42,24 +51,35 @@ export function createPrismaBenchmarkRunRepository(prisma: PrismaClient): Benchm
               passedCases: run.passedCases,
               score: run.score,
               perSkill: run.perSkill,
+              dimensions: run.dimensions,
             } as unknown as Prisma.InputJsonValue,
           },
         });
         return ok(toBenchmarkRun(row as BenchmarkRunRow));
       } catch (cause) {
         return err(
-          domainError("persistence_failed", "A benchmark run could not be recorded.", cause),
+          domainError(
+            "persistence_failed",
+            "A benchmark run could not be recorded.",
+            cause,
+          ),
         );
       }
     },
 
     async list() {
       try {
-        const rows = await prisma.benchmarkRun.findMany({ orderBy: { createdAt: "desc" } });
+        const rows = await prisma.benchmarkRun.findMany({
+          orderBy: { createdAt: "desc" },
+        });
         return ok(rows.map((row) => toBenchmarkRun(row as BenchmarkRunRow)));
       } catch (cause) {
         return err(
-          domainError("persistence_failed", "Benchmark runs could not be listed.", cause),
+          domainError(
+            "persistence_failed",
+            "Benchmark runs could not be listed.",
+            cause,
+          ),
         );
       }
     },
