@@ -488,6 +488,7 @@ npm run test:conformance # opt-in live provider check; set CONFORMANCE_PROVIDER 
 npm run test:visual # browser-mode screenshot suite (baselines in __screenshots__;
                     # refresh with test:visual:update)  — DESIGN.md §5.3
 npm run db:generate / db:push / db:migrate / db:seed # Prisma (needs DATABASE_URL)
+npm run tap:initial-release -- --repo <tap-checkout> # reviewed seed snapshot; add --fire only for the owner-run release
 ```
 
 - **Boots with no secrets.** Missing `DATABASE_URL` / Clerk keys / selected
@@ -511,6 +512,11 @@ npm run db:generate / db:push / db:migrate / db:seed # Prisma (needs DATABASE_UR
   tap repo checkout's published skill folders and prints GitHub annotations —
   the advisory CI entry point the tap repo's workflows call, always exit 0 on
   findings (verdicts annotate, never gate).
+- `npm run tap:initial-release -- --repo <tap-checkout>` renders the deterministic
+  reviewed baseline seed and prints its managed file set without changing the
+  checkout. The owner-run `--fire` form applies the files and requests the first
+  publish dispatch; without `TAP_SYNC_TOKEN`, dispatch reports `unavailable`.
+  `TAP_REPOSITORY` overrides the built-in `CrowBe/agentbranch-tap` target.
 
 ---
 

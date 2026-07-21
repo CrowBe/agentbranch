@@ -17,6 +17,7 @@
     "test:visual:update": "vitest run --config vitest.visual.config.ts --update",
     "check:docs": "node scripts/check-doc-drift.mjs",
     "tap:apply-snapshot": "node scripts/apply-tap-repository-snapshot.mjs",
+    "tap:initial-release": "tsx scripts/initial-tap-release.ts",
     "tap:lint-skills": "tsx scripts/lint-tap-skills.ts",
     "prepare": "git config core.hooksPath .githooks || true",
     "db:generate": "prisma generate",

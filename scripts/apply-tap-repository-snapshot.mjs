@@ -3,27 +3,37 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-const args = parseArgs(process.argv.slice(2));
-const snapshotSource = args.snapshot ?? process.env.TAP_REPOSITORY_SNAPSHOT;
-const repoDir = path.resolve(args.repo ?? process.env.TAP_REPOSITORY_DIR ?? process.cwd());
+export async function main(argv = process.argv.slice(2)) {
+  const args = parseArgs(argv);
+  const snapshotSource = args.snapshot ?? process.env.TAP_REPOSITORY_SNAPSHOT;
+  const repoDir = path.resolve(args.repo ?? process.env.TAP_REPOSITORY_DIR ?? process.cwd());
 
-if (!snapshotSource) {
-  fail("Missing snapshot source. Pass --snapshot <url-or-file> or set TAP_REPOSITORY_SNAPSHOT.");
+  if (!snapshotSource) {
+    fail("Missing snapshot source. Pass --snapshot <url-or-file> or set TAP_REPOSITORY_SNAPSHOT.");
+  }
+
+  const snapshot = JSON.parse(await readSnapshot(snapshotSource));
+  await applyTapRepositoryFiles(snapshot.files, repoDir, { dryRun: args.dryRun === true });
 }
 
-const snapshot = JSON.parse(await readSnapshot(snapshotSource));
-const files = validateSnapshot(snapshot);
+export async function applyTapRepositoryFiles(files, repoDir, options = {}) {
+  const validated = validateSnapshot({ files });
+  const resolvedRepoDir = path.resolve(repoDir);
+  if (options.dryRun) {
+    console.log(`Would apply ${validated.length} tap repository file(s) to ${resolvedRepoDir}:`);
+    for (const file of validated) console.log(file.path);
+    return;
+  }
 
-await rm(path.join(repoDir, "skills"), { recursive: true, force: true });
-await rm(path.join(repoDir, ".claude-plugin", "marketplace.json"), { force: true });
-
-for (const file of files) {
-  const target = path.join(repoDir, file.path);
-  await mkdir(path.dirname(target), { recursive: true });
-  await writeFile(target, file.content);
+  await rm(path.join(resolvedRepoDir, "skills"), { recursive: true, force: true });
+  await rm(path.join(resolvedRepoDir, ".claude-plugin", "marketplace.json"), { force: true });
+  for (const file of validated) {
+    const target = path.join(resolvedRepoDir, file.path);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, file.content);
+  }
+  console.log(`Applied ${validated.length} tap repository file(s) to ${resolvedRepoDir}.`);
 }
-
-console.log(`Applied ${files.length} tap repository file(s) to ${repoDir}.`);
 
 function parseArgs(argv) {
   const parsed = {};
@@ -31,6 +41,7 @@ function parseArgs(argv) {
     const arg = argv[i];
     if (arg === "--snapshot") parsed.snapshot = argv[++i];
     else if (arg === "--repo") parsed.repo = argv[++i];
+    else if (arg === "--dry-run") parsed.dryRun = true;
     else fail(`Unknown argument: ${arg}`);
   }
   return parsed;
@@ -74,4 +85,8 @@ function validateSnapshot(snapshot) {
 function fail(message) {
   console.error(message);
   process.exit(1);
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  await main();
 }
