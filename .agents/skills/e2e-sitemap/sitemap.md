@@ -89,6 +89,7 @@ Equipment quality routes take `{ "document": "<JSON string>", "surface": "insigh
 | `/api/response-schema/build` | POST (SSE) | signed-in | stream opens; provider-key error streamed |
 | `/api/tool-contract` | POST | signed-in | works — pure quality check |
 | `/api/tool-contract/build` | POST (SSE) | signed-in | stream opens; provider-key error streamed |
+| `/api/equipment` · `/api/equipment/[id]` | GET/POST/DELETE | signed-in | works against memory adapters; checked documents are saved account-side |
 | `/api/skills` · `/api/skills/[id]` · `…/restore` · `…/runs` · `…/branches[...]` | GET/POST/DELETE | signed-in | work against memory adapters (state resets on restart) |
 | `/api/skill-library` (`?surface=templates`, `?q=`, `?category=`, `?tag=`, `?slug=`) | GET | public read | works — pure read over publications |
 | `/api/publications` | POST | signed-in | works offline (memory) — publishes the user's main version |
@@ -231,7 +232,7 @@ independent · offline-safe for the paste path
 
 | # | action | selector | expect |
 |---|---|---|---|
-| 1 | click | nav button `Equipment` | panel title `Equipment` |
+| 1 | click | nav button `Equipment` | `Loading equipment…` → `No saved equipment yet.` (or `Equipment loaded.`); panel title `Equipment` |
 | 2 | fill plain language (e.g. `a schema for invoice summaries`), click | `textarea`, then button `Send` | routes to the chat authoring loop; **offline** it fails with `No API key for "<provider>". Add one in the model console or .env.local.` |
 | 3 | fill a JSON Schema (`{"title":"Invoice summary","type":"object",…}`), click | `textarea`, then button `Send` | `Checking response schema…` → `Response schema "Invoice summary" checked and kept for tool contracts to reference.` |
 | 4 | fill a tool contract (`{"name":"fetch_unread_email","description":…,"input":…,"output":…}`), click | `textarea`, then button `Send` | `Checking tool contract…` → `Tool contract "fetch_unread_email" checked — it runs with your next test run.` |
@@ -318,7 +319,7 @@ Recorded state (update in the same change that truly moves a cell):
 | Quality Insights panel | yes (chip + panel) | yes, after check/authoring | yes |
 | Quality Breakdown panel | yes | yes | yes |
 | Chat authoring loop | yes | yes | yes |
-| Persistence beyond the session | yes (skill records + drafts) | no — session-kept — recorded, #220 | no — session-kept, #220 |
+| Persistence beyond the session | yes (skill records + drafts) | yes | yes |
 | History / past runs | yes | no — accepted gap (#218 non-goals) | no |
 | Export | yes | no — accepted gap (#218 non-goals) | no |
 | Publish / Skill library | yes | no — accepted gap (#218 non-goals) | no |

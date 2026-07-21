@@ -24,8 +24,26 @@ model User {
   safetyRatings SafetyRating[]
   publications  Publication[]
   usageCharges  UsageCharge[]
+  equipment     Equipment[]
 
   @@map("users")
+}
+
+model Equipment {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  kind        String
+  name        String
+  document    String   @db.Text
+  contentHash String   @map("content_hash")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, kind, name])
+  @@index([userId])
+  @@map("equipment")
 }
 
 /// Append-only identity for the validation harness itself. The source artifacts

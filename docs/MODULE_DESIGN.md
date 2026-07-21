@@ -180,6 +180,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **lint** | `lintCapability`, `summarizeLintFindings`, `LintReport`, `LintFinding` | — | real (quality + pure policy rules; `summarizeLintFindings` is the shared scorer every LintReport-shaped artifact uses) |
 | **response-schema** | `responseSchemaCapability`, `parseResponseSchema`, `serializeResponseSchema`, `applyResponseSchemaEdit`, `responseSchemaName`, `schemaShapeFindings`, `validateAgainstSchema`, `exampleValueForSchema`, `responseSchemaRenderedRenderer`, `responseSchemaSourceRenderer` + types | — | real (first equipment primitive: lossless source model + pure lint + Rendered/Source hero views + offline schema-subset validation) |
 | **tool-contract** | `toolContractCapability`, `parseToolContract`, `serializeToolContract`, `toolContractRenderedRenderer`, `toolContractSourceRenderer` + types | — | real (second equipment primitive: lossless source model + pure lint + Rendered/Source hero views; I/O `$ref`s response schemas) |
+| **equipment** | `EQUIPMENT_COUNT_MAX`, `EQUIPMENT_CAP_MESSAGE`, `Equipment`, `EquipmentKind`, `EquipmentRepository`, `SaveEquipmentInput` | `EquipmentRepository` | real (account-scoped saved equipment; upsert-by-kind/name with content hash and structural cap) |
 | **subagent-definition** | `subagentDefinitionCapability`, `parseSubagentDefinition`, `serializeSubagentDefinition`, `createSubagentDefinitionLintReport`, `subagentDefinitionLintAnalyzer`, `SUBAGENT_DEFINITION_LINT_RULESET_VERSION`, `renderSubagentDefinition`, `renderSubagentDefinitionSource`, `subagentDefinitionInsightsRenderer`, `subagentDefinitionBreakdownRenderer` + types | — | real (third equipment primitive: lossless frontmatter + body source model, pure delegation-quality lint, and seam renderers; no execution or routing) |
 | **skill-import** | `SkillImportFetcher`, `SkillImportFetchError` | `SkillImportFetcher` | port |
 | **portability** | `portabilityCapability`, `runCrossRuntimeValidation`, runtime-target/result types | — | real cross-runtime validation engine |
@@ -275,8 +276,8 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
 - `response-schema-stream.ts` — `responseSchemaLoopResponse(input, gateway, userId)`:
   the equipment-authoring driver. Drives `runResponseSchemaLoop`, applies streamed
   edits to the working draft, follows each write with the primitive's lint feedback,
-  and encodes events as an SSE `Response`. No persistence — equipment is
-  session-kept by the client workspace.
+  and encodes events as an SSE `Response`. The completed document is saved by
+  the client through the equipment repository route.
 - `evaluation-run.ts` — `evaluationResponse({kind, surface, sse, skill, pin, deps})`:
   the recorded-evaluation driver the evaluation routes share. Runs the seam's
   `runEvaluation`, then the persistence choreography — resolve the pinned
@@ -312,6 +313,9 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
   primitives' quality checks: auth → parse the raw document through the
   module's source model → `runCapability` (pure, offline) → Insights or
   Breakdown JSON.
+- `app/api/equipment/route.ts` + `app/api/equipment/[id]/route.ts` — account-scoped
+  list, check-then-save, and remove. Save parses through the primitive source
+  model, runs pure quality analysis, and persists only a parseable document.
 - `app/api/response-schema/build/route.ts` — the response-schema authoring
   route (issue #151): auth → parse (messages + optional current draft through
   the source model) → one call into the equipment-authoring driver
@@ -414,7 +418,7 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
   loop (`/api/response-schema/build`) — the workspace streams the
   conversation, tracks the draft through write/edit events, hands lint
   feedback back as the next turn, and quality-checks + keeps the finished
-  schema exactly like a pasted one. Kept equipment lives for the session; the
+  schema exactly like a pasted one. Saved equipment is loaded when Equipment opens; the
   workspace bundles kept contracts into the next test run, and the breakdown
   panel shows the per-call contract checks.
   The Templates mode consumes `/api/skill-library?surface=templates` through
