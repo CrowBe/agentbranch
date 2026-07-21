@@ -73,12 +73,12 @@ async function main(): Promise<void> {
         await tx.skill.upsert({
           where: { id: record.skillId },
           create: { id: record.skillId, userId: SYSTEM_PUBLISHER_ID, ...source },
-          update: source,
+          update: { userId: SYSTEM_PUBLISHER_ID, ...source },
         });
         await tx.skillBranch.upsert({
           where: { id: record.branchId },
           create: { id: record.branchId, skillId: record.skillId, ordinal: 1 },
-          update: { status: "open", ordinal: 1 },
+          update: { skillId: record.skillId, status: "open", ordinal: 1 },
         });
         await tx.skillVersion.upsert({
           where: { id: record.versionId },
@@ -89,7 +89,13 @@ async function main(): Promise<void> {
             revision: 1,
             ...source,
           },
-          update: source,
+          update: {
+            skillId: record.skillId,
+            branchId: record.branchId,
+            revision: 1,
+            parentId: null,
+            ...source,
+          },
         });
         await tx.skill.update({
           where: { id: record.skillId },
@@ -107,6 +113,7 @@ async function main(): Promise<void> {
             contentHash: record.contentHash,
           },
           update: {
+            publisherId: SYSTEM_PUBLISHER_ID,
             skillId: record.skillId,
             skillVersionId: record.versionId,
             slug: record.slug,
