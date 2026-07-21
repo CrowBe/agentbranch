@@ -6,7 +6,7 @@ import {
   responseSchemaCorpus,
   type ResponseSchemaCorpusEntry,
 } from "@/modules/response-schema-corpus";
-import { toolContractCorpus, type ToolContractCorpusEntry } from "./index";
+import { toolContractCorpus, type ToolContractCorpusEntry } from "./corpus";
 
 export type ToolContractBundleFixture = {
   readonly id: string;

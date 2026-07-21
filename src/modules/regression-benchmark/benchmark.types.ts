@@ -21,6 +21,25 @@ export type BenchmarkScore = {
   /** passedCases / totalCases, 0..1. */
   readonly score: number;
   readonly perSkill: readonly BenchmarkSkillScore[];
+  readonly dimensions: {
+    readonly responseSchema: BenchmarkDimensionScore;
+    readonly toolContract: BenchmarkDimensionScore;
+    readonly safety: BenchmarkDimensionScore;
+  };
+};
+
+export type BenchmarkDimensionEntryScore = {
+  readonly corpusEntryId: string;
+  readonly contentHash: string;
+  readonly passed: boolean;
+};
+
+export type BenchmarkDimensionScore = {
+  readonly benchmarkSetHash: string;
+  readonly totalCases: number;
+  readonly passedCases: number;
+  readonly score: number;
+  readonly entries: readonly BenchmarkDimensionEntryScore[];
 };
 
 /** A persisted benchmark run, pinned to the harness version it scored. */

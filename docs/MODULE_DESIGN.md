@@ -194,7 +194,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **tool-contract-corpus** | `toolContractCorpus`, `toolContractBundleFixtures`, `ToolContractCorpusEntry`, `ToolContractBundleFixture` | — | real (curated, hash-pinned tool-contract fixtures with frozen lint expectations and composed bundle test-run inputs) |
 | **adversarial-safety-battery** | `adversarialSafetyBattery`, `adversarialTriggeringNegativePrompts`, `AdversarialCase` + types | — | real (curated, hash-pinned malicious/deceptive whole-folder fixtures across the §9.1 threat classes; freezes static policy expectations and documented latent non-detection) |
 | **harness-recommendation** | `harnessRecommendationCapability`, `CorpusCohort`, `HarnessRecommendationReport` + types | — | real (Tier-1 static correlation) |
-| **regression-benchmark** | `regressionBenchmarkSet`, `regressionBenchmarkSetHash`, `runRegressionBenchmark`, `BenchmarkRun` + types | `BenchmarkRunRepository` | real |
+| **regression-benchmark** | `regressionBenchmarkSet`, `responseSchemaBenchmarkSet`, `toolContractBenchmarkSet`, `safetyBenchmarkSet`, their set hashes, `runRegressionBenchmark`, `BenchmarkRun` + types | `BenchmarkRunRepository` | real |
 
 **Harness improvement loop (admin).** ARCHITECTURE §9 carries the design; the
 build spans three seams. The **aggregate read** is `listForAnalysis` on
@@ -206,10 +206,13 @@ cross into it, and the skill version's stored lint summary (score + fired
 rules) rides along as the static feature set. The **report** is the
 `harness-recommendation` module — an analysis capability whose `Input` is the
 corpus cohort. The **measurement guardrail** is the `regression-benchmark`
-module: the baseline corpus + curated batteries as a hash-pinned frozen set,
-scored through the triggering eval's competitive selection (`runBatteryCases`,
+module: the baseline corpus plus the response-schema, tool-contract, and safety
+corpora as independently hash-pinned frozen sets. Triggering is scored through
+the eval's competitive selection (`runBatteryCases`,
 candidate excluded from its own distractor field, `platform`-tagged) and
-recorded per harness version behind `BenchmarkRunRepository`. All three surface
+the other dimensions compare lint grade/finding codes or safety verdict/policy
+codes. All scores and set hashes are recorded per harness version behind
+`BenchmarkRunRepository`. All three surface
 only through the admin routes (below), gated by `isAdmin`.
 
 **Stub boundaries (where the real interface is set but behaviour is a

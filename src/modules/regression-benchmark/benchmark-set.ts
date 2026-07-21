@@ -1,5 +1,8 @@
 import { createHash } from "node:crypto";
 import { baselineSkillCorpus } from "@/modules/baseline-corpus";
+import { adversarialSafetyBattery } from "@/modules/adversarial-safety-battery";
+import { responseSchemaCorpus } from "@/modules/response-schema-corpus";
+import { toolContractCorpus } from "@/modules/tool-contract-corpus";
 import type { PromptCase } from "@/modules/triggering-eval";
 
 /** One skill in the frozen set: identity + the battery it is always scored on. */
@@ -17,15 +20,17 @@ export type BenchmarkEntry = {
  * varies is what makes scores across harness versions comparable — the set
  * hash below pins exactly what "fixed" means.
  */
-export const regressionBenchmarkSet: readonly BenchmarkEntry[] = baselineSkillCorpus.map(
-  (entry) => ({
+export const regressionBenchmarkSet: readonly BenchmarkEntry[] =
+  baselineSkillCorpus.map((entry) => ({
     corpusEntryId: entry.id,
     name: entry.name,
     description: entry.description,
     contentHash: entry.contentHash,
-    battery: entry.promptBattery.map((c) => ({ prompt: c.prompt, expected: c.expected })),
-  }),
-);
+    battery: entry.promptBattery.map((c) => ({
+      prompt: c.prompt,
+      expected: c.expected,
+    })),
+  }));
 
 /** Identity of the frozen set — changes iff a corpus skill or battery changes. */
 export const regressionBenchmarkSetHash: string = createHash("sha256")
@@ -40,3 +45,23 @@ export const regressionBenchmarkSetHash: string = createHash("sha256")
       .join("\n\n"),
   )
   .digest("hex");
+
+export const responseSchemaBenchmarkSet = responseSchemaCorpus;
+export const toolContractBenchmarkSet = toolContractCorpus;
+export const safetyBenchmarkSet = adversarialSafetyBattery;
+
+export const responseSchemaBenchmarkSetHash = hashCorpusSet(
+  responseSchemaBenchmarkSet,
+);
+export const toolContractBenchmarkSetHash = hashCorpusSet(
+  toolContractBenchmarkSet,
+);
+export const safetyBenchmarkSetHash = hashCorpusSet(safetyBenchmarkSet);
+
+function hashCorpusSet(
+  set: readonly { readonly id: string; readonly contentHash: string }[],
+): string {
+  return createHash("sha256")
+    .update(set.map((entry) => `${entry.id}:${entry.contentHash}`).join("\n"))
+    .digest("hex");
+}
