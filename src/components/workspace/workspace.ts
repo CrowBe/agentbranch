@@ -374,18 +374,34 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     }
   }
 
-  function showEquipment() {
+  async function showEquipment() {
     if (snapshot.busy) return;
     patch({
       mode: "equipment",
       capability: null,
       activeTool: null,
-      status:
-        snapshot.equipment.contracts.length + snapshot.equipment.schemas.length > 0
-          ? "Equipment ready — tool contracts run with your next test run."
-          : "Describe the output you want to build a response schema, or paste equipment to check it.",
+      status: "Loading equipment…",
+      entries: [],
     });
-    refreshEquipmentEntries(snapshot.equipment);
+    try {
+      const res = await fetchImpl("/api/equipment");
+      const body = await res.json().catch(() => null) as { equipment?: unknown } | null;
+      if (!res.ok) { fail(errorMessage(body, res.status)); return; }
+      const rows = Array.isArray(body?.equipment) ? body.equipment : [];
+      const contracts: Array<EquipmentState["contracts"][number]> = [];
+      const schemas: Array<EquipmentState["schemas"][number]> = [];
+      for (const value of rows) {
+        if (!value || typeof value !== "object") continue;
+        const item = value as Record<string, unknown>;
+        if (typeof item.id !== "string" || typeof item.name !== "string" || typeof item.document !== "string") continue;
+        const doc = { id: item.id, name: item.name, raw: item.document, contentHash: typeof item.contentHash === "string" ? item.contentHash : undefined };
+        if (item.kind === "tool-contract") contracts.push(doc);
+        else if (item.kind === "response-schema") schemas.push(doc);
+      }
+      const loaded: EquipmentState = { contracts, schemas };
+      patch({ equipment: loaded, status: rows.length ? "Equipment loaded." : "No saved equipment yet." });
+      refreshEquipmentEntries(loaded);
+    } catch (cause) { fail(friendlyError(String(cause))); }
   }
 
   async function showHistory(): Promise<void> {
@@ -655,13 +671,25 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
         actionLabel: "Open",
         onAction: () => focusEquipment(kind, doc.name, doc.raw),
         secondaryActionLabel: "Remove",
-        onSecondaryAction: () => {
-          const updated = removeEquipment(state, kind, doc.name);
-          patch({ equipment: updated });
-          refreshEquipmentEntries(updated);
-        },
+        onSecondaryAction: () => void deleteEquipment(doc.id, kind, doc.name),
       })),
     });
+  }
+
+  async function deleteEquipment(id: string, kind: EquipmentKind, name: string) {
+    const previous = snapshot.equipment;
+    const updated = removeEquipment(previous, kind, name);
+    patch({ equipment: updated, status: `Removing ${name}…` });
+    refreshEquipmentEntries(updated);
+    try {
+      const res = await fetchImpl(`/api/equipment/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok) { patch({ equipment: previous }); refreshEquipmentEntries(previous); fail(errorMessage(await res.json().catch(() => null), res.status)); return; }
+      patch({ status: `Removed ${name}.` });
+    } catch (cause) {
+      patch({ equipment: previous });
+      refreshEquipmentEntries(previous);
+      fail(friendlyError(String(cause)));
+    }
   }
 
   async function submitEquipment(raw: string): Promise<void> {
@@ -704,19 +732,21 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     raw: string,
   ): Promise<boolean> {
     const isContract = kind === "tool-contract";
-    const res = await fetchImpl(isContract ? "/api/tool-contract" : "/api/response-schema", {
+    const res = await fetchImpl("/api/equipment", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ document: raw, surface: "insights" }),
+      body: JSON.stringify({ kind, document: raw, surface: "insights" }),
     });
     const body = (await res.json().catch(() => null)) as unknown;
     if (!res.ok) {
       fail(errorMessage(body, res.status));
       return false;
     }
-    const insight = decodeEquipmentInsight(body);
+    const savedBody = body as { equipment?: { id?: unknown; contentHash?: unknown }; quality?: unknown };
+    const insight = decodeEquipmentInsight(savedBody.quality ?? body);
+    const savedId = typeof savedBody.equipment?.id === "string" ? savedBody.equipment.id : `${kind}-${name}`;
 
-    const next = storeEquipment(snapshot.equipment, kind, name, raw);
+    const next = storeEquipment(snapshot.equipment, kind, name, raw, savedId, typeof savedBody.equipment?.contentHash === "string" ? savedBody.equipment.contentHash : undefined);
     patch({
       capability: {
         kind: "lint-insights",
@@ -1659,8 +1689,10 @@ function storeEquipment(
   kind: EquipmentKind,
   name: string,
   raw: string,
+  id: string,
+  contentHash?: string,
 ): EquipmentState {
-  const doc = { name, raw };
+  const doc = { id, name, raw, contentHash };
   if (kind === "tool-contract") {
     return {
       ...state,

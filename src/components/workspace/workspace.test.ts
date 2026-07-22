@@ -625,7 +625,7 @@ describe("workspace choreography", () => {
     const workspace = createWorkspace(init, { fetch: fetchMock });
 
     await workspace.actions.submitEquipment(contract);
-    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/tool-contract", expect.anything());
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/equipment", expect.anything());
     expect(workspace.getSnapshot().equipment.contracts).toHaveLength(1);
     expect(workspace.getSnapshot().capability?.kind).toBe("lint-insights");
     expect(workspace.getSnapshot().entries[0]?.label).toBe("Tool contract: send_invoice_reminder");
@@ -681,7 +681,7 @@ describe("workspace choreography", () => {
     await workspace.actions.submitEquipment("A schema for my invoice summaries, just draft it");
 
     expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/response-schema/build", expect.anything());
-    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/response-schema", expect.anything());
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/equipment", expect.anything());
     const snapshot = workspace.getSnapshot();
     expect(snapshot.equipment.schemas).toHaveLength(1);
     expect(snapshot.equipment.schemas[0]?.name).toBe("invoice-summary");
@@ -731,7 +731,7 @@ describe("workspace choreography", () => {
     await workspace.actions.submitEquipment("A tool contract for invoice reminders, just draft it");
 
     expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/tool-contract/build", expect.anything());
-    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/tool-contract", expect.anything());
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/equipment", expect.anything());
     const snapshot = workspace.getSnapshot();
     expect(snapshot.equipment.contracts).toHaveLength(1);
     expect(snapshot.equipment.contracts[0]?.name).toBe("send_invoice_reminder");

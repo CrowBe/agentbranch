@@ -45,8 +45,8 @@ export type DraftSummary = {
   readonly description: string | null;
 };
 
-/** One checked equipment document kept for the session (raw JSON text). */
-export type EquipmentDoc = { readonly name: string; readonly raw: string };
+/** One checked equipment document saved for the account (raw JSON text). */
+export type EquipmentDoc = { readonly id: string; readonly name: string; readonly raw: string; readonly contentHash?: string };
 
 export type EquipmentState = {
   readonly contracts: readonly EquipmentDoc[];

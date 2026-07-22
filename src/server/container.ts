@@ -12,6 +12,7 @@ import type { HarnessVersion, HarnessVersionRepository } from "@/modules/harness
 import { currentHarnessManifest } from "@/modules/harness-version";
 import type { BenchmarkRunRepository } from "@/modules/regression-benchmark";
 import type { PublicationRepository, TapSyncTrigger } from "@/modules/publication";
+import type { EquipmentRepository } from "@/modules/equipment";
 import type { DomainError, Result } from "@/shared";
 
 import { readConfig, type AppConfig } from "./config";
@@ -28,6 +29,7 @@ import { createMemorySafetyRatingRepository } from "@/infra/memory/safety-rating
 import { createMemoryHarnessVersionRepository } from "@/infra/memory/harness-version.memory-repository";
 import { createMemoryBenchmarkRunRepository } from "@/infra/memory/benchmark.memory-repository";
 import { createMemoryPublicationRepository } from "@/infra/memory/publication.memory-repository";
+import { createMemoryEquipmentRepository } from "@/infra/memory/equipment.memory-repository";
 import { createPrismaClient } from "@/infra/prisma/client";
 import {
   createPrismaSkillRepository,
@@ -41,6 +43,7 @@ import { createPrismaSafetyRatingRepository } from "@/infra/prisma/safety-rating
 import { createPrismaHarnessVersionRepository } from "@/infra/prisma/harness-version.prisma-repository";
 import { createPrismaBenchmarkRunRepository } from "@/infra/prisma/benchmark.prisma-repository";
 import { createPrismaPublicationRepository } from "@/infra/prisma/publication.prisma-repository";
+import { createPrismaEquipmentRepository } from "@/infra/prisma/equipment.prisma-repository";
 import { createUserProvisioningAuth } from "@/infra/prisma/user-provisioning-auth";
 import { createModelRouter } from "@/infra/ai/model-router";
 import { createSdkModelCalls } from "@/infra/ai/sdk-model-calls";
@@ -83,6 +86,7 @@ export type AppContainer = {
   // route's persistence (ARCHITECTURE §9 harness improvement loop).
   readonly benchmarkRuns: BenchmarkRunRepository;
   readonly publications: PublicationRepository;
+  readonly equipment: EquipmentRepository;
   // Publish → public tap repo fast path (ARCHITECTURE §9.1 bot pipeline):
   // best-effort repository_dispatch; disabled without a token.
   readonly tapSync: TapSyncTrigger;
@@ -174,6 +178,9 @@ export function getContainer(): AppContainer {
     publications: prisma
       ? createPrismaPublicationRepository(prisma)
       : createMemoryPublicationRepository(memorySkillStore!),
+    equipment: prisma
+      ? createPrismaEquipmentRepository(prisma)
+      : createMemoryEquipmentRepository(),
     tapSync: config.flags.hasTapSync
       ? createGithubTapSyncTrigger({
           repository: config.tapSync.repository,
