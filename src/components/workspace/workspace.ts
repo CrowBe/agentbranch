@@ -4,6 +4,7 @@ import type {
   BuildMessage,
   ResponseSchemaLoopEvent,
   ToolContractLoopEvent,
+  SubagentDefinitionLoopEvent,
 } from "@/modules/build-loop";
 import {
   formatTestRunFeedback,
@@ -28,6 +29,7 @@ import {
   serializeToolContract,
   type ToolContractSource,
 } from "@/modules/tool-contract";
+import { createSubagentDefinitionLintReport, parseSubagentDefinition, serializeSubagentDefinition, type SubagentDefinitionSource } from "@/modules/subagent-definition";
 import {
   createHeroArtifact,
   renderedRenderer,
@@ -117,7 +119,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     entries: [],
     capability: null,
     activeTool: null,
-    equipment: { contracts: [], schemas: [] },
+    equipment: { contracts: [], schemas: [], subagentDefinitions: [] },
     safetyRating: null,
     branchId: null,
     openDrafts: [],
@@ -136,6 +138,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
   let equipmentMessages: readonly BuildMessage[] = [];
   let responseSchemaDraft: ResponseSchemaSource | null = null;
   let toolContractDraft: ToolContractSource | null = null;
+  let subagentDefinitionDraft: SubagentDefinitionSource | null = null;
   let entrySeq = 0;
 
   const listeners = new Set<() => void>();
@@ -321,7 +324,8 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
   function focusEquipment(kind: EquipmentKind, name: string, raw: string) {
     const rendered = renderEquipmentDocs(kind, raw);
     if (!rendered) return;
-    patch({ heroFocus: { kind, name, raw }, heroDocs: rendered.docs, lintSummary: rendered.summary, capability: null, activeTool: null, view: "rendered", status: `${kind === "tool-contract" ? "Tool contract" : "Response schema"} "${name}" opened.` });
+    const label = kind === "tool-contract" ? "Tool contract" : kind === "response-schema" ? "Response schema" : "Subagent definition";
+    patch({ heroFocus: { kind, name, raw }, heroDocs: rendered.docs, lintSummary: rendered.summary, capability: null, activeTool: null, view: "rendered", status: `${label} "${name}" opened.` });
   }
 
   function renderEquipmentDocs(kind: EquipmentKind, raw: string): { docs: HeroDocs; summary: SkillVersionLintSummary } | null {
@@ -330,6 +334,12 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       if (!parsed.ok) return null;
       const report = createResponseSchemaLintReport(parsed.value);
       return { docs: { rendered: responseSchemaRenderedRenderer.render(report), source: responseSchemaSourceRenderer.render(report) }, summary: report.summary };
+    }
+    if (kind === "subagent-definition") {
+      const parsed = parseSubagentDefinition(raw); if (!parsed.ok) return null;
+      const report = createSubagentDefinitionLintReport(parsed.value);
+      const source = parsed.value;
+      return { docs: { rendered: { title: source.frontmatter.name, description: source.frontmatter.description, sections: [{ heading: "Instructions", level: 2, body: source.body, span: { start: 0, end: source.body.length } }, ...(source.frontmatter.tools?.length ? [{ heading: "Tools", level: 2 as const, body: source.frontmatter.tools.join("\n"), span: { start: 0, end: 0 } }] : [])] }, source: { markdown: serializeSubagentDefinition(source) } }, summary: report.summary };
     }
     const parsed = parseToolContract(raw);
     if (!parsed.ok) return null;
@@ -390,6 +400,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       const rows = Array.isArray(body?.equipment) ? body.equipment : [];
       const contracts: Array<EquipmentState["contracts"][number]> = [];
       const schemas: Array<EquipmentState["schemas"][number]> = [];
+      const subagentDefinitions: Array<EquipmentState["subagentDefinitions"][number]> = [];
       for (const value of rows) {
         if (!value || typeof value !== "object") continue;
         const item = value as Record<string, unknown>;
@@ -397,8 +408,9 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
         const doc = { id: item.id, name: item.name, raw: item.document, contentHash: typeof item.contentHash === "string" ? item.contentHash : undefined };
         if (item.kind === "tool-contract") contracts.push(doc);
         else if (item.kind === "response-schema") schemas.push(doc);
+        else if (item.kind === "subagent-definition") subagentDefinitions.push(doc);
       }
-      const loaded: EquipmentState = { contracts, schemas };
+      const loaded: EquipmentState = { contracts, schemas, subagentDefinitions };
       patch({ equipment: loaded, status: rows.length ? "Equipment loaded." : "No saved equipment yet." });
       refreshEquipmentEntries(loaded);
     } catch (cause) { fail(friendlyError(String(cause))); }
@@ -663,11 +675,12 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     const docs = [
       ...state.contracts.map((doc) => ({ doc, kind: "tool-contract" as const })),
       ...state.schemas.map((doc) => ({ doc, kind: "response-schema" as const })),
+      ...state.subagentDefinitions.map((doc) => ({ doc, kind: "subagent-definition" as const })),
     ];
     patch({
       entries: docs.map(({ doc, kind }) => ({
         id: `${kind}-${doc.name}`,
-        label: `${kind === "tool-contract" ? "Tool contract" : "Response schema"}: ${doc.name}`,
+        label: `${kind === "tool-contract" ? "Tool contract" : kind === "response-schema" ? "Response schema" : "Subagent definition"}: ${doc.name}`,
         actionLabel: "Open",
         onAction: () => focusEquipment(kind, doc.name, doc.raw),
         secondaryActionLabel: "Remove",
@@ -703,9 +716,10 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     }
 
     const isContract = detected.kind === "tool-contract";
+    const isDefinition = detected.kind === "subagent-definition";
     patch({
       equipmentBusy: true,
-      status: isContract ? "Checking tool contract…" : "Checking response schema…",
+      status: isContract ? "Checking tool contract…" : isDefinition ? "Checking subagent definition…" : "Checking response schema…",
     });
     try {
       const kept = await checkAndKeepEquipment(detected.kind, detected.name, raw);
@@ -714,6 +728,8 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       patch({
         status: isContract
           ? `Tool contract "${detected.name}" checked — it runs with your next test run.`
+          : isDefinition
+            ? `Subagent definition "${detected.name}" checked and kept.`
           : `Response schema "${detected.name}" checked and kept for tool contracts to reference.`,
       });
     } catch (cause) {
@@ -750,7 +766,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     patch({
       capability: {
         kind: "lint-insights",
-        title: isContract ? "Tool contract quality" : "Response schema quality",
+        title: isContract ? "Tool contract quality" : kind === "subagent-definition" ? "Subagent definition quality" : "Response schema quality",
         insight,
         subject: { kind, raw },
       },
@@ -773,9 +789,10 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     ];
     equipmentMessages = nextMessages;
     const isContract = kind === "tool-contract";
+    const isDefinition = kind === "subagent-definition";
     patch({
       entries: [...snapshot.entries, entry(message)],
-      status: isContract ? "Building tool contract…" : "Building response schema…",
+      status: isContract ? "Building tool contract…" : isDefinition ? "Building subagent definition…" : "Building response schema…",
       equipmentBusy: true,
       capability: null,
     });
@@ -786,7 +803,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
 
     try {
       const res = await fetchImpl(
-        isContract ? "/api/tool-contract/build" : "/api/response-schema/build",
+        isContract ? "/api/tool-contract/build" : isDefinition ? "/api/subagent-definition/build" : "/api/response-schema/build",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -796,6 +813,10 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
               ? toolContractDraft
                 ? serializeToolContract(toolContractDraft)
                 : undefined
+              : isDefinition
+                ? subagentDefinitionDraft
+                  ? serializeSubagentDefinition(subagentDefinitionDraft)
+                  : undefined
               : responseSchemaDraft
                 ? serializeResponseSchema(responseSchemaDraft)
                 : undefined,
@@ -812,7 +833,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
         return;
       }
 
-      for await (const event of readSseEvents<ResponseSchemaLoopEvent | ToolContractLoopEvent>(res.body)) {
+      for await (const event of readSseEvents<ResponseSchemaLoopEvent | ToolContractLoopEvent | SubagentDefinitionLoopEvent>(res.body)) {
         if (event.event === "text") {
           assistantText += event.data.delta;
           patch({ entries: upsertAssistant(snapshot.entries, assistantText) });
@@ -859,6 +880,17 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
           }
           toolContractDraft = edited.value;
           focusEquipment("tool-contract", toolContractDraft.name || "Working draft", serializeToolContract(toolContractDraft));
+        } else if (event.event === "subagent-definition") {
+          subagentDefinitionDraft = event.data.source;
+          focusEquipment("subagent-definition", subagentDefinitionDraft.frontmatter.name || "Working draft", serializeSubagentDefinition(subagentDefinitionDraft));
+        } else if (event.event === "subagent-definition-edit") {
+          if (!subagentDefinitionDraft) { appendEntry(entry("No draft exists to edit yet.", "error")); continue; }
+          const raw = serializeSubagentDefinition(subagentDefinitionDraft);
+          if (!raw.includes(event.data.oldStr)) { appendEntry(entry("The exact text to replace was not found.", "error")); continue; }
+          const edited = parseSubagentDefinition(raw.replace(event.data.oldStr, event.data.newStr));
+          if (!edited.ok) { appendEntry(entry(edited.error.message, "error")); continue; }
+          subagentDefinitionDraft = edited.value;
+          focusEquipment("subagent-definition", subagentDefinitionDraft.frontmatter.name || "Working draft", serializeSubagentDefinition(subagentDefinitionDraft));
         } else if (event.event === "lint-feedback") {
           pendingLintFeedback = event.data.feedback;
         } else if (event.event === "error") {
@@ -890,24 +922,32 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       ? toolContractDraft
         ? serializeToolContract(toolContractDraft)
         : null
+      : isDefinition
+        ? subagentDefinitionDraft
+          ? serializeSubagentDefinition(subagentDefinitionDraft)
+          : null
       : responseSchemaDraft
         ? serializeResponseSchema(responseSchemaDraft)
         : null;
     if (completed && finishedRaw) {
       const name = isContract
         ? toolContractDraft?.name || "untitled contract"
+        : isDefinition
+          ? subagentDefinitionDraft?.frontmatter.name || "untitled definition"
         : responseSchemaDraft
           ? responseSchemaName(responseSchemaDraft) || "untitled schema"
           : "untitled schema";
       patch({
         equipmentBusy: true,
-        status: isContract ? "Checking tool contract…" : "Checking response schema…",
+        status: isContract ? "Checking tool contract…" : isDefinition ? "Checking subagent definition…" : "Checking response schema…",
       });
       try {
         const kept = await checkAndKeepEquipment(kind, name, finishedRaw);
         if (kept) {
           const done = isContract
             ? `Tool contract "${name}" checked — it runs with your next test run.`
+            : isDefinition
+              ? `Subagent definition "${name}" checked and kept.`
             : `Response schema "${name}" checked and kept for tool contracts to reference.`;
           appendEntry(entry(done, "muted"));
           patch({ status: done });
@@ -1308,12 +1348,13 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       if (snapshot.lintBusy) return;
       patch({ activeTool: null, lintBusy: true, status: "Quality running…" });
       try {
-        const res = await fetchImpl(subject.kind === "tool-contract" ? "/api/tool-contract" : "/api/response-schema", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ document: subject.raw, surface }) });
+        const route = subject.kind === "tool-contract" ? "/api/tool-contract" : subject.kind === "subagent-definition" ? "/api/subagent-definition" : "/api/response-schema";
+        const res = await fetchImpl(route, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ document: subject.raw, surface }) });
         const body = (await res.json().catch(() => null)) as unknown;
         if (!res.ok) { fail(errorMessage(body, res.status)); return; }
         const panel = decodeLintPanel(surface, body);
         if (panel.kind !== "lint-insights" && panel.kind !== "lint-breakdown") { fail("Equipment check returned an unexpected response."); return; }
-        patch({ capability: { ...panel, title: subject.kind === "tool-contract" ? "Tool contract quality" : "Response schema quality", subject }, status: "Quality ready." });
+        patch({ capability: { ...panel, title: subject.kind === "tool-contract" ? "Tool contract quality" : subject.kind === "subagent-definition" ? "Subagent definition quality" : "Response schema quality", subject }, status: "Quality ready." });
       } catch (cause) { fail(friendlyError(String(cause))); } finally { patch({ lintBusy: false }); }
       return;
     }
@@ -1651,6 +1692,7 @@ function appendProgressCase(
  * document). The server re-parses through the real source models either way.
  */
 function selectEquipmentAuthoringKind(message: string): EquipmentKind {
+  if (/\b(subagent|sub-agent|helper|specialist|delegate|delegat(?:e|ion|ing))\b/i.test(message)) return "subagent-definition";
   return /\b(tool|contract|input|output|failure mode|confirmation boundary|confirm before)\b/i.test(
     message,
   )
@@ -1661,11 +1703,13 @@ function selectEquipmentAuthoringKind(message: string): EquipmentKind {
 function detectEquipmentKind(raw: string):
   | { readonly ok: true; readonly kind: EquipmentKind; readonly name: string }
   | { readonly ok: false; readonly error: string } {
+  const definition = parseSubagentDefinition(raw);
+  if (definition.ok) return { ok: true, kind: "subagent-definition", name: definition.value.frontmatter.name };
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return { ok: false, error: "Equipment must be a JSON document." };
+    return { ok: false, error: "Describe equipment in chat, or paste a response schema, tool contract, or subagent definition." };
   }
   if (parsed === null || typeof parsed !== "object") {
     return { ok: false, error: "Equipment must be a JSON object." };
@@ -1699,6 +1743,7 @@ function storeEquipment(
       contracts: [...state.contracts.filter((item) => item.name !== name), doc],
     };
   }
+  if (kind === "subagent-definition") return { ...state, subagentDefinitions: [...state.subagentDefinitions.filter((item) => item.name !== name), doc] };
   return { ...state, schemas: [...state.schemas.filter((item) => item.name !== name), doc] };
 }
 
@@ -1706,5 +1751,6 @@ function removeEquipment(state: EquipmentState, kind: EquipmentKind, name: strin
   if (kind === "tool-contract") {
     return { ...state, contracts: state.contracts.filter((item) => item.name !== name) };
   }
+  if (kind === "subagent-definition") return { ...state, subagentDefinitions: state.subagentDefinitions.filter((item) => item.name !== name) };
   return { ...state, schemas: state.schemas.filter((item) => item.name !== name) };
 }

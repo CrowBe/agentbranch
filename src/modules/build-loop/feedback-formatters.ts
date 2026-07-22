@@ -3,6 +3,7 @@ import type { CaseResult, TriggeringResult } from "@/modules/triggering-eval";
 import type { LintFinding, LintReport } from "@/modules/lint";
 import type { ResponseSchemaLintReport } from "@/modules/response-schema";
 import type { ToolContractLintReport } from "@/modules/tool-contract";
+import type { SubagentDefinitionLintReport } from "@/modules/subagent-definition";
 
 export function formatTriggeringEvalFeedback(result: TriggeringResult): string {
   const lines = [
@@ -119,6 +120,18 @@ export function formatToolContractLintFeedback(report: ToolContractLintReport): 
     ...formatLintSection("Info:", report.findings, "info"),
     "",
     "Please revise the tool contract to address these lint findings. Fix errors first, then tighten warnings.",
+  ].join("\n");
+}
+
+export function formatSubagentDefinitionLintFeedback(report: SubagentDefinitionLintReport): string | null {
+  if (report.findings.length === 0) return null;
+  return [
+    `Lint - Quality ${report.summary.grade} ${report.summary.score}/100`, "",
+    "The deterministic lint pass found issues in the current subagent definition.", "",
+    ...formatLintSection("Errors:", report.findings, "error"), "",
+    ...formatLintSection("Warnings:", report.findings, "warn"), "",
+    ...formatLintSection("Info:", report.findings, "info"), "",
+    "Please revise the subagent definition to address these lint findings. Fix errors first, then tighten warnings.",
   ].join("\n");
 }
 

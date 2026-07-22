@@ -3,13 +3,14 @@ import { getContainer } from "@/server/container";
 import { runCapability } from "@/modules/skill-analysis";
 import { parseResponseSchema, responseSchemaCapability, responseSchemaName } from "@/modules/response-schema";
 import { parseToolContract, toolContractCapability } from "@/modules/tool-contract";
+import { parseSubagentDefinition, subagentDefinitionCapability } from "@/modules/subagent-definition";
 import { domainErrorResponse } from "../_shared/skill-request";
 import { invalidRequestResponse, parseJsonRequest } from "../_shared/request-body";
 
 export const runtime = "nodejs";
 
 const requestSchema = z.object({
-  kind: z.enum(["response-schema", "tool-contract"]),
+  kind: z.enum(["response-schema", "tool-contract", "subagent-definition"]),
   document: z.string().min(1),
   surface: z.enum(["insights", "breakdown"]).default("insights"),
 });
@@ -35,9 +36,10 @@ export async function POST(request: Request): Promise<Response> {
 
   const contract = parsed.data.kind === "tool-contract" ? parseToolContract(parsed.data.document) : null;
   const schema = parsed.data.kind === "response-schema" ? parseResponseSchema(parsed.data.document) : null;
-  const sourceError = contract && !contract.ok ? contract.error : schema && !schema.ok ? schema.error : null;
+  const definition = parsed.data.kind === "subagent-definition" ? parseSubagentDefinition(parsed.data.document) : null;
+  const sourceError = contract && !contract.ok ? contract.error : schema && !schema.ok ? schema.error : definition && !definition.ok ? definition.error : null;
   if (sourceError) return invalidRequestResponse(sourceError.message);
-  if (!contract?.ok && !schema?.ok) return invalidRequestResponse("Equipment could not be parsed.");
+  if (!contract?.ok && !schema?.ok && !definition?.ok) return invalidRequestResponse("Equipment could not be parsed.");
   let name: string;
   let result;
   if (contract?.ok) {
@@ -46,6 +48,9 @@ export async function POST(request: Request): Promise<Response> {
   } else if (schema?.ok) {
     name = responseSchemaName(schema.value);
     result = await runCapability(responseSchemaCapability, parsed.data.surface, schema.value);
+  } else if (definition?.ok) {
+    name = definition.value.frontmatter.name;
+    result = await runCapability(subagentDefinitionCapability, parsed.data.surface, definition.value);
   } else {
     return invalidRequestResponse("Equipment could not be parsed.");
   }

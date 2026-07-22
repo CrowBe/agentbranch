@@ -28,7 +28,7 @@ into a labelled slideout (name = visible text, `aria-label` gone), so a CSS
 | Build | `Build` | `Describe your skill` — chat drives the build loop |
 | Import | `Import` | `Import a skill` — paste `SKILL.md` or a public GitHub URL |
 | My skills | `My skills` | saved-skill list with `Open` cards |
-| Equipment | `Equipment` | paste a response schema / tool contract, or chat-author one |
+| Equipment | `Equipment` | paste a response schema / tool contract / subagent definition, or chat-author one |
 | History | `History` | revision + run entries, restore cards |
 | Templates | `Templates` | reviewed Skill-library entries + search |
 | Models | `Models` | model console overlay (admin-gated when auth is on) |
@@ -70,7 +70,7 @@ into a labelled slideout (name = visible text, `aria-label` gone), so a CSS
 
 Skill-carrying POSTs take a structured source, not raw `SKILL.md` text:
 `{ "skill": { "frontmatter": { "name", "description" }, "body" } }`.
-Equipment quality routes take `{ "document": "<JSON string>", "surface": "insights" | "breakdown" }`.
+Equipment quality routes take `{ "document": "<source string>", "surface": "insights" | "breakdown" }`.
 
 | Route | Method | Auth | Offline (no model / memory adapters) |
 |---|---|---|---|
@@ -89,6 +89,8 @@ Equipment quality routes take `{ "document": "<JSON string>", "surface": "insigh
 | `/api/response-schema/build` | POST (SSE) | signed-in | stream opens; provider-key error streamed |
 | `/api/tool-contract` | POST | signed-in | works — pure quality check |
 | `/api/tool-contract/build` | POST (SSE) | signed-in | stream opens; provider-key error streamed |
+| `/api/subagent-definition` | POST | signed-in | works — pure quality check |
+| `/api/subagent-definition/build` | POST (SSE) | signed-in | stream opens; provider-key error streamed |
 | `/api/equipment` · `/api/equipment/[id]` | GET/POST/DELETE | signed-in | works against memory adapters; checked documents are saved account-side |
 | `/api/skills` · `/api/skills/[id]` · `…/restore` · `…/runs` · `…/branches[...]` | GET/POST/DELETE | signed-in | work against memory adapters (state resets on restart) |
 | `/api/skill-library` (`?surface=templates`, `?q=`, `?category=`, `?tag=`, `?slug=`) | GET | public read | works — pure read over publications |
@@ -236,13 +238,14 @@ independent · offline-safe for the paste path
 | 2 | fill plain language (e.g. `a schema for invoice summaries`), click | `textarea`, then button `Send` | routes to the chat authoring loop; **offline** it fails with `No API key for "<provider>". Add one in the model console or .env.local.` |
 | 3 | fill a JSON Schema (`{"title":"Invoice summary","type":"object",…}`), click | `textarea`, then button `Send` | `Checking response schema…` → `Response schema "Invoice summary" checked and kept for tool contracts to reference.` |
 | 4 | fill a tool contract (`{"name":"fetch_unread_email","description":…,"input":…,"output":…}`), click | `textarea`, then button `Send` | `Checking tool contract…` → `Tool contract "fetch_unread_email" checked — it runs with your next test run.` |
-| 5 | click the response schema card's `Open` | response schema card button `Open` | `Response schema "Invoice summary" opened.`; hero heading `Invoice summary`; Rendered/Source toggle remains available |
-| 6 | click the hero quality chip, then `Breakdown` | `button[aria-label^="Quality"]`, then button `Breakdown` | `Quality ready.`; Breakdown heading remains `Response schema quality` and posts the schema to `/api/response-schema` |
-| 7 | click | button `Back to skill` | `Skill opened.` and the skill-only chips return |
+| 5 | fill frontmatter markdown (`name: invoice-reviewer`, `description: …`, body instructions), click | `textarea`, then button `Send` | `Checking subagent definition…` → `Subagent definition "invoice-reviewer" checked and kept.` |
+| 6 | click the subagent definition card's `Open` | subagent definition card button `Open` | `Subagent definition "invoice-reviewer" opened.`; hero heading `invoice-reviewer`; Rendered/Source toggle remains available |
+| 7 | click the hero quality chip, then `Breakdown` | `button[aria-label^="Quality"]`, then button `Breakdown` | `Quality ready.`; Breakdown heading remains `Subagent definition quality` and posts the definition to `/api/subagent-definition` |
+| 8 | click | button `Back to skill` | `Skill opened.` and the skill-only chips return |
 
-Routing rule: JSON object with string `name` + `description` → tool contract;
-other JSON object → response schema (named by `title`); anything that isn't a
-JSON object → a chat turn for the authoring loop. Checked contracts bundle
+Routing rule: frontmatter markdown with string `name` + `description` → subagent definition;
+JSON object with string `name` + `description` → tool contract; other JSON object → response schema
+(named by `title`); anything else → a chat turn for the authoring loop. Checked contracts bundle
 into the next test run automatically.
 
 ### WALK-11 · Templates / Skill library
@@ -313,16 +316,16 @@ an unrecorded `no` is a finding.
 
 Recorded state (update in the same change that truly moves a cell):
 
-| Core experience | Skill | Response schema | Tool contract |
-|---|---|---|---|
-| Hero document view (Rendered/Source) | yes | yes | yes |
-| Quality Insights panel | yes (chip + panel) | yes, after check/authoring | yes |
-| Quality Breakdown panel | yes | yes | yes |
-| Chat authoring loop | yes | yes | yes |
-| Persistence beyond the session | yes (skill records + drafts) | yes | yes |
-| History / past runs | yes | no — accepted gap (#218 non-goals) | no |
-| Export | yes | no — accepted gap (#218 non-goals) | no |
-| Publish / Skill library | yes | no — accepted gap (#218 non-goals) | no |
+| Core experience | Skill | Response schema | Tool contract | Subagent definition |
+|---|---|---|---|---|
+| Hero document view (Rendered/Source) | yes | yes | yes | yes |
+| Quality Insights panel | yes (chip + panel) | yes, after check/authoring | yes | yes |
+| Quality Breakdown panel | yes | yes | yes | yes |
+| Chat authoring loop | yes | yes | yes | yes |
+| Persistence beyond the session | yes (skill records + drafts) | yes | yes | yes |
+| History / past runs | yes | no — accepted gap (#218 non-goals) | no | no |
+| Export | yes | no — accepted gap (#218 non-goals) | no | no |
+| Publish / Skill library | yes | no — accepted gap (#218 non-goals) | no | no |
 
 ### QUAL-02 · Module-reachability ledger
 
