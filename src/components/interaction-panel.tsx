@@ -128,9 +128,9 @@ function copyForMode(mode: InteractionMode): {
     return {
       title: "Equipment",
       empty:
-        "Describe the output you want — the authoring agent asks a few questions, then drafts the response schema with you. Or paste a response schema or tool contract to quality-check it. Checked tool contracts run with your next test run.",
+        "Describe an output, tool, or specialist you want to build. The authoring agent asks a few questions, then drafts a response schema, tool contract, or subagent definition with you. You can also paste any of the three to quality-check it.",
       hint: 'Say "just draft it" if you don\'t want any questions before the first draft.',
-      placeholder: "e.g. A schema for the invoice summaries my billing skill returns",
+      placeholder: "e.g. A helper that reviews my invoices",
       button: "Send",
       busy: "Working…",
     };

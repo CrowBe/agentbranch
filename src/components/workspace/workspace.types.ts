@@ -51,9 +51,10 @@ export type EquipmentDoc = { readonly id: string; readonly name: string; readonl
 export type EquipmentState = {
   readonly contracts: readonly EquipmentDoc[];
   readonly schemas: readonly EquipmentDoc[];
+  readonly subagentDefinitions: readonly EquipmentDoc[];
 };
 
-export type EquipmentKind = "tool-contract" | "response-schema";
+export type EquipmentKind = "tool-contract" | "response-schema" | "subagent-definition";
 export type HeroFocus = { readonly kind: "skill" } | { readonly kind: EquipmentKind; readonly name: string; readonly raw: string };
 
 export type SkillLibraryEntryPanel = {

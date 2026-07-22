@@ -746,6 +746,24 @@ describe("workspace choreography", () => {
     ]);
   });
 
+  it("routes and keeps subagent definitions from paste and plain-language authoring", async () => {
+    const raw = `---\nname: invoice-reviewer\ndescription: Review invoices when a second specialist should check totals.\ntools:\n  - read_invoice\n---\n\nReview totals and escalate mismatches.`;
+    const source = { frontmatter: { name: "invoice-reviewer", description: "Review invoices when a second specialist should check totals.", tools: ["read_invoice"], extra: {} }, body: "Review totals and escalate mismatches." };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({ score: 95, grade: "A", summary: "Solid definition.", findings: [], watch: [] }))
+      .mockResolvedValueOnce(sseResponse([{ event: "subagent-definition", data: { source } }, { event: "done", data: { finishReason: "stop" } }]))
+      .mockResolvedValueOnce(Response.json({ score: 95, grade: "A", summary: "Solid definition.", findings: [], watch: [] }));
+    const workspace = createWorkspace(init, { fetch: fetchMock });
+
+    await workspace.actions.submitEquipment(raw);
+    expect(workspace.getSnapshot().equipment.subagentDefinitions[0]?.name).toBe("invoice-reviewer");
+    expect(workspace.getSnapshot().status).toBe('Subagent definition "invoice-reviewer" checked and kept.');
+
+    await workspace.actions.submitEquipment("I need a helper that reviews invoices, just draft it");
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/subagent-definition/build", expect.anything());
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/equipment", expect.anything());
+  });
+
   it("applies streamed schema edits and hands lint feedback back as the next authoring turn", async () => {
     const draft = {
       title: "invoice-summary",

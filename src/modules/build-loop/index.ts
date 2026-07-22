@@ -20,6 +20,7 @@ export {
   formatLintFeedback,
   formatResponseSchemaLintFeedback,
   formatToolContractLintFeedback,
+  formatSubagentDefinitionLintFeedback,
   formatTestRunFeedback,
   formatTriggeringEvalFeedback,
 } from "./feedback-formatters";
@@ -39,3 +40,6 @@ export {
 } from "./tool-contract-loop";
 export { toolContractTools, type ToolContractToolName } from "./tool-contract-tools";
 export { TOOL_CONTRACT_AUTHORING_PROMPT } from "./tool-contract-prompt";
+export { runSubagentDefinitionLoop, type SubagentDefinitionLoopEvent, type SubagentDefinitionLoopInput } from "./subagent-definition-loop";
+export { subagentDefinitionTools } from "./subagent-definition-tools";
+export { SUBAGENT_DEFINITION_AUTHORING_PROMPT } from "./subagent-definition-prompt";

@@ -4,7 +4,7 @@ export const EQUIPMENT_COUNT_MAX = 50;
 export const EQUIPMENT_CAP_MESSAGE =
   "You're at your equipment limit - remove a saved document to make room.";
 
-export type EquipmentKind = "response-schema" | "tool-contract";
+export type EquipmentKind = "response-schema" | "tool-contract" | "subagent-definition";
 
 export type Equipment = {
   readonly id: string;
