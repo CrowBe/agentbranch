@@ -201,6 +201,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       lintSummary: null,
     });
     let assistantText = "";
+    const assistantEntryId = entry("").id;
     let latestSource = startingSource;
     let latestSkillId = startingSkillId;
     let completedMessages: readonly BuildMessage[] = nextMessages;
@@ -233,7 +234,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       for await (const event of readSseEvents<BuildLoopEvent>(res.body)) {
         if (event.event === "text") {
           assistantText += event.data.delta;
-          patch({ entries: upsertAssistant(snapshot.entries, assistantText) });
+          patch({ entries: upsertAssistant(snapshot.entries, assistantEntryId, assistantText) });
         } else if (event.event === "tool") {
           patch({
             status: event.data.phase === "call" ? `Running ${event.data.name}…` : "Updating preview…",
@@ -798,6 +799,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     });
 
     let assistantText = "";
+    const assistantEntryId = entry("").id;
     let pendingLintFeedback: string | null = null;
     let completed = false;
 
@@ -836,7 +838,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       for await (const event of readSseEvents<ResponseSchemaLoopEvent | ToolContractLoopEvent | SubagentDefinitionLoopEvent>(res.body)) {
         if (event.event === "text") {
           assistantText += event.data.delta;
-          patch({ entries: upsertAssistant(snapshot.entries, assistantText) });
+          patch({ entries: upsertAssistant(snapshot.entries, assistantEntryId, assistantText) });
         } else if (event.event === "tool") {
           patch({
             status:
@@ -1579,12 +1581,16 @@ function decodeMetadataSuggestion(value: unknown, requireTags: boolean): Metadat
   return { name, description, category, tags, rationale };
 }
 
-function upsertAssistant(entries: readonly InteractionEntry[], label: string): InteractionEntry[] {
+function upsertAssistant(
+  entries: readonly InteractionEntry[],
+  id: string,
+  label: string,
+): InteractionEntry[] {
   const last = entries.at(-1);
-  if (last?.id === "assistant-stream") {
+  if (last?.id === id) {
     return [...entries.slice(0, -1), { ...last, label }];
   }
-  return [...entries, { id: "assistant-stream", label }];
+  return [...entries, { id, label }];
 }
 
 function isLintFeedbackMessage(message: string): boolean {
