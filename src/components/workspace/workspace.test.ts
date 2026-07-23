@@ -439,12 +439,18 @@ describe("workspace choreography", () => {
       .fn()
       .mockResolvedValueOnce(
         sseResponse([
+          { event: "text", data: { delta: "Drafting the skill." } },
           { event: "skill", data: { source: skill } },
           { event: "lint-feedback", data: { feedback: "Lint - Quality C 70/100\n\nWarnings:\n- Add an example." } },
           { event: "done", data: { skillId: "skill-1", revision: 1 } },
         ]),
       )
-      .mockResolvedValueOnce(sseResponse([{ event: "done", data: { skillId: "skill-1", revision: 2 } }]));
+      .mockResolvedValueOnce(
+        sseResponse([
+          { event: "text", data: { delta: "Added an example." } },
+          { event: "done", data: { skillId: "skill-1", revision: 2 } },
+        ]),
+      );
     const workspace = createWorkspace(init, { fetch: fetchMock });
 
     await workspace.actions.send("Make a calendar planner");
@@ -454,6 +460,16 @@ describe("workspace choreography", () => {
       messages: readonly { role: string; content: string }[];
     };
     expect(second.messages.at(-1)?.content).toContain("Lint - Quality C 70/100");
+    const assistantEntries = workspace
+      .getSnapshot()
+      .entries.filter((entry) =>
+        ["Drafting the skill.", "Added an example."].includes(entry.label),
+      );
+    expect(assistantEntries.map((entry) => entry.label)).toEqual([
+      "Drafting the skill.",
+      "Added an example.",
+    ]);
+    expect(new Set(assistantEntries.map((entry) => entry.id)).size).toBe(2);
   });
 
   it("starts, promotes, and refuses drafts through the confirm edge", async () => {
