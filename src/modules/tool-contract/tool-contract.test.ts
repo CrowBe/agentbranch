@@ -29,6 +29,12 @@ const SEND_INVOICE = {
   safetyNotes: ["Sends outbound email on the user's behalf."],
 } as const;
 
+const FLAWED_SEND_INVOICE = {
+  ...SEND_INVOICE,
+  description: "Does stuff.",
+  failureModes: [],
+} as const;
+
 describe("tool-contract source model", () => {
   it("renders the job, shapes, examples, failures, safety notes, and source", () => {
     const report = createToolContractLintReport(unwrap(parseToolContract(JSON.stringify(SEND_INVOICE))));
@@ -91,6 +97,19 @@ describe("tool-contract source model", () => {
 });
 
 describe("tool-contract lint", () => {
+  it("keeps the QUAL-03 sensitivity probe parseable and discriminating", () => {
+    const clean = createToolContractLintReport(
+      unwrap(parseToolContract(JSON.stringify(SEND_INVOICE))),
+    );
+    const flawed = createToolContractLintReport(
+      unwrap(parseToolContract(JSON.stringify(FLAWED_SEND_INVOICE))),
+    );
+
+    expect(clean.summary).toMatchObject({ grade: "A", score: 100 });
+    expect(flawed.summary).toMatchObject({ grade: "B", score: 76 });
+    expect(clean.summary.score - flawed.summary.score).toBeGreaterThan(5);
+  });
+
   it("passes a complete contract without errors", () => {
     const report = createToolContractLintReport(
       unwrap(parseToolContract(JSON.stringify(SEND_INVOICE))),
