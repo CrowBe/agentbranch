@@ -41,5 +41,5 @@ export {
 export { toolContractTools, type ToolContractToolName } from "./tool-contract-tools";
 export { TOOL_CONTRACT_AUTHORING_PROMPT } from "./tool-contract-prompt";
 export { runSubagentDefinitionLoop, type SubagentDefinitionLoopEvent, type SubagentDefinitionLoopInput } from "./subagent-definition-loop";
-export { subagentDefinitionTools } from "./subagent-definition-tools";
+export { createSubagentDefinitionTools } from "./subagent-definition-tools";
 export { SUBAGENT_DEFINITION_AUTHORING_PROMPT } from "./subagent-definition-prompt";
