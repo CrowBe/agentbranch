@@ -33,9 +33,10 @@ npm test                # vitest, single run
 npm run check:docs      # doc-drift guard (modules ↔ MODULE_DESIGN §4)
 ```
 
-`npm run test:visual` (browser-mode screenshot suite) needs Chromium; in the
-remote environment it lives at `/opt/pw-browsers/chromium`
-(`PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`). Never run `playwright install`.
+`npm run test:visual` (browser-mode screenshot suite) needs Chrome or Chromium.
+The E2E walk runner discovers Playwright-cache and common system installations;
+set `CHROMIUM_PATH=/path/to/chrome` to override discovery. Never run
+`playwright install`.
 
 ## 3. Boot and health-check
 
