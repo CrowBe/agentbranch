@@ -8,9 +8,9 @@
 // sitemap.md §2 on the five-skill account cap) and no model key, so the
 // offline expectations apply. Override the browser with CHROMIUM_PATH.
 import { chromium } from "playwright-core";
+import { resolveChromiumExecutable } from "./browser-executable.mjs";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
-const CHROMIUM = process.env.CHROMIUM_PATH ?? "/opt/pw-browsers/chromium";
 const results = [];
 let page;
 
@@ -52,7 +52,9 @@ async function walk(name, fn) {
   }
 }
 
-const browser = await chromium.launch({ executablePath: CHROMIUM });
+const { executablePath } = await resolveChromiumExecutable();
+console.log(`Using browser executable: ${executablePath}`);
+const browser = await chromium.launch({ executablePath });
 page = await browser.newPage();
 // Dialog policy (sitemap §1): accept confirms, dismiss the safety-rating offer.
 page.on("dialog", (d) =>

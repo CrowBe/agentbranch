@@ -19,11 +19,14 @@ skill is the quick single-flow subset of this spec).
 
 ## Driver
 
-Playwright over `playwright-core` with the pre-installed browser:
+Playwright over `playwright-core` with an automatically discovered browser.
+Set `CHROMIUM_PATH` to explicitly override discovery:
 
 ```ts
 import { chromium } from "playwright-core";
-const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+import { resolveChromiumExecutable } from "./browser-executable.mjs";
+const { executablePath } = await resolveChromiumExecutable();
+const browser = await chromium.launch({ executablePath });
 const page = await browser.newPage();
 // Accept confirms, but DISMISS the optional safety-rating offer inside
 // promote — accepting it runs a model-costing safety rating, which offline
