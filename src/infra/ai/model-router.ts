@@ -38,6 +38,7 @@ export function createModelRouter(deps: {
   profiles: readonly ProviderProfile[];
   serverKeys: Readonly<Partial<Record<ProviderId, ServerKey>>>;
   defaultSelection?: ModelSelection;
+  cliAvailable?: (kind: "claude-code-cli" | "codex-cli") => boolean;
 }): ModelRouter {
   const { profiles, serverKeys } = deps;
   let active: ModelSelection = deps.defaultSelection ?? defaultSelection(profiles);
@@ -51,6 +52,9 @@ export function createModelRouter(deps: {
   }
 
   function isReady(profile: ProviderProfile): boolean {
+    if (profile.kind === "claude-code-cli" || profile.kind === "codex-cli") {
+      return deps.cliAvailable?.(profile.kind) ?? false;
+    }
     return Boolean(overrides.get(profile.id)?.apiKey ?? serverKeyFor(profile.id).apiKey);
   }
 
@@ -63,12 +67,13 @@ export function createModelRouter(deps: {
     if (profile.kind === "anthropic") {
       return createAnthropicProvider({ apiKey, modelIds });
     }
-    return createNousProvider({
+    if (profile.kind === "openai-compatible") return createNousProvider({
       apiKey,
       modelIds,
       baseUrl,
       structuredOutputs: structuredOutputSupportFor(profile),
     });
+    throw new Error(`CLI provider "${profile.id}" cannot be built as an SDK provider.`);
   }
 
   function providerFor(
@@ -105,6 +110,8 @@ export function createModelRouter(deps: {
   function status(profile: ProviderProfile): ProviderStatus {
     const hasServerKey = Boolean(serverKeyFor(profile.id).apiKey);
     const hasByoKey = overrides.has(profile.id);
+    const cliReady =
+      (profile.kind === "claude-code-cli" || profile.kind === "codex-cli") && isReady(profile);
     return {
       id: profile.id,
       label: profile.label,
@@ -113,7 +120,14 @@ export function createModelRouter(deps: {
       modelIds: effectiveModelIds(profile, active),
       hasServerKey,
       hasByoKey,
-      ready: hasServerKey || hasByoKey,
+      readiness: cliReady
+        ? "cli-detected"
+        : hasByoKey
+          ? "byo-key"
+          : hasServerKey
+            ? "server-key"
+            : "unavailable",
+      ready: cliReady || hasServerKey || hasByoKey,
     };
   }
 
@@ -167,6 +181,19 @@ export function createModelRouter(deps: {
         );
       }
       const override = overrides.get(profile.id);
+      if (profile.kind === "claude-code-cli" || profile.kind === "codex-cli") {
+        if (!isReady(profile)) {
+          return err(domainError("model_unavailable", `${profile.label} CLI was not detected.`));
+        }
+        const modelIds = effectiveModelIds(profile, requested.value);
+        return ok({
+          providerId: profile.id,
+          kind: profile.kind,
+          structuredOutputs: structuredOutputSupportFor(profile),
+          modelId: modelIds[primitive],
+          viaOverride: false,
+        });
+      }
       const apiKey = override?.apiKey ?? serverKeyFor(profile.id).apiKey;
       if (!apiKey) {
         return err(

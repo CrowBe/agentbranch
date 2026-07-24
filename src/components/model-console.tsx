@@ -173,12 +173,23 @@ function ProviderCard({
           <span className="text-body-md font-medium">{provider.label}</span>
         </label>
         <div className="flex items-center gap-1.5">
-          {provider.ready ? <Pill tone="success">ready</Pill> : <Pill tone="neutral">no key</Pill>}
+          {provider.readiness === "cli-detected" ? (
+            <Pill tone="success">CLI detected</Pill>
+          ) : provider.ready ? (
+            <Pill tone="success">ready</Pill>
+          ) : (
+            <Pill tone="neutral">
+              {provider.kind === "claude-code-cli" || provider.kind === "codex-cli"
+                ? "CLI not detected"
+                : "no key"}
+            </Pill>
+          )}
           {provider.hasServerKey && <Pill tone="neutral">server key</Pill>}
           {provider.hasByoKey && <Pill tone="warn">your key</Pill>}
         </div>
       </div>
 
+      {provider.kind !== "claude-code-cli" && provider.kind !== "codex-cli" && (
       <div className="mt-3 flex flex-wrap items-end gap-2">
         <label className="flex flex-1 flex-col gap-1">
           <span className="text-label text-on-surface-variant">Default model</span>
@@ -198,6 +209,7 @@ function ProviderCard({
           {active ? "Apply model" : "Use this"}
         </Button>
       </div>
+      )}
 
       <div className="mt-3 flex flex-wrap items-end gap-2">
         <label className="flex flex-1 flex-col gap-1">

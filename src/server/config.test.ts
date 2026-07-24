@@ -125,6 +125,22 @@ describe("readConfig", () => {
 
     expect(() => readConfig()).toThrow(/Unsupported NOUS_STRUCTURED_OUTPUTS/);
   });
+
+  it("registers opted-in CLI providers only outside production", () => {
+    replaceEnv({ AGENTBRANCH_DEV_CLI_PROVIDERS: "claude-code,codex", NODE_ENV: "development" });
+    expect(readConfig().providerRegistry.map((profile) => profile.id)).toEqual([
+      "anthropic",
+      "nous",
+      "claude-code-cli",
+      "codex-cli",
+    ]);
+
+    replaceEnv({ AGENTBRANCH_DEV_CLI_PROVIDERS: "claude-code,codex", NODE_ENV: "production" });
+    expect(readConfig().providerRegistry.map((profile) => profile.id)).toEqual([
+      "anthropic",
+      "nous",
+    ]);
+  });
 });
 
 function replaceEnv(env: Record<string, string>): void {
@@ -140,6 +156,7 @@ function replaceEnv(env: Record<string, string>): void {
   delete process.env.AGENTBRANCH_RUN_AGENT_MODEL;
   delete process.env.AGENTBRANCH_STREAM_AGENT_MODEL;
   delete process.env.AGENTBRANCH_MODEL_PROVIDER;
+  delete process.env.AGENTBRANCH_DEV_CLI_PROVIDERS;
   delete process.env.AGENTBRANCH_PRO_PLAN_SLUG;
   delete process.env.CLERK_SECRET_KEY;
   delete process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;

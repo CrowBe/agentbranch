@@ -41,6 +41,8 @@ describe("usage meter", () => {
     expect(pricesForModel("claude-sonnet-4-6")?.inputPerToken).toBe(3);
     expect(pricesForModel("claude-opus-4-8")?.outputPerToken).toBe(25);
     expect(pricesForModel("deepseek/deepseek-v4-flash")?.inputPerToken).toBe(0.098);
+    expect(pricesForModel("cli:claude-code")).toMatchObject({ key: "cli:claude-code", inputPerToken: 0 });
+    expect(pricesForModel("cli:codex")).toMatchObject({ key: "cli:codex", outputPerToken: 0 });
     expect(pricesForModel("unknown/model")).toBeNull();
   });
 
