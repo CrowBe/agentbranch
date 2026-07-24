@@ -37,6 +37,12 @@ const SKILL_PAYLOAD = {
   },
 };
 
+const EQUIPMENT_WALK_PRIMITIVES = [
+  "Response schema: Invoice summary",
+  "Tool contract: fetch_unread_email",
+  "Subagent definition: invoice-reviewer",
+];
+
 async function status(text, timeout = 15000) {
   await page.locator('[role="status"]').filter({ hasText: text }).waitFor({ timeout });
 }
@@ -154,6 +160,39 @@ await walk("WALK-10 equipment", async () => {
     );
   await page.getByRole("button", { name: "Send", exact: true }).click();
   await status('Tool contract "fetch_unread_email" checked — it runs with your next test run.');
+  // A pasted agent file is checked, kept, and exposed through the same hero
+  // and quality surfaces as the other equipment primitives.
+  await page.locator("textarea").fill(`---
+name: invoice-reviewer
+description: Review invoices when a second specialist should check totals.
+tools:
+  - read_invoice
+---
+
+Review totals and escalate mismatches.`);
+  await page.getByRole("button", { name: "Send", exact: true }).click();
+  await status('Subagent definition "invoice-reviewer" checked and kept.');
+
+  // Drift guard: every primitive documented in WALK-10 must have reached the
+  // executable equipment list before its individual hero checks continue.
+  for (const primitive of EQUIPMENT_WALK_PRIMITIVES) {
+    await page.getByText(primitive, { exact: true }).waitFor();
+  }
+
+  const definitionCard = page.getByText("Subagent definition: invoice-reviewer").locator("..");
+  await definitionCard.getByRole("button", { name: "Open" }).click();
+  await status('Subagent definition "invoice-reviewer" opened.');
+  await page.getByRole("heading", { name: "invoice-reviewer" }).waitFor();
+  await page.getByRole("button", { name: /^Quality / }).click();
+  await status("Quality ready.");
+  await page.getByRole("button", { name: "Breakdown" }).click();
+  await status("Quality ready.");
+  await page.getByText("Subagent definition quality").waitFor();
+  await page.getByRole("button", { name: "Back to skill" }).click();
+  await status("Skill opened.");
+
+  // Response-schema hero and quality coverage remains an independent check.
+  await page.getByRole("button", { name: "Equipment" }).first().click();
   const schemaCard = page.getByText("Response schema: Invoice summary").locator("..");
   await schemaCard.getByRole("button", { name: "Open" }).click();
   await status('Response schema "Invoice summary" opened.');
