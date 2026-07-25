@@ -48,6 +48,7 @@ import { createUserProvisioningAuth } from "@/infra/prisma/user-provisioning-aut
 import { createModelRouter } from "@/infra/ai/model-router";
 import { createSdkModelCalls } from "@/infra/ai/sdk-model-calls";
 import { createDispatchingModelCalls } from "@/infra/ai/dispatching-model-calls";
+import { createClaudeCodeModelCalls } from "@/infra/ai/claude-code-model-calls";
 import { execFileSync } from "node:child_process";
 import { createClerkAuth } from "@/infra/clerk/clerk-auth";
 import { createStubAuth } from "@/infra/clerk/stub-auth";
@@ -125,7 +126,10 @@ export function getContainer(): AppContainer {
   // (CONTEXT.md → Model gateway) — no separate offline stub needed.
   const modelGateway: ModelGateway = createModelGateway({
     router: modelRouter,
-    calls: createDispatchingModelCalls({ sdk: createSdkModelCalls() }),
+    calls: createDispatchingModelCalls({
+      sdk: createSdkModelCalls(),
+      cli: { "claude-code-cli": createClaudeCodeModelCalls() },
+    }),
     usage,
     requestRateLimiter,
   });
