@@ -1,3 +1,4 @@
+import type { ConceptView } from "@/modules/concept";
 import type { RenderedDoc, SourceDoc, HeroView } from "@/modules/hero";
 import type { SafetyReviewScore, SafetyReviewVerdict } from "@/modules/safety-review";
 import type { SkillSource, SkillVersionLintSummary } from "@/modules/skill";
@@ -92,6 +93,7 @@ export type SafetyRatingState = {
 };
 
 export type CapabilityPanel =
+  | { readonly kind: "concept"; readonly concept: ConceptView }
   | {
       readonly kind: "metadata-suggestion";
       readonly name: string;

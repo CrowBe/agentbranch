@@ -172,6 +172,27 @@ describe("concept", () => {
     render(<Frame><ConceptView concept={concept} /></Frame>);
     await screenshotFrame("concept-dark");
   });
+
+  test("renders through the hero capability takeover", async () => {
+    const docs = await heroProps();
+    const onBackToSkill = vi.fn();
+
+    render(
+      <Frame>
+        <HeroPanel
+          {...heroBase}
+          {...docs}
+          view="rendered"
+          capability={{ kind: "concept", concept }}
+          onBackToSkill={onBackToSkill}
+        />
+      </Frame>,
+    );
+
+    await expect.element(page.getByRole("heading", { name: concept.title })).toBeVisible();
+    await page.getByRole("button", { name: "Back to skill" }).click();
+    expect(onBackToSkill).toHaveBeenCalledOnce();
+  });
 });
 
 async function heroProps() {
@@ -181,27 +202,11 @@ async function heroProps() {
 }
 
 describe("hero document", () => {
-  const noop = () => {};
-  const base = {
-    capability: null,
-    activeTool: null,
-    toolBusy: false,
-    lintBusy: false,
-    onViewChange: noop,
-    onToolSelect: noop,
-    onLintSelect: noop,
-    onEvaluationSurfaceChange: noop,
-    onLintSurfaceChange: noop,
-    onSafetySurfaceChange: noop,
-    onReviseWithFeedback: noop,
-    feedbackBusy: false,
-  } as const;
-
   test("rendered view with quality pill — light", async () => {
     const docs = await heroProps();
     render(
       <Frame>
-        <HeroPanel {...base} {...docs} view="rendered" lintSummary={createLintSummary(source)} />
+        <HeroPanel {...heroBase} {...docs} view="rendered" lintSummary={createLintSummary(source)} />
       </Frame>,
     );
     await screenshotFrame("hero-rendered-light");
@@ -211,7 +216,7 @@ describe("hero document", () => {
     const docs = await heroProps();
     render(
       <Frame>
-        <HeroPanel {...base} {...docs} view="source" lintSummary={null} />
+        <HeroPanel {...heroBase} {...docs} view="source" lintSummary={null} />
       </Frame>,
     );
     await screenshotFrame("hero-source-light");
@@ -222,12 +227,28 @@ describe("hero document", () => {
     const docs = await heroProps();
     render(
       <Frame>
-        <HeroPanel {...base} {...docs} view="rendered" lintSummary={createLintSummary(source)} />
+        <HeroPanel {...heroBase} {...docs} view="rendered" lintSummary={createLintSummary(source)} />
       </Frame>,
     );
     await screenshotFrame("hero-rendered-dark");
   });
 });
+
+const noop = () => {};
+const heroBase = {
+  capability: null,
+  activeTool: null,
+  toolBusy: false,
+  lintBusy: false,
+  onViewChange: noop,
+  onToolSelect: noop,
+  onLintSelect: noop,
+  onEvaluationSurfaceChange: noop,
+  onLintSurfaceChange: noop,
+  onSafetySurfaceChange: noop,
+  onReviseWithFeedback: noop,
+  feedbackBusy: false,
+} as const;
 
 describe("shell chrome", () => {
   test("top bar, tool chips, draft banners — light", async () => {
