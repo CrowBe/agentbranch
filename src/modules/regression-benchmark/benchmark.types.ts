@@ -32,6 +32,7 @@ export type BenchmarkScore = {
     readonly responseSchema: BenchmarkDimensionScore;
     readonly toolContract: BenchmarkDimensionScore;
     readonly safety: BenchmarkDimensionScore;
+    readonly taskOutcome: TaskOutcomeBenchmarkDimensionScore;
   };
 };
 
@@ -47,6 +48,22 @@ export type BenchmarkDimensionScore = {
   readonly passedCases: number;
   readonly score: number;
   readonly entries: readonly BenchmarkDimensionEntryScore[];
+};
+
+export type TaskOutcomeBenchmarkDimensionScore = BenchmarkDimensionScore & {
+  readonly attempts: number;
+  readonly totalAttempts: number;
+  readonly passedAttempts: number;
+  readonly attemptPassRate: number;
+  readonly attemptPassRateInterval: WilsonInterval;
+  readonly method: {
+    readonly kind: "model";
+    readonly grader: "json-output";
+    readonly graderVersion: 1;
+    readonly method: "generate-then-schema-validate";
+    readonly methodVersion: 1;
+    readonly attemptsPerCase: number;
+  };
 };
 
 /** A persisted benchmark run, pinned to the harness version it scored. */

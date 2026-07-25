@@ -5,6 +5,7 @@ import {
   safetyBenchmarkSetHash,
   toolContractBenchmarkSetHash,
 } from "@/modules/regression-benchmark";
+import { taskOutcomeCorpusSetHash } from "@/modules/task-outcome-corpus";
 import { HarnessVersionId, unwrap, wilson95 } from "@/shared";
 import { createPrismaBenchmarkRunRepository } from "./benchmark.prisma-repository";
 
@@ -41,6 +42,16 @@ describe("Prisma benchmark repository uncertainty metadata", () => {
     expect(recorded.attemptPassRateInterval).toEqual(interval);
     expect(create.mock.calls[0]?.[0].data.scoreJson).toMatchObject({
       attemptPassRateInterval: interval,
+      dimensions: {
+        taskOutcome: {
+          attempts: 1,
+          totalAttempts: 1,
+          passedAttempts: 0,
+          attemptPassRate: 0,
+          attemptPassRateInterval: wilson95(0, 1),
+          method: { attemptsPerCase: 1 },
+        },
+      },
     });
   });
 
@@ -78,6 +89,22 @@ function dimensions() {
     responseSchema: emptyDimension(responseSchemaBenchmarkSetHash),
     toolContract: emptyDimension(toolContractBenchmarkSetHash),
     safety: emptyDimension(safetyBenchmarkSetHash),
+    taskOutcome: {
+      ...emptyDimension(taskOutcomeCorpusSetHash),
+      attempts: 1,
+      totalAttempts: 1,
+      passedAttempts: 0,
+      attemptPassRate: 0,
+      attemptPassRateInterval: wilson95(0, 1),
+      method: {
+        kind: "model" as const,
+        grader: "json-output" as const,
+        graderVersion: 1 as const,
+        method: "generate-then-schema-validate" as const,
+        methodVersion: 1 as const,
+        attemptsPerCase: 1,
+      },
+    },
   };
 }
 
