@@ -189,6 +189,12 @@ function ProviderCard({
         </div>
       </div>
 
+      {provider.kind === "codex-cli" && (
+        <p className="text-label mt-3 text-on-surface-variant">
+          Covers classification and structured generation. Agent turns require the Claude Code CLI.
+        </p>
+      )}
+
       {!isCliProvider && (
         <>
           <div className="mt-3 flex flex-wrap items-end gap-2">
