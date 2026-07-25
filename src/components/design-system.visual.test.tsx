@@ -18,6 +18,7 @@ import { ToolChips } from "./tool-chips";
 import { TopBar } from "./top-bar";
 import { Button } from "./ui/button";
 import { Chip } from "./ui/chip";
+import { ConceptView } from "./concept-view";
 import { Pill } from "./ui/pill";
 import { Segmented } from "./ui/segmented";
 
@@ -133,6 +134,67 @@ describe("ui primitives", () => {
   });
 });
 
+describe("concept", () => {
+  const concept = {
+    id: "equipment-primitive-decision",
+    title: "Which primitive do I need?",
+    kind: "decision-aid" as const,
+    terms: ["Skill", "Response schema", "Tool contract", "Subagent definition"] as const,
+    idea: {
+      text: "Pick the primitive that captures the reusable boundary.",
+      citations: [{ source: "docs/ARCHITECTURE.md" as const, section: "§9.2" }] as const,
+    },
+    distinction: {
+      text: "These primitives compose without replacing each other.",
+      citations: [{ source: "CONTEXT.md" as const, section: "Equipment" }] as const,
+    },
+    options: [
+      ["Skill", "Use for reusable instructions, workflow, and judgement."],
+      ["Response schema", "Use when the result needs predictable fields and types."],
+      ["Tool contract", "Use for a typed, bounded action an agent can call."],
+      ["Subagent definition", "Use when a specialist needs its own context and boundaries."],
+    ].map(([term, text]) => ({
+      term: term as "Skill" | "Response schema" | "Tool contract" | "Subagent definition",
+      useWhen: {
+        text: text!,
+        citations: [{ source: "CONTEXT.md" as const, section: term! }] as const,
+      },
+    })),
+  };
+
+  test("light", async () => {
+    render(<Frame><ConceptView concept={concept} /></Frame>);
+    await screenshotFrame("concept-light");
+  });
+
+  test("dark", async () => {
+    document.documentElement.dataset.theme = "dark";
+    render(<Frame><ConceptView concept={concept} /></Frame>);
+    await screenshotFrame("concept-dark");
+  });
+
+  test("renders through the hero capability takeover", async () => {
+    const docs = await heroProps();
+    const onBackToSkill = vi.fn();
+
+    render(
+      <Frame>
+        <HeroPanel
+          {...heroBase}
+          {...docs}
+          view="rendered"
+          capability={{ kind: "concept", concept }}
+          onBackToSkill={onBackToSkill}
+        />
+      </Frame>,
+    );
+
+    await expect.element(page.getByRole("heading", { name: concept.title })).toBeVisible();
+    await page.getByRole("button", { name: "Back to skill" }).click();
+    expect(onBackToSkill).toHaveBeenCalledOnce();
+  });
+});
+
 async function heroProps() {
   const rendered = unwrap(await runCapability(heroCapability, "rendered", skill));
   const sourceDoc = unwrap(await runCapability(heroCapability, "source", skill));
@@ -140,27 +202,11 @@ async function heroProps() {
 }
 
 describe("hero document", () => {
-  const noop = () => {};
-  const base = {
-    capability: null,
-    activeTool: null,
-    toolBusy: false,
-    lintBusy: false,
-    onViewChange: noop,
-    onToolSelect: noop,
-    onLintSelect: noop,
-    onEvaluationSurfaceChange: noop,
-    onLintSurfaceChange: noop,
-    onSafetySurfaceChange: noop,
-    onReviseWithFeedback: noop,
-    feedbackBusy: false,
-  } as const;
-
   test("rendered view with quality pill — light", async () => {
     const docs = await heroProps();
     render(
       <Frame>
-        <HeroPanel {...base} {...docs} view="rendered" lintSummary={createLintSummary(source)} />
+        <HeroPanel {...heroBase} {...docs} view="rendered" lintSummary={createLintSummary(source)} />
       </Frame>,
     );
     await screenshotFrame("hero-rendered-light");
@@ -170,7 +216,7 @@ describe("hero document", () => {
     const docs = await heroProps();
     render(
       <Frame>
-        <HeroPanel {...base} {...docs} view="source" lintSummary={null} />
+        <HeroPanel {...heroBase} {...docs} view="source" lintSummary={null} />
       </Frame>,
     );
     await screenshotFrame("hero-source-light");
@@ -181,12 +227,28 @@ describe("hero document", () => {
     const docs = await heroProps();
     render(
       <Frame>
-        <HeroPanel {...base} {...docs} view="rendered" lintSummary={createLintSummary(source)} />
+        <HeroPanel {...heroBase} {...docs} view="rendered" lintSummary={createLintSummary(source)} />
       </Frame>,
     );
     await screenshotFrame("hero-rendered-dark");
   });
 });
+
+const noop = () => {};
+const heroBase = {
+  capability: null,
+  activeTool: null,
+  toolBusy: false,
+  lintBusy: false,
+  onViewChange: noop,
+  onToolSelect: noop,
+  onLintSelect: noop,
+  onEvaluationSurfaceChange: noop,
+  onLintSurfaceChange: noop,
+  onSafetySurfaceChange: noop,
+  onReviseWithFeedback: noop,
+  feedbackBusy: false,
+} as const;
 
 describe("shell chrome", () => {
   test("top bar, tool chips, draft banners — light", async () => {

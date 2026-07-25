@@ -99,7 +99,7 @@ most capabilities read a `Skill`, the equipment primitives (`response-schema`,
 `tool-contract`) read their own source models, and the test run reads a
 `TestRunInput` bundle (ARCHITECTURE §9.2).
 
-- **`ArtifactKind`** — closed union of valid kind strings (`"hero" | "skill-ir" | "skill-metadata" | "export" | "lint" | "response-schema-lint" | "tool-contract-lint" | "subagent-definition-lint" | "test-run" | "triggering-eval" | "cross-runtime-validation" | "safety-review" | "harness-recommendation"`). Add a new member here when a new capability needs its own artifact type. Free-string kinds are a compile error.
+- **`ArtifactKind`** — closed union of valid kind strings (`"hero" | "concept" | "skill-ir" | "skill-metadata" | "export" | "lint" | "response-schema-lint" | "tool-contract-lint" | "subagent-definition-lint" | "test-run" | "triggering-eval" | "cross-runtime-validation" | "safety-review" | "harness-recommendation"`). Add a new member here when a new capability needs its own artifact type. Free-string kinds are a compile error.
 - **`Artifact<K>`** — the base artifact type; `K` must be an `ArtifactKind`. Each capability extends this with its own fields.
 - **`Analyzer<Input, A>`** — read an input, emit a structured artifact. Async +
   `Result` (some analyzers call the model).
@@ -130,6 +130,7 @@ most capabilities read a `Skill`, the equipment primitives (`response-schema`,
 | Capability | Shape | Module | Analyzer / Evaluator | Renderer(s) | Status |
 |---|---|---|---|---|---|
 | Hero | analysis | `hero` | hero (sections + spans) | `rendered`, `source` | real |
+| Concept | analysis | `concept` | reviewed concept kernel | `rendered` structured view | pure, offline, zero tokens |
 | Visualise | analysis | `visualise` | IR extraction | `mermaid` | extraction model-backed (deterministic offline fallback); render real |
 | Metadata suggest | analysis | `metadata-suggest` | editable name, description, category + tag recommendation | `suggestions` | local suggestion → metered gateway → deterministic keyword fallback; identical author-owned surface on every rung |
 | Export | analysis | `export` | instruction intent | `claude` (manifest) | real |
@@ -170,6 +171,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **skill** | `parseSkillMd`, `serializeSkillMd`, `makeSkill`, `reviseSkill`, `skillName/Description`, `SKILL_CATEGORIES`, `skillMetadata`, `withSkillMetadata`, `SkillBranch`/`RetentionReport` + types | `SkillRepository`, `SkillRetentionRepository` | real (discovery metadata — `category` + `tags` — lives in frontmatter extra keys, so it travels with the standard-native artifact and is pinned by the same content hash) |
 | **skill-analysis** | `defineCapability`, `runCapability`, `Analyzer/Renderer/Capability/SourceSpan/Artifact` | — | real |
 | **hero** | `heroCapability`, `HeroView`, doc types | — | real |
+| **concept** | `conceptCapability`, `ConceptArtifact`, `ConceptView` | — | real (pure, offline projection of reviewed concept kernels into a structured, token-rendered view) |
 | **visualise** | `visualiseCapability`, IR + Mermaid types | — | extraction model-backed · deterministic offline fallback · render real |
 | **metadata-suggest** | `metadataSuggestCapability`, `SkillMetadataSuggestion/View` | — | analysis capability · suggests editable name, description, category + tags · workspace tries the local provider before this route; the route uses the gateway then deterministic keyword fallback · writing stays with the author (`withSkillMetadata` / build-loop frontmatter edits) |
 | **test-run** | `testRunCapability`, `executeSkill`, `createMockToolRegistry`, `defaultMockToolRegistry`, `emailMockTool`, `registryFromContracts`, `computeContractChecks`, `contractCheckIssues`, `toTestRunAnalysisRecord` | `TestRunRepository` | evaluation capability over a `TestRunInput` bundle · run + world generation real · contract-driven mocks + per-call validation real · email mock = offline fallback |

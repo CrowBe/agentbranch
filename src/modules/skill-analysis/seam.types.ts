@@ -16,6 +16,7 @@ export type SourceSpan = { readonly start: number; readonly end: number };
  */
 export type ArtifactKind =
   | "hero"
+  | "concept"
   | "skill-ir"
   | "skill-metadata"
   | "export"

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { RenderedDoc, SourceDoc, HeroView } from "@/modules/hero";
 import type { SkillVersionLintSummary } from "@/modules/skill";
 import { Button } from "./ui/button";
+import { ConceptView } from "./concept-view";
 import { MermaidDiagram } from "./mermaid-diagram";
 import { Segmented } from "./ui/segmented";
 import { ViewToggle } from "./view-toggle";
@@ -65,11 +66,13 @@ export function HeroPanel({
   equipmentFocus?: boolean;
   onBackToSkill?: () => void;
 }) {
+  const capabilityTakeover = equipmentFocus || capability?.kind === "concept";
+
   return (
     <section className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-3 px-4 py-4 lg:gap-4 lg:px-6 lg:py-8">
       {banner}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {equipmentFocus ? <Button type="button" variant="secondary" onClick={onBackToSkill}>Back to skill</Button> : <ToolChips active={activeTool} busy={toolBusy} onSelect={onToolSelect} />}
+        {capabilityTakeover ? <Button type="button" variant="secondary" onClick={onBackToSkill}>Back to skill</Button> : <ToolChips active={activeTool} busy={toolBusy} onSelect={onToolSelect} />}
         <ViewToggle value={view} onChange={onViewChange} />
       </div>
 
@@ -168,6 +171,10 @@ function CapabilityView({
   onApplyMetadataSuggestion?: () => void;
   feedbackBusy: boolean;
 }) {
+  if (panel.kind === "concept") {
+    return <ConceptView concept={panel.concept} />;
+  }
+
   if (panel.kind === "metadata-suggestion") {
     return (
       <div className="flex flex-col gap-4">
