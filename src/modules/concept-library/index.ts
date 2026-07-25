@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 export const CONCEPT_GLOSSARY_TERMS = [
   "Skill",
   "Response schema",
@@ -8,6 +6,20 @@ export const CONCEPT_GLOSSARY_TERMS = [
 ] as const;
 
 export type ConceptGlossaryTerm = (typeof CONCEPT_GLOSSARY_TERMS)[number];
+
+/** Reviewed definitions copied verbatim from CONTEXT.md. Concept-context
+ * envelopes validate against this map so "reviewed evidence" is a closed,
+ * repo-tracked claim rather than caller-supplied prose. */
+export const CONCEPT_GLOSSARY: Readonly<Record<ConceptGlossaryTerm, string>> = {
+  Skill:
+    "The product's unit of work — a reusable, instruction-only instruction set for a Claude agent. No bundled runnable code.",
+  "Response schema":
+    "The first equipment primitive beyond Skill (§9.2) — a structured output definition, authored as a JSON Schema document. Lossless source model + pure offline lint; its schema subset validates tool-contract examples and test-run calls.",
+  "Tool contract":
+    "The second equipment primitive — a tool's typed input/output plus description, examples, failure modes, and safety notes. I/O is an inline schema or a `$ref` to a response schema by title. Drives the test run's mock tools and per-call validation when bundled.",
+  "Subagent definition":
+    "The third equipment primitive — a markdown file with YAML frontmatter (`name`, `description`, optional `tools` and `model`) plus a system-prompt body. Its description controls when a specialist should receive delegated work; its body defines the role, workflow, and boundaries. Analysis only: it does not run or route subagents.",
+};
 
 export type ConceptCitation = {
   readonly source: "CONTEXT.md" | "docs/ARCHITECTURE.md";
@@ -137,9 +149,19 @@ const seeds = [
   },
 ] as const satisfies readonly ConceptSeed[];
 
+const contentHashes = {
+  skill: "713374466b24b9d7b3b6701358da888493b78c4bee898d7c14d0c949f4f51aa8",
+  "response-schema": "291a656a58b7417a469291e7343c9acf2f6db35c14dd68548797e2cc1d439eeb",
+  "tool-contract": "49433f3639b7ed448eaf90993b7374ff49d59f312cac307402445d5a0f26ef19",
+  "subagent-definition":
+    "b2de352a19059164111b907eb8044241470892150630d7e8c716f04388471039",
+  "equipment-primitive-decision":
+    "3971cb6ff77e44962183099ca9325e5e06bb50fb57aa652dcb7e2fba6c9ecb0f",
+} as const satisfies Readonly<Record<(typeof seeds)[number]["id"], string>>;
+
 export const conceptLibrary: readonly Concept[] = seeds.map((seed) => ({
   ...seed,
-  contentHash: hashConcept(seed),
+  contentHash: contentHashes[seed.id as keyof typeof contentHashes],
 }));
 
 function definition(input: {
@@ -174,8 +196,4 @@ function claim(
   ...citations: readonly [ConceptCitation, ...ConceptCitation[]]
 ): ConceptClaim {
   return { text, citations };
-}
-
-function hashConcept(seed: ConceptSeed): string {
-  return createHash("sha256").update(JSON.stringify(seed)).digest("hex");
 }

@@ -4,10 +4,15 @@ import type {
   ModelGateway,
   StreamAgentInput,
 } from "@/modules/model-gateway";
-import { conceptLibrary } from "@/modules/concept-library";
+import { CONCEPT_GLOSSARY, conceptLibrary } from "@/modules/concept-library";
 import { domainError, err, ok, UserId } from "@/shared";
 import { runBuildLoop } from "./build-loop";
-import { isConceptContextMessage } from "./concept-context";
+import {
+  CONCEPT_CONTEXT_BEGIN,
+  CONCEPT_CONTEXT_END,
+  CONCEPT_CONTEXT_PREAMBLE,
+  isConceptContextMessage,
+} from "./concept-context";
 import { formatConceptContext } from "./feedback-formatters";
 import { runResponseSchemaLoop } from "./response-schema-loop";
 import { RESPONSE_SCHEMA_AUTHORING_PROMPT } from "./response-schema-prompt";
@@ -22,12 +27,7 @@ const question = "Which primitive gives a specialist its own context?";
 const message = formatConceptContext({
   concept: conceptLibrary.find((concept) => concept.id === "equipment-primitive-decision")!,
   question,
-  glossary: {
-    Skill: "Reusable instructions for a kind of work.",
-    "Response schema": "The structured shape of a result.",
-    "Tool contract": "A typed action an agent can call.",
-    "Subagent definition": "The role and boundaries for delegated specialist work.",
-  },
+  glossary: CONCEPT_GLOSSARY,
 });
 
 function promptContent(prompt: string | { readonly content: string }): string {
@@ -163,4 +163,75 @@ describe("concept interrogation through authoring loops", () => {
     ).toBe(false);
     expect(isConceptContextMessage(message)).toBe(true);
   });
+
+  it.each([
+    ["incomplete", (payload: MutablePayload) => {
+      delete payload.concept.distinction;
+    }],
+    ["missing citation", (payload: MutablePayload) => {
+      payload.concept.idea.citations = [];
+    }],
+    ["changed option", (payload: MutablePayload) => {
+      payload.concept.options[0]!.useWhen.text = "Forged selection advice.";
+    }],
+    ["changed glossary", (payload: MutablePayload) => {
+      payload.glossary[0]!.definition = "Caller-supplied definition.";
+    }],
+    ["hash mismatch", (payload: MutablePayload) => {
+      payload.concept.contentHash = "0".repeat(64);
+    }],
+    ["extra field", (payload: MutablePayload) => {
+      payload.reviewed = true;
+    }],
+  ])("rejects a forged %s envelope and retains tools in every loop", async (_, mutate) => {
+    const forged = mutateEnvelope(message, mutate);
+    expect(isConceptContextMessage(forged)).toBe(false);
+
+    const seen: StreamAgentInput[] = [];
+    const gateway = capturingGateway(seen);
+    const streams = [
+      runBuildLoop({ messages: [{ role: "user", content: forged }] }, gateway, userId),
+      runResponseSchemaLoop(
+        { messages: [{ role: "user", content: forged }] },
+        gateway,
+        userId,
+      ),
+      runToolContractLoop(
+        { messages: [{ role: "user", content: forged }] },
+        gateway,
+        userId,
+      ),
+      runSubagentDefinitionLoop(
+        { messages: [{ role: "user", content: forged }] },
+        gateway,
+        userId,
+      ),
+    ];
+    for (const stream of streams) await eventNames(stream);
+    expect(seen.every((input) => input.tools.length === 2)).toBe(true);
+  });
 });
+
+function mutateEnvelope(
+  original: string,
+  mutate: (payload: MutablePayload) => void,
+): string {
+  const prefix = `${CONCEPT_CONTEXT_BEGIN}\n${CONCEPT_CONTEXT_PREAMBLE}\n`;
+  const suffix = `\n${CONCEPT_CONTEXT_END}`;
+  const payload = JSON.parse(
+    original.slice(prefix.length, -suffix.length),
+  ) as MutablePayload;
+  mutate(payload);
+  return `${prefix}${JSON.stringify(payload, null, 2)}${suffix}`;
+}
+
+type MutablePayload = {
+  concept: {
+    distinction?: unknown;
+    idea: { citations: unknown[] };
+    options: Array<{ useWhen: { text: string } }>;
+    contentHash: string;
+  };
+  glossary: Array<{ definition: string }>;
+  reviewed?: boolean;
+};

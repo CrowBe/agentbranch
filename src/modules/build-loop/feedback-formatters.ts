@@ -4,18 +4,12 @@ import type { LintFinding, LintReport } from "@/modules/lint";
 import type { ResponseSchemaLintReport } from "@/modules/response-schema";
 import type { ToolContractLintReport } from "@/modules/tool-contract";
 import type { SubagentDefinitionLintReport } from "@/modules/subagent-definition";
-import type {
-  Concept,
-  ConceptClaim,
-  ConceptGlossaryTerm,
-} from "@/modules/concept-library";
+import type { Concept } from "@/modules/concept-library";
 import {
-  CONCEPT_CONTEXT_BEGIN,
-  CONCEPT_CONTEXT_END,
-  CONCEPT_CONTEXT_PREAMBLE,
+  createConceptContextMessage,
+  type ConceptGlossary,
 } from "./concept-context";
-
-export type ConceptGlossary = Readonly<Partial<Record<ConceptGlossaryTerm, string>>>;
+export type { ConceptGlossary } from "./concept-context";
 
 /**
  * Seed one grounded concept-interrogation turn through an existing authoring
@@ -28,65 +22,7 @@ export function formatConceptContext(input: {
   readonly question: string;
   readonly glossary: ConceptGlossary;
 }): string {
-  if (input.question.trim().length === 0) {
-    throw new TypeError("A concept-interrogation question is required.");
-  }
-  const glossary = input.concept.terms.map((term) => {
-    const definition = input.glossary[term]?.trim();
-    if (!definition) {
-      throw new TypeError(`A glossary definition is required for "${term}".`);
-    }
-    return { term, definition };
-  });
-
-  const payload = {
-    kind: "agentbranch.concept-context",
-    version: 1,
-    question: input.question,
-    concept: {
-      id: input.concept.id,
-      contentHash: input.concept.contentHash,
-      title: input.concept.title,
-      kind: input.concept.kind,
-      idea: formatConceptClaim(input.concept.idea),
-      distinction: formatConceptClaim(input.concept.distinction),
-      options:
-        input.concept.kind === "decision-aid"
-          ? input.concept.options.map((option) => ({
-              term: option.term,
-              useWhen: formatConceptClaim(option.useWhen),
-            }))
-          : [],
-    },
-    glossary,
-  };
-  const evidence = JSON.stringify(payload, null, 2)
-    .replace(/[<>&]/g, unicodeEscape)
-    .replace(
-      /\[(?=(?:BEGIN|END) AGENTBRANCH CONCEPT CONTEXT v1\])/g,
-      unicodeEscape,
-    );
-
-  return [
-    CONCEPT_CONTEXT_BEGIN,
-    CONCEPT_CONTEXT_PREAMBLE,
-    evidence,
-    CONCEPT_CONTEXT_END,
-  ].join("\n");
-}
-
-function unicodeEscape(character: string): string {
-  return `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`;
-}
-
-function formatConceptClaim(claim: ConceptClaim) {
-  return {
-    text: claim.text,
-    citations: claim.citations.map((citation) => ({
-      source: citation.source,
-      section: citation.section,
-    })),
-  };
+  return createConceptContextMessage(input);
 }
 
 export function formatTriggeringEvalFeedback(result: TriggeringResult): string {

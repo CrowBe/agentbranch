@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  CONCEPT_GLOSSARY,
   CONCEPT_GLOSSARY_TERMS,
   conceptLibrary,
   type ConceptClaim,
@@ -59,6 +60,19 @@ describe("concept library", () => {
         expect(CONCEPT_GLOSSARY_TERMS).toContain(term);
         expect(textFor(concept)).toContain(term);
       }
+    }
+  });
+
+  it("keeps the reviewed glossary definitions verbatim with CONTEXT.md", () => {
+    const context = readFileSync(resolve(root, "CONTEXT.md"), "utf8");
+    for (const term of CONCEPT_GLOSSARY_TERMS) {
+      const marker = `**${term}**:\n`;
+      const start = context.indexOf(marker);
+      expect(start, term).toBeGreaterThanOrEqual(0);
+      const definition = context
+        .slice(start + marker.length)
+        .split("\n", 1)[0];
+      expect(CONCEPT_GLOSSARY[term]).toBe(definition);
     }
   });
 
