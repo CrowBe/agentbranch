@@ -110,6 +110,13 @@ describe("triggering eval", () => {
     expect(result.attempts).toBe(1);
     expect(result.totalAttempts).toBe(result.cases.length);
     expect(result.cases).toHaveLength(8);
+    expect(result.comparisonMetadata).toMatchObject({
+      evaluationSetHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+      grader: "selection",
+      graderVersion: 1,
+      method: "competitive-selection",
+      methodVersion: 1,
+    });
     expect(typeof result.passed).toBe("boolean");
     for (const c of result.cases) {
       expect(["fire", "silent"]).toContain(c.actual);

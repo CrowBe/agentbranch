@@ -143,6 +143,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
   let responseSchemaDraft: ResponseSchemaSource | null = null;
   let toolContractDraft: ToolContractSource | null = null;
   let subagentDefinitionDraft: SubagentDefinitionSource | null = null;
+  let comparisonLeftRunId: string | null = null;
   let entrySeq = 0;
 
   const listeners = new Set<() => void>();
@@ -461,6 +462,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
 
   async function showHistory(): Promise<void> {
     if (snapshot.busy) return;
+    comparisonLeftRunId = null;
     patch({ mode: "history", capability: null, activeTool: null, entries: [] });
 
     const skillId = snapshot.currentSkillId;
@@ -502,9 +504,14 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
               ? undefined
               : () => void restoreVersion(detail.skill.id, version.revision),
         })),
-        ...history.evalRuns.map((run) =>
-          entry(`Triggering eval ${run.status}: ${run.summary}`, run.status === "failed" ? "error" : undefined),
-        ),
+        ...history.evalRuns.map((run) => ({
+          ...entry(
+            `Triggering eval ${run.status}: ${run.summary}`,
+            run.status === "failed" ? "error" : undefined,
+          ),
+          actionLabel: "Compare",
+          onAction: () => void selectEvalRunForComparison(run.id),
+        })),
         ...history.testRuns.map((run) => entry(`Test run ${run.status}: ${run.prompt}`)),
       ];
       patch({
@@ -514,6 +521,62 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     } catch (cause) {
       const error = friendlyError(String(cause));
       patch({ status: error, entries: [entry(error, "error")] });
+    }
+  }
+
+  async function selectEvalRunForComparison(runId: string): Promise<void> {
+    if (!comparisonLeftRunId) {
+      comparisonLeftRunId = runId;
+      patch({ status: "Baseline selected. Choose another triggering eval to compare." });
+      return;
+    }
+    const leftRunId = comparisonLeftRunId;
+    comparisonLeftRunId = null;
+    const params = new URLSearchParams({ leftRunId, rightRunId: runId, methodVersion: "1" });
+    patch({ status: "Comparing evaluation runs…" });
+    try {
+      const response = await fetchImpl(`/api/eval-comparison?${params}`);
+      const body = (await response.json().catch(() => null)) as unknown;
+      if (!response.ok) {
+        fail(errorMessage(body, response.status));
+        return;
+      }
+      if (!body || typeof body !== "object" || !("comparable" in body)) {
+        fail("Comparison returned an unexpected response.");
+        return;
+      }
+      const comparison = body as {
+        comparable: unknown;
+        reason?: unknown;
+        verdict?: unknown;
+        aggregate?: { delta?: unknown; lower?: unknown; upper?: unknown };
+      };
+      if (comparison.comparable === false && typeof comparison.reason === "string") {
+        patch({ status: "These runs cannot be compared." });
+        appendEntry(entry(`Comparison unavailable: ${comparison.reason}.`, "muted"));
+        return;
+      }
+      const aggregate = comparison.aggregate;
+      if (
+        comparison.comparable !== true ||
+        typeof comparison.verdict !== "string" ||
+        !aggregate ||
+        typeof aggregate.delta !== "number" ||
+        typeof aggregate.lower !== "number" ||
+        typeof aggregate.upper !== "number"
+      ) {
+        fail("Comparison returned an unexpected response.");
+        return;
+      }
+      patch({ status: "Comparison complete." });
+      appendEntry(
+        entry(
+          `Comparison ${comparison.verdict}: right − left ${aggregate.delta.toFixed(3)} ` +
+            `(95% CI ${aggregate.lower.toFixed(3)} to ${aggregate.upper.toFixed(3)}).`,
+        ),
+      );
+    } catch (cause) {
+      fail(friendlyError(String(cause)));
     }
   }
 

@@ -1009,7 +1009,7 @@ describe("workspace choreography", () => {
       .mockResolvedValueOnce(
         Response.json({
           testRuns: [{ status: "completed", scenario: { prompt: "Triage the inbox." } }],
-          evalRuns: [{ status: "failed", result: { insight: { summary: "Fires too broadly." } } }],
+          evalRuns: [{ id: "eval-1", status: "failed", result: { insight: { summary: "Fires too broadly." } } }],
         }),
       )
       .mockResolvedValueOnce(
@@ -1038,6 +1038,52 @@ describe("workspace choreography", () => {
     ]);
     expect(snapshot.entries[0]?.onAction).toBeDefined();
     expect(snapshot.entries[1]?.onAction).toBeUndefined();
+    expect(snapshot.entries[2]?.actionLabel).toBe("Compare");
+  });
+
+  it("selects two history runs in order and renders their derived comparison", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ skill: savedSkill, versions: [] }))
+      .mockResolvedValueOnce(Response.json({ branches: [] }))
+      .mockResolvedValueOnce(Response.json({ rating: null }))
+      .mockResolvedValueOnce(
+        Response.json({
+          testRuns: [],
+          evalRuns: [
+            { id: "eval-left", status: "passed", result: { insight: { summary: "Left." } } },
+            { id: "eval-right", status: "passed", result: { insight: { summary: "Right." } } },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          skill: savedSkill,
+          versions: [{ id: "v2", revision: 2, source: skill, lintSummary: null }],
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          comparable: true,
+          verdict: "improved",
+          aggregate: { delta: 0.25, lower: 0.1, upper: 0.4 },
+        }),
+      );
+    const workspace = createWorkspace(init, { fetch: fetchMock });
+    await workspace.actions.openSkill("skill-1");
+    await workspace.actions.showHistory();
+
+    workspace.getSnapshot().entries[1]?.onAction?.();
+    expect(workspace.getSnapshot().status).toContain("Baseline selected");
+    workspace.getSnapshot().entries[2]?.onAction?.();
+    await vi.waitFor(() => expect(workspace.getSnapshot().status).toBe("Comparison complete."));
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/eval-comparison?leftRunId=eval-left&rightRunId=eval-right&methodVersion=1",
+    );
+    expect(workspace.getSnapshot().entries.at(-1)?.label).toContain(
+      "right − left 0.250 (95% CI 0.100 to 0.400)",
+    );
   });
 
   it("loads Templates from the Skill library feed and exposes install-boundary details", async () => {

@@ -19,6 +19,7 @@ import {
   HarnessVersionId,
   ok,
   SkillId,
+  SkillBranchId,
   SkillVersionId,
   UserId,
 } from "@/shared";
@@ -109,6 +110,21 @@ export function createPrismaEvalRunRepository(prisma: PrismaClient): EvalRunRepo
         return ok(row ? toEvalRun(row as EvalRunRow) : null);
       } catch (cause) {
         return err(domainError("persistence_failed", "An eval run could not be loaded.", cause));
+      }
+    },
+
+    async findComparableById(id, userId) {
+      try {
+        const row = await prisma.evalRun.findFirst({
+          where: { id, userId },
+          include: { skillVersion: { select: { branchId: true } } },
+        });
+        if (!row) return ok(null);
+        const run = toEvalRun(row as EvalRunRow);
+        const branchId = (row as { skillVersion?: { branchId: string } | null }).skillVersion?.branchId;
+        return ok({ ...run, branchId: branchId ? SkillBranchId(branchId) : null });
+      } catch (cause) {
+        return err(domainError("persistence_failed", "An eval run could not be loaded for comparison.", cause));
       }
     },
 

@@ -154,6 +154,15 @@ export function getContainer(): AppContainer {
         return null;
       }
     : undefined;
+  const resolveBranchId = memorySkillStore
+    ? (versionId: string) => {
+        for (const versions of memorySkillStore.versions.values()) {
+          const version = versions.find((item) => item.id === versionId);
+          if (version) return version.branchId;
+        }
+        return null;
+      }
+    : undefined;
   const harnessVersions = prisma
     ? createPrismaHarnessVersionRepository(prisma)
     : createMemoryHarnessVersionRepository();
@@ -177,7 +186,7 @@ export function getContainer(): AppContainer {
       : createMemoryTestRunRepository({ resolveLintSummary }),
     evalRuns: prisma
       ? createPrismaEvalRunRepository(prisma)
-      : createMemoryEvalRunRepository({ resolveLintSummary }),
+      : createMemoryEvalRunRepository({ resolveLintSummary, resolveBranchId }),
     safetyRatings: prisma
       ? createPrismaSafetyRatingRepository(prisma)
       : createMemorySafetyRatingRepository(),
