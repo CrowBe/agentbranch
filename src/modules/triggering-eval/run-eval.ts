@@ -5,7 +5,7 @@ import { skillName, skillDescription } from "@/modules/skill";
 import type { ModelGateway, AccountingTag } from "@/modules/model-gateway";
 import type { ModelSelection } from "@/modules/model-router";
 import { insightSchema, type EvaluationObserver } from "@/modules/skill-analysis";
-import { ok, isErr, type Result, type DomainError } from "@/shared";
+import { canonicalJson, ok, isErr, type Result, type DomainError } from "@/shared";
 import { generatePromptBattery } from "./prompt-battery";
 import { distractorLibrary } from "./distractor-library";
 import type {
@@ -255,18 +255,6 @@ async function gradeJsonOutputCase(
     passedAttempts,
     passRate: passedAttempts / attempts,
   });
-}
-
-function canonicalJson(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalJson);
-  if (value !== null && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, child]) => [key, canonicalJson(child)]),
-    );
-  }
-  return value;
 }
 
 const INSIGHT_SYSTEM = `You explain a skill's triggering-eval result to its

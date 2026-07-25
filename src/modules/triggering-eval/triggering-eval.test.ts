@@ -134,6 +134,71 @@ describe("triggering eval", () => {
     })]);
   });
 
+  it("decides repeated JSON-output grading by strict majority", async () => {
+    const outputs = [{ count: 3 }, { count: "wrong" }, { count: 4 }];
+    let calls = 0;
+    const gateway: ModelGateway = {
+      ...fakeGateway(),
+      async generate(input) {
+        return ok(input.schema.parse(outputs[calls++]));
+      },
+    };
+    const cases = unwrap(await runBatteryCases(
+      { name: "t", description: "count records" },
+      [{
+        grader: "json-output",
+        graderVersion: 1,
+        prompt: "Return the record count.",
+        expectedSchema: {
+          type: "object",
+          properties: { count: { type: "integer" } },
+          required: ["count"],
+        },
+      }],
+      gateway,
+      TAG,
+      { attempts: 3 },
+    ));
+    expect(calls).toBe(3);
+    expect(cases[0]).toMatchObject({
+      grader: "json-output",
+      pass: true,
+      attempts: 3,
+      passedAttempts: 2,
+      passRate: 2 / 3,
+      observed: { grader: "json-output", output: { count: 3 }, validationIssues: [] },
+    });
+  });
+
+  it("emits no JSON-output case event when a middle attempt fails", async () => {
+    const events: EvaluationRunEvent[] = [];
+    let calls = 0;
+    const gateway: ModelGateway = {
+      ...fakeGateway(),
+      async generate(input) {
+        calls += 1;
+        return calls === 2
+          ? err(domainError("seam_analyze_failed", "middle attempt failed"))
+          : ok(input.schema.parse({ count: 3 }));
+      },
+    };
+    const result = await runBatteryCases(
+      { name: "t", description: "count records" },
+      [{
+        grader: "json-output",
+        graderVersion: 1,
+        prompt: "Return the record count.",
+        expectedSchema: { type: "object" },
+      }],
+      gateway,
+      TAG,
+      { attempts: 3, observer: (event) => events.push(event) },
+    );
+    expect(result.ok).toBe(false);
+    expect(calls).toBe(2);
+    expect(events).toEqual([]);
+  });
+
   it("keeps the grader union closed at compile time", () => {
     // @ts-expect-error unknown graders are rejected by the case union
     const unsupported: PromptCase = { grader: "llm-judge", prompt: "grade me" };

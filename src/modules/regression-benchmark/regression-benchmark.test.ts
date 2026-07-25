@@ -94,6 +94,12 @@ describe("regression benchmark", () => {
     });
     expect(left).toBe(right);
     expect(left).toContain('"benchmark-case",1,"json-output",1');
+    expect(canonicalBenchmarkCase({
+      grader: "json-output",
+      graderVersion: 1,
+      prompt: "unicode keys",
+      expectedSchema: { ä: 4, z: 2, Å: 3, a: 1 },
+    })).toContain('{"a":1,"z":2,"Å":3,"ä":4}');
   });
 
   it("scores every corpus battery through classify, platform-tagged, candidate excluded from the field", async () => {

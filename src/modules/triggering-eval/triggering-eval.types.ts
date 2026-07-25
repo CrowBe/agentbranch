@@ -112,7 +112,19 @@ export type AnalysisReadFilter = {
  * classifier's rationale — the features the loop mines, not the content. */
 export type EvalCaseOutcome =
   | Omit<SelectionCaseResult, "prompt">
-  | Omit<JsonOutputCaseResult, "prompt">;
+  | {
+      readonly grader: "json-output";
+      readonly caseId: string;
+      readonly pass: boolean;
+      readonly attempts: number;
+      readonly passedAttempts: number;
+      readonly passRate: number;
+      /** Counts only; schemas, generated output, paths, and messages stay private. */
+      readonly validationSummary: {
+        readonly issueCount: number;
+        readonly truncated: boolean;
+      };
+    };
 
 /**
  * The cross-user read model for the harness improvement loop. Outcomes and

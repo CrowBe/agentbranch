@@ -29,7 +29,25 @@ export function toEvalRunAnalysisRecord(
     attempts: run.result.attempts,
     totalAttempts: run.result.totalAttempts,
     passedAttempts: run.result.passedAttempts,
-    cases: run.result.cases.map(({ prompt: _prompt, ...outcome }) => outcome),
+    cases: run.result.cases.map((caseResult) => {
+      if (caseResult.grader === "selection") {
+        const { prompt: _prompt, ...outcome } = caseResult;
+        return outcome;
+      }
+      const issueCount = caseResult.observed.validationIssues.length;
+      return {
+        grader: "json-output" as const,
+        caseId: caseResult.caseId,
+        pass: caseResult.pass,
+        attempts: caseResult.attempts,
+        passedAttempts: caseResult.passedAttempts,
+        passRate: caseResult.passRate,
+        validationSummary: {
+          issueCount: Math.min(issueCount, 100),
+          truncated: issueCount > 100,
+        },
+      };
+    }),
     skillLintSummary,
     createdAt: run.createdAt,
   };

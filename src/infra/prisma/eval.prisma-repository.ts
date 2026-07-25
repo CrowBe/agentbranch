@@ -54,79 +54,125 @@ function toEvalRun(row: EvalRunRow): EvalRun {
  * see the closed current union.
  */
 export function normalizeTriggeringResult(value: unknown): TriggeringResult {
-  type StoredCase = Partial<
-    Pick<CaseResult, "caseId" | "attempts" | "passedAttempts" | "passRate">
-  > & {
-    readonly grader?: CaseResult["grader"];
-    readonly prompt: string;
-    readonly expected?: "fire" | "silent";
-    readonly actual?: "fire" | "silent";
-    readonly pass: boolean;
-    readonly rationale?: string;
-    readonly risk?: "trigger-hijack";
-    readonly observed?: CaseResult["observed"];
-    readonly graderVersion?: 1;
-    readonly expectedSchema?: Readonly<Record<string, unknown>>;
-  };
-  const legacy = value as Omit<
-    TriggeringResult,
-    "cases" | "attempts" | "totalAttempts" | "passedAttempts"
-  > & Partial<Pick<TriggeringResult, "attempts" | "totalAttempts" | "passedAttempts">> & {
-    readonly cases: readonly StoredCase[];
-  };
-  const cases = legacy.cases.map((item): CaseResult => {
-    const attempts = item.attempts ?? 1;
-    const passedAttempts = item.passedAttempts ?? (item.pass ? attempts : 0);
-    const common = {
-      caseId: item.caseId,
-      attempts,
-      passedAttempts,
-      passRate: item.passRate ?? passedAttempts / attempts,
-      pass: item.pass,
-    };
-    if (item.grader === "json-output") {
-      const promptCase = {
-        grader: "json-output" as const,
-        graderVersion: item.graderVersion ?? 1,
-        prompt: item.prompt,
-        expectedSchema: item.expectedSchema ?? {},
-      };
-      return {
-        ...promptCase,
-        ...common,
-        caseId: common.caseId ?? triggeringCaseId(promptCase),
-        observed: item.observed?.grader === "json-output"
-          ? item.observed
-          : { grader: "json-output", output: null, validationIssues: [] },
-      };
-    }
-    const promptCase = {
-      grader: "selection" as const,
-      prompt: item.prompt,
-      expected: item.expected ?? "silent",
-      ...(item.risk === undefined ? {} : { risk: item.risk }),
-    };
-    return {
-      ...promptCase,
-      ...common,
-      caseId: common.caseId ?? triggeringCaseId(promptCase),
-      observed: item.observed?.grader === "selection"
-        ? item.observed
-        : {
-            grader: "selection",
-            actual: item.actual ?? "silent",
-            rationale: item.rationale ?? "",
-          },
-    };
-  });
+  if (!isRecord(value) || !Array.isArray(value.cases)) {
+    throw new TypeError("Persisted triggering result is malformed.");
+  }
+  const hasCurrentCase = value.cases.some(
+    (item) => isRecord(item) && item.grader !== undefined,
+  );
+  if (hasCurrentCase) {
+    requireNumber(value.attempts, "attempts");
+    requireNumber(value.totalAttempts, "totalAttempts");
+    requireNumber(value.passedAttempts, "passedAttempts");
+  }
+  const cases = value.cases.map(normalizeStoredCase);
+  const attempts = value.attempts === undefined ? cases[0]?.attempts ?? 1 : requireNumber(value.attempts, "attempts");
+  const totalAttempts = value.totalAttempts === undefined
+    ? cases.reduce((sum, item) => sum + item.attempts, 0)
+    : requireNumber(value.totalAttempts, "totalAttempts");
+  const passedAttempts = value.passedAttempts === undefined
+    ? cases.reduce((sum, item) => sum + item.passedAttempts, 0)
+    : requireNumber(value.passedAttempts, "passedAttempts");
   return {
-    ...legacy,
+    ...(value as unknown as TriggeringResult),
     cases,
-    attempts: legacy.attempts ?? cases[0]?.attempts ?? 1,
-    totalAttempts: legacy.totalAttempts ?? cases.reduce((sum, item) => sum + item.attempts, 0),
-    passedAttempts:
-      legacy.passedAttempts ?? cases.reduce((sum, item) => sum + item.passedAttempts, 0),
+    attempts,
+    totalAttempts,
+    passedAttempts,
   };
+}
+
+function normalizeStoredCase(value: unknown): CaseResult {
+  if (!isRecord(value)) throw new TypeError("Persisted triggering case is malformed.");
+  if (value.grader === undefined) return normalizeLegacySelection(value);
+  if (value.grader === "selection") {
+    requireCurrentCommon(value);
+    if (
+      typeof value.prompt !== "string" ||
+      (value.expected !== "fire" && value.expected !== "silent") ||
+      (value.risk !== undefined && value.risk !== "trigger-hijack") ||
+      !isRecord(value.observed) ||
+      value.observed.grader !== "selection" ||
+      (value.observed.actual !== "fire" && value.observed.actual !== "silent") ||
+      typeof value.observed.rationale !== "string"
+    ) {
+      throw new TypeError("Persisted selection case is malformed.");
+    }
+    return value as unknown as CaseResult;
+  }
+  if (value.grader === "json-output") {
+    requireCurrentCommon(value);
+    if (
+      value.graderVersion !== 1 ||
+      typeof value.prompt !== "string" ||
+      !isRecord(value.expectedSchema) ||
+      !isRecord(value.observed) ||
+      value.observed.grader !== "json-output" ||
+      !Object.hasOwn(value.observed, "output") ||
+      !Array.isArray(value.observed.validationIssues) ||
+      !value.observed.validationIssues.every((issue) => typeof issue === "string")
+    ) {
+      throw new TypeError("Persisted JSON-output case is malformed.");
+    }
+    return value as unknown as CaseResult;
+  }
+  throw new TypeError(`Unknown persisted triggering grader: ${String(value.grader)}.`);
+}
+
+function normalizeLegacySelection(value: Readonly<Record<string, unknown>>): CaseResult {
+  if (
+    typeof value.prompt !== "string" ||
+    (value.expected !== "fire" && value.expected !== "silent") ||
+    (value.actual !== "fire" && value.actual !== "silent") ||
+    typeof value.pass !== "boolean" ||
+    typeof value.rationale !== "string"
+  ) {
+    throw new TypeError("Persisted legacy selection case is malformed.");
+  }
+  const attempts = value.attempts === undefined ? 1 : requireNumber(value.attempts, "attempts");
+  const passedAttempts = value.passedAttempts === undefined
+    ? value.pass ? attempts : 0
+    : requireNumber(value.passedAttempts, "passedAttempts");
+  const expected: "fire" | "silent" = value.expected;
+  const risk: "trigger-hijack" | undefined =
+    value.risk === "trigger-hijack" ? "trigger-hijack" : undefined;
+  const promptCase = {
+    grader: "selection" as const,
+    prompt: value.prompt,
+    expected,
+    ...(risk === undefined ? {} : { risk }),
+  };
+  return {
+    ...promptCase,
+    caseId: typeof value.caseId === "string" ? value.caseId : triggeringCaseId(promptCase),
+    observed: { grader: "selection", actual: value.actual, rationale: value.rationale },
+    pass: value.pass,
+    attempts,
+    passedAttempts,
+    passRate: value.passRate === undefined
+      ? passedAttempts / attempts
+      : requireNumber(value.passRate, "passRate"),
+  };
+}
+
+function requireCurrentCommon(value: Readonly<Record<string, unknown>>): void {
+  if (typeof value.caseId !== "string" || typeof value.pass !== "boolean") {
+    throw new TypeError("Persisted current triggering case is missing identity or result.");
+  }
+  requireNumber(value.attempts, "attempts");
+  requireNumber(value.passedAttempts, "passedAttempts");
+  requireNumber(value.passRate, "passRate");
+}
+
+function requireNumber(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new TypeError(`Persisted triggering result has invalid ${field}.`);
+  }
+  return value;
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 /** Prisma EvalRunRepository (real). Persists triggering-eval artifacts. */

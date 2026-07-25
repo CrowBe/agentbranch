@@ -3,6 +3,7 @@
 export * from "./result";
 export * from "./id";
 export * from "./errors";
+export * from "./canonical-json";
 export * from "./sse";
 export * from "./limits";
 export * from "./binomial-statistics";

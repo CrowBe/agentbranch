@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
-import { unwrap } from "@/shared";
+import { EvalRunId, UserId, isErr, unwrap } from "@/shared";
 import { createPrismaEvalRunRepository } from "./eval.prisma-repository";
 
 describe("Prisma eval run repository", () => {
@@ -59,5 +59,58 @@ describe("Prisma eval run repository", () => {
         include: { skillVersion: { select: { lintSummaryJson: true } } },
       }),
     );
+  });
+
+  it.each([
+    ["unknown grader", { grader: "llm-judge" }],
+    [
+      "corrupt current selection",
+      {
+        grader: "selection",
+        prompt: "current",
+        expected: "fire",
+        pass: true,
+        observed: { grader: "selection", actual: "fire", rationale: "ok" },
+      },
+    ],
+    [
+      "corrupt current JSON-output",
+      {
+        grader: "json-output",
+        graderVersion: 1,
+        prompt: "current",
+        expectedSchema: { type: "object" },
+        pass: true,
+        observed: { grader: "json-output", output: {}, validationIssues: [] },
+      },
+    ],
+  ])("rejects %s persisted cases instead of inventing defaults", async (_, storedCase) => {
+    const prisma = {
+      evalRun: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "eval-bad",
+          skillId: "skill-1",
+          skillVersionId: null,
+          harnessVersionId: null,
+          userId: "user-1",
+          status: "failed",
+          resultJson: {
+            kind: "triggering-eval",
+            passed: false,
+            attempts: 1,
+            totalAttempts: 1,
+            passedAttempts: 0,
+            cases: [storedCase],
+            insight: { verdict: "failing", summary: "bad", findings: [], watch: [] },
+          },
+          createdAt: new Date(),
+        }),
+      },
+    } as unknown as PrismaClient;
+    const result = await createPrismaEvalRunRepository(prisma).findById(
+      EvalRunId("eval-bad"),
+      UserId("user-1"),
+    );
+    expect(isErr(result) && result.error.tag).toBe("persistence_failed");
   });
 });
