@@ -18,6 +18,7 @@ import { ToolChips } from "./tool-chips";
 import { TopBar } from "./top-bar";
 import { Button } from "./ui/button";
 import { Chip } from "./ui/chip";
+import { ConceptView } from "./concept-view";
 import { Pill } from "./ui/pill";
 import { Segmented } from "./ui/segmented";
 
@@ -130,6 +131,46 @@ describe("ui primitives", () => {
     document.documentElement.dataset.theme = "dark";
     render(<Primitives />);
     await screenshotFrame("primitives-dark");
+  });
+});
+
+describe("concept", () => {
+  const concept = {
+    id: "equipment-primitive-decision",
+    title: "Which primitive do I need?",
+    kind: "decision-aid" as const,
+    terms: ["Skill", "Response schema", "Tool contract", "Subagent definition"] as const,
+    idea: {
+      text: "Pick the primitive that captures the reusable boundary.",
+      citations: [{ source: "docs/ARCHITECTURE.md" as const, section: "§9.2" }] as const,
+    },
+    distinction: {
+      text: "These primitives compose without replacing each other.",
+      citations: [{ source: "CONTEXT.md" as const, section: "Equipment" }] as const,
+    },
+    options: [
+      ["Skill", "Use for reusable instructions, workflow, and judgement."],
+      ["Response schema", "Use when the result needs predictable fields and types."],
+      ["Tool contract", "Use for a typed, bounded action an agent can call."],
+      ["Subagent definition", "Use when a specialist needs its own context and boundaries."],
+    ].map(([term, text]) => ({
+      term: term as "Skill" | "Response schema" | "Tool contract" | "Subagent definition",
+      useWhen: {
+        text: text!,
+        citations: [{ source: "CONTEXT.md" as const, section: term! }] as const,
+      },
+    })),
+  };
+
+  test("light", async () => {
+    render(<Frame><ConceptView concept={concept} /></Frame>);
+    await screenshotFrame("concept-light");
+  });
+
+  test("dark", async () => {
+    document.documentElement.dataset.theme = "dark";
+    render(<Frame><ConceptView concept={concept} /></Frame>);
+    await screenshotFrame("concept-dark");
   });
 });
 
