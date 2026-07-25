@@ -45,6 +45,7 @@ export {
   runTriggeringEval,
   runBatteryCases,
   triggeringCaseId,
+  triggeringEvaluationSetHash,
   validateTriggeringAttempts,
 } from "./run-eval";
 export { analysisReadLimit, toEvalRunAnalysisRecord } from "./analysis-read";

@@ -10,6 +10,7 @@ import {
   analysisReadLimit,
   toEvalRunAnalysisRecord,
   triggeringCaseId,
+  triggeringEvaluationSetHash,
   validateTriggeringAttempts,
 } from "@/modules/triggering-eval";
 import type { SkillVersionLintSummary } from "@/modules/skill";
@@ -75,19 +76,53 @@ export function normalizeTriggeringResult(value: unknown): TriggeringResult {
     }
     return normalizeLegacySelection(item);
   });
-  const attempts = value.attempts === undefined ? cases[0]?.attempts ?? 1 : requireNumber(value.attempts, "attempts");
+  if (
+    value.kind !== "triggering-eval" ||
+    typeof value.passed !== "boolean" ||
+    !isInsight(value.insight) ||
+    value.passed !== cases.every((item) => item.pass)
+  ) {
+    throw new TypeError("Persisted legacy triggering result has an invalid root.");
+  }
+  const attempts = value.attempts === undefined
+    ? cases[0]?.attempts ?? 1
+    : requireValidAttempts(value.attempts, "attempts");
+  if (value.attempts !== undefined && cases.some((item) => item.attempts !== attempts)) {
+    throw new TypeError("Persisted legacy case attempt counts do not match the run.");
+  }
+  const exactTotal = cases.reduce((sum, item) => sum + item.attempts, 0);
+  const exactPassed = cases.reduce((sum, item) => sum + item.passedAttempts, 0);
   const totalAttempts = value.totalAttempts === undefined
-    ? cases.reduce((sum, item) => sum + item.attempts, 0)
-    : requireNumber(value.totalAttempts, "totalAttempts");
+    ? exactTotal
+    : requireNonnegativeInteger(value.totalAttempts, "totalAttempts");
   const passedAttempts = value.passedAttempts === undefined
-    ? cases.reduce((sum, item) => sum + item.passedAttempts, 0)
-    : requireNumber(value.passedAttempts, "passedAttempts");
+    ? exactPassed
+    : requireNonnegativeInteger(value.passedAttempts, "passedAttempts");
+  if (
+    totalAttempts !== exactTotal ||
+    passedAttempts !== exactPassed ||
+    passedAttempts > totalAttempts
+  ) {
+    throw new TypeError("Persisted legacy triggering result aggregates are inconsistent.");
+  }
   return {
-    ...(value as unknown as TriggeringResult),
+    kind: "triggering-eval",
+    passed: value.passed,
     cases,
     attempts,
     totalAttempts,
     passedAttempts,
+    ...normalizeComparisonMetadata(
+      value.comparisonMetadata,
+      cases,
+      cases.every((item) => item.grader === "selection"),
+    ),
+    insight: {
+      verdict: value.insight.verdict,
+      summary: value.insight.summary,
+      findings: value.insight.findings,
+      watch: value.insight.watch,
+    },
   };
 }
 
@@ -127,7 +162,11 @@ function normalizeCurrentResult(value: Readonly<Record<string, unknown>>): Trigg
     totalAttempts,
     passedAttempts,
     cases,
-    ...normalizeComparisonMetadata(value.comparisonMetadata),
+    ...normalizeComparisonMetadata(
+      value.comparisonMetadata,
+      cases,
+      cases.every((item) => item.grader === "selection"),
+    ),
     insight: {
       verdict: value.insight.verdict,
       summary: value.insight.summary,
@@ -139,8 +178,13 @@ function normalizeCurrentResult(value: Readonly<Record<string, unknown>>): Trigg
 
 function normalizeComparisonMetadata(
   value: unknown,
+  cases: readonly CaseResult[],
+  allSelection: boolean,
 ): Pick<TriggeringResult, "comparisonMetadata"> | Record<string, never> {
   if (value === undefined) return {};
+  if (!allSelection) {
+    throw new TypeError("JSON-output results cannot carry selection comparison metadata.");
+  }
   if (
     !isRecord(value) ||
     typeof value.evaluationSetHash !== "string" ||
@@ -151,6 +195,9 @@ function normalizeComparisonMetadata(
     value.methodVersion !== 1
   ) {
     throw new TypeError("Persisted triggering comparison metadata is malformed.");
+  }
+  if (value.evaluationSetHash !== triggeringEvaluationSetHash(cases)) {
+    throw new TypeError("Persisted triggering comparison metadata has the wrong evaluation set.");
   }
   return {
     comparisonMetadata: {
@@ -244,10 +291,12 @@ function normalizeLegacySelection(value: Readonly<Record<string, unknown>>): Cas
   ) {
     throw new TypeError("Persisted legacy selection case is malformed.");
   }
-  const attempts = value.attempts === undefined ? 1 : requireNumber(value.attempts, "attempts");
+  const attempts = value.attempts === undefined
+    ? 1
+    : requireValidAttempts(value.attempts, "case attempts");
   const passedAttempts = value.passedAttempts === undefined
     ? value.pass ? attempts : 0
-    : requireNumber(value.passedAttempts, "passedAttempts");
+    : requireNonnegativeInteger(value.passedAttempts, "case passedAttempts");
   const expected: "fire" | "silent" = value.expected;
   const risk: "trigger-hijack" | undefined =
     value.risk === "trigger-hijack" ? "trigger-hijack" : undefined;
@@ -259,15 +308,31 @@ function normalizeLegacySelection(value: Readonly<Record<string, unknown>>): Cas
   };
   return {
     ...promptCase,
-    caseId: typeof value.caseId === "string" ? value.caseId : triggeringCaseId(promptCase),
+    caseId: triggeringCaseId(promptCase),
     observed: { grader: "selection", actual: value.actual, rationale: value.rationale },
     pass: value.pass,
     attempts,
     passedAttempts,
-    passRate: value.passRate === undefined
-      ? passedAttempts / attempts
-      : requireNumber(value.passRate, "passRate"),
+    passRate: validateLegacyCaseMetrics(value, attempts, passedAttempts),
   };
+}
+
+function validateLegacyCaseMetrics(
+  value: Readonly<Record<string, unknown>>,
+  attempts: number,
+  passedAttempts: number,
+): number {
+  const passRate = value.passRate === undefined
+    ? passedAttempts / attempts
+    : requireNumber(value.passRate, "case passRate");
+  if (
+    passedAttempts > attempts ||
+    passRate !== passedAttempts / attempts ||
+    value.pass !== (passedAttempts * 2 > attempts)
+  ) {
+    throw new TypeError("Persisted legacy triggering case metrics are inconsistent.");
+  }
+  return passRate;
 }
 
 function currentCaseMetrics(
@@ -313,6 +378,13 @@ function requireNonnegativeInteger(value: unknown, field: string): number {
     throw new TypeError(`Persisted triggering result has invalid ${field}.`);
   }
   return number;
+}
+
+function requireValidAttempts(value: unknown, field: string): number {
+  const number = requireNumber(value, field);
+  const result = validateTriggeringAttempts(number);
+  if (!result.ok) throw new TypeError(`Persisted triggering result has invalid ${field}.`);
+  return result.value;
 }
 
 function isInsight(value: unknown): value is TriggeringResult["insight"] {

@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
 import { EvalRunId, UserId, isErr, unwrap } from "@/shared";
-import { triggeringCaseId } from "@/modules/triggering-eval";
+import { triggeringCaseId, triggeringEvaluationSetHash } from "@/modules/triggering-eval";
 import { createPrismaEvalRunRepository } from "./eval.prisma-repository";
 
 describe("Prisma eval run repository", () => {
@@ -17,6 +17,7 @@ describe("Prisma eval run repository", () => {
         kind: "triggering-eval",
         passed: true,
         cases: [{
+          caseId: "untrusted-legacy-id",
           prompt: "legacy prompt",
           expected: "fire",
           actual: "fire",
@@ -181,7 +182,113 @@ describe("Prisma eval run repository", () => {
     ));
     expect(run?.result.comparisonMetadata).toEqual(currentResult().comparisonMetadata);
   });
+
+  it.each([
+    ["kind", (value: ReturnType<typeof legacyResult>) => ({ ...value, kind: "other" })],
+    ["pass", (value: ReturnType<typeof legacyResult>) => ({ ...value, passed: false })],
+    ["insight", (value: ReturnType<typeof legacyResult>) => ({ ...value, insight: null })],
+    ["attempts", (value: ReturnType<typeof legacyResult>) => ({ ...value, attempts: 2 })],
+    ["totalAttempts", (value: ReturnType<typeof legacyResult>) => ({ ...value, totalAttempts: 2 })],
+    ["passedAttempts", (value: ReturnType<typeof legacyResult>) => ({ ...value, passedAttempts: 0 })],
+    ["case passRate", (value: ReturnType<typeof legacyResult>) => ({
+      ...value,
+      cases: [{ ...value.cases[0], passRate: 0.5 }],
+    })],
+    ["case counts", (value: ReturnType<typeof legacyResult>) => ({
+      ...value,
+      cases: [{ ...value.cases[0], passedAttempts: 2 }],
+    })],
+  ])("rejects corrupt supplied legacy %s", async (_, corrupt) => {
+    const result = await repositoryResult(corrupt(legacyResult()));
+    expect(isErr(result) && result.error.tag).toBe("persistence_failed");
+  });
+
+  it("rejects selection comparison metadata on a current JSON-output result", async () => {
+    const value = jsonCurrentResult();
+    const result = await repositoryResult({
+      ...value,
+      comparisonMetadata: currentResult().comparisonMetadata,
+    });
+    expect(isErr(result) && result.error.tag).toBe("persistence_failed");
+  });
+
+  it("rejects selection comparison metadata with the wrong ordered case hash", async () => {
+    const value = currentResult();
+    const result = await repositoryResult({
+      ...value,
+      comparisonMetadata: { ...value.comparisonMetadata, evaluationSetHash: "wrong" },
+    });
+    expect(isErr(result) && result.error.tag).toBe("persistence_failed");
+  });
 });
+
+function repositoryResult(resultJson: unknown) {
+  const prisma = {
+    evalRun: {
+      findFirst: vi.fn().mockResolvedValue({
+        id: "eval-probe",
+        skillId: "skill-1",
+        skillVersionId: null,
+        harnessVersionId: null,
+        userId: "user-1",
+        status: "failed",
+        resultJson,
+        createdAt: new Date(),
+      }),
+    },
+  } as unknown as PrismaClient;
+  return createPrismaEvalRunRepository(prisma).findById(
+    EvalRunId("eval-probe"),
+    UserId("user-1"),
+  );
+}
+
+function legacyResult() {
+  return {
+    kind: "triggering-eval" as const,
+    passed: true,
+    attempts: 1,
+    totalAttempts: 1,
+    passedAttempts: 1,
+    cases: [{
+      prompt: "legacy",
+      expected: "fire" as const,
+      actual: "fire" as const,
+      pass: true,
+      rationale: "legacy",
+      attempts: 1,
+      passedAttempts: 1,
+      passRate: 1,
+    }],
+    insight: { verdict: "good" as const, summary: "legacy", findings: [], watch: [] },
+  };
+}
+
+function jsonCurrentResult() {
+  const promptCase = {
+    grader: "json-output" as const,
+    graderVersion: 1 as const,
+    prompt: "return json",
+    expectedSchema: { type: "object" },
+  };
+  return {
+    kind: "triggering-eval" as const,
+    passed: true,
+    attempts: 1,
+    totalAttempts: 1,
+    passedAttempts: 1,
+    cases: [{
+      ...promptCase,
+      caseId: triggeringCaseId(promptCase),
+      observed: { grader: "json-output" as const, output: {}, validationIssues: [] },
+      pass: true,
+      attempts: 1,
+      passedAttempts: 1,
+      passRate: 1,
+    }],
+    insight: { verdict: "good" as const, summary: "json", findings: [], watch: [] },
+  };
+}
 
 function currentResult() {
   const promptCase = {
@@ -189,6 +296,15 @@ function currentResult() {
     prompt: "current prompt",
     expected: "fire" as const,
   };
+  const cases = [{
+    ...promptCase,
+    caseId: triggeringCaseId(promptCase),
+    observed: { grader: "selection" as const, actual: "fire" as const, rationale: "current" },
+    pass: true,
+    attempts: 3,
+    passedAttempts: 2,
+    passRate: 2 / 3,
+  }];
   return {
     kind: "triggering-eval" as const,
     passed: true,
@@ -196,21 +312,13 @@ function currentResult() {
     totalAttempts: 3,
     passedAttempts: 2,
     comparisonMetadata: {
-      evaluationSetHash: "set-hash",
+      evaluationSetHash: triggeringEvaluationSetHash(cases),
       grader: "selection" as const,
       graderVersion: 1 as const,
       method: "competitive-selection" as const,
       methodVersion: 1 as const,
     },
-    cases: [{
-      ...promptCase,
-      caseId: triggeringCaseId(promptCase),
-      observed: { grader: "selection" as const, actual: "fire" as const, rationale: "current" },
-      pass: true,
-      attempts: 3,
-      passedAttempts: 2,
-      passRate: 2 / 3,
-    }],
+    cases,
     insight: { verdict: "good" as const, summary: "valid", findings: [], watch: [] },
   };
 }

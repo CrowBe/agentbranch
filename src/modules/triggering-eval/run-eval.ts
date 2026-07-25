@@ -83,7 +83,7 @@ export async function runTriggeringEval(
     ...(cases.every((item) => item.grader === "selection")
       ? {
           comparisonMetadata: {
-            evaluationSetHash: evaluationSetHash(cases),
+            evaluationSetHash: triggeringEvaluationSetHash(cases),
             grader: "selection" as const,
             graderVersion: 1 as const,
             method: "competitive-selection" as const,
@@ -95,7 +95,7 @@ export async function runTriggeringEval(
   });
 }
 
-function evaluationSetHash(cases: readonly CaseResult[]): string {
+export function triggeringEvaluationSetHash(cases: readonly Pick<CaseResult, "caseId">[]): string {
   return createHash("sha256")
     .update(JSON.stringify(["triggering-evaluation-set", 1, ...cases.map((item) => item.caseId)]))
     .digest("hex");

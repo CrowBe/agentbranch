@@ -134,6 +134,44 @@ describe("triggering eval", () => {
     })]);
   });
 
+  it("keeps a live JSON-output run out of selection-only comparison metadata", async () => {
+    let generateCalls = 0;
+    const gateway: ModelGateway = {
+      ...fakeGateway(),
+      async generate(input) {
+        generateCalls += 1;
+        return generateCalls === 1
+          ? ok(input.schema.parse({ count: 3 }))
+          : ok(input.schema.parse({
+              verdict: "good",
+              summary: "JSON matched.",
+              findings: [],
+              watch: [],
+            }));
+      },
+    };
+    const result = unwrap(await runTriggeringEval(
+      skillFor("Return record counts."),
+      gateway,
+      TAG,
+      {
+        battery: [{
+          grader: "json-output",
+          graderVersion: 1,
+          prompt: "Return the record count.",
+          expectedSchema: {
+            type: "object",
+            properties: { count: { type: "integer" } },
+            required: ["count"],
+          },
+        }],
+      },
+    ));
+    expect(result.passed).toBe(true);
+    expect(result.comparisonMetadata).toBeUndefined();
+    expect(generateCalls).toBe(2);
+  });
+
   it("decides repeated JSON-output grading by strict majority", async () => {
     const outputs = [{ count: 3 }, { count: "wrong" }, { count: 4 }];
     let calls = 0;
