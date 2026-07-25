@@ -40,6 +40,7 @@ export function HeroPanel({
   onSafetySurfaceChange,
   onReviseWithFeedback,
   onApplyMetadataSuggestion,
+  onAskAboutConcept,
   feedbackBusy,
   equipmentFocus = false,
   onBackToSkill,
@@ -62,6 +63,7 @@ export function HeroPanel({
   onSafetySurfaceChange: (surface: "insights" | "breakdown") => void;
   onReviseWithFeedback: (result: EvaluationFeedbackResult) => void;
   onApplyMetadataSuggestion?: () => void;
+  onAskAboutConcept?: (question: string) => void;
   feedbackBusy: boolean;
   equipmentFocus?: boolean;
   onBackToSkill?: () => void;
@@ -86,6 +88,7 @@ export function HeroPanel({
             onSafetySurfaceChange={onSafetySurfaceChange}
             onReviseWithFeedback={onReviseWithFeedback}
             onApplyMetadataSuggestion={onApplyMetadataSuggestion}
+            onAskAboutConcept={onAskAboutConcept}
             feedbackBusy={feedbackBusy}
           />
         ) : view === "rendered" ? (
@@ -160,6 +163,7 @@ function CapabilityView({
   onSafetySurfaceChange,
   onReviseWithFeedback,
   onApplyMetadataSuggestion,
+  onAskAboutConcept,
   feedbackBusy,
 }: {
   panel: CapabilityPanel;
@@ -169,10 +173,17 @@ function CapabilityView({
   onSafetySurfaceChange: (surface: "insights" | "breakdown") => void;
   onReviseWithFeedback: (result: EvaluationFeedbackResult) => void;
   onApplyMetadataSuggestion?: () => void;
+  onAskAboutConcept?: (question: string) => void;
   feedbackBusy: boolean;
 }) {
   if (panel.kind === "concept") {
-    return <ConceptView concept={panel.concept} />;
+    return (
+      <ConceptView
+        concept={panel.concept}
+        busy={feedbackBusy}
+        onAsk={onAskAboutConcept}
+      />
+    );
   }
 
   if (panel.kind === "metadata-suggestion") {

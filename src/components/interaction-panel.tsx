@@ -17,6 +17,7 @@ export function InteractionPanel({
   onSend,
   onImport,
   onEquipment,
+  onEquipmentHelp,
   onTemplates,
 }: {
   entries: readonly InteractionEntry[];
@@ -29,6 +30,7 @@ export function InteractionPanel({
   onSend: (message: string) => void;
   onImport?: (raw: string) => void;
   onEquipment?: (raw: string) => void;
+  onEquipmentHelp?: () => void;
   onTemplates?: (query: string) => void;
 }) {
   const [value, setValue] = useState("");
@@ -65,6 +67,19 @@ export function InteractionPanel({
         {entries.length === 0 ? (
           <div className="flex flex-col gap-2">
             <p className="text-on-surface-variant">{copy.empty}</p>
+            {mode === "equipment" && onEquipmentHelp ? (
+              <p className="text-label text-on-surface-variant">
+                Not sure which one fits?{" "}
+                <button
+                  type="button"
+                  onClick={onEquipmentHelp}
+                  className="text-primary underline underline-offset-2 hover:no-underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                >
+                  Choose the right building block
+                </button>
+                .
+              </p>
+            ) : null}
             {copy.hint && <p className="text-label text-on-surface-variant">{copy.hint}</p>}
           </div>
         ) : (

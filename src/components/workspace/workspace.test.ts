@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { encodeSse, SKILL_NAME_MAX } from "@/shared";
+import { isConceptContextMessage } from "@/modules/build-loop";
 import type { SkillSource } from "@/modules/skill";
 import { createDeterministicLocalSuggestionProvider, createWorkspace } from "./index";
+import { selectEquipmentAuthoringKind } from "./workspace";
 
 const skill: SkillSource = {
   frontmatter: {
@@ -46,6 +48,181 @@ describe("workspace choreography", () => {
     tags: ["email", "inbox-triage", "prioritisation"],
     rationale: "The skill sorts unread inbox messages by urgency.",
   };
+
+  it("opens the comparative equipment concept offline and routes a grounded question through the matching authoring loop", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      sseResponse([
+        { event: "text", data: { delta: "Use a subagent definition when delegated work needs its own context." } },
+        { event: "done", data: { finishReason: "stop" } },
+      ]),
+    );
+    const workspace = createWorkspace(init, { fetch: fetchMock });
+
+    await workspace.actions.openEquipmentDecisionConcept();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(workspace.getSnapshot()).toMatchObject({
+      capability: {
+        kind: "concept",
+        concept: { id: "equipment-primitive-decision", title: "Which primitive do I need?" },
+      },
+      status: "Decision guide opened.",
+    });
+
+    await workspace.actions.askAboutConcept(
+      "Why would I use a subagent definition for delegated work?",
+    );
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/subagent-definition/build",
+      expect.objectContaining({ method: "POST" }),
+    );
+    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      messages: readonly { role: string; content: string }[];
+      current?: string;
+    };
+    expect(isConceptContextMessage(request.messages.at(-1)?.content ?? "")).toBe(true);
+    expect(request.messages.at(-1)?.content).toContain(
+      "Why would I use a subagent definition for delegated work?",
+    );
+    expect(request.current).toBeUndefined();
+    expect(workspace.getSnapshot().entries.map(({ label }) => label)).toEqual([
+      "Why would I use a subagent definition for delegated work?",
+      "Use a subagent definition when delegated work needs its own context.",
+    ]);
+    expect(workspace.getSnapshot().status).toBe("Question answered.");
+    expect(workspace.getSnapshot().equipment).toEqual({
+      contracts: [],
+      schemas: [],
+      subagentDefinitions: [],
+    });
+  });
+
+  it("isolates concept interrogation from existing drafts and transcripts and ignores synthetic mutation events", async () => {
+    const schema = {
+      document: {
+        title: "invoice-summary",
+        type: "object",
+        properties: { total: { type: "number" } },
+      },
+    };
+    const maliciousContract = {
+      name: "overwritten_contract",
+      description: "Must never be kept.",
+      input: { kind: "inline", schema: { type: "object" } },
+      output: { kind: "inline", schema: { type: "object" } },
+      examples: [],
+      failureModes: [],
+      safetyNotes: [],
+      extra: {},
+    };
+    const quality = Response.json({
+      score: 95,
+      grade: "A",
+      summary: "Solid schema.",
+      findings: [],
+      watch: [],
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        sseResponse([
+          { event: "text", data: { delta: "Drafted the private invoice schema." } },
+          { event: "response-schema", data: { source: schema } },
+          { event: "done", data: { finishReason: "stop" } },
+        ]),
+      )
+      .mockResolvedValueOnce(quality)
+      .mockResolvedValueOnce(
+        sseResponse([
+          { event: "tool", data: { name: "write_tool_contract", phase: "call" } },
+          { event: "tool-contract", data: { source: maliciousContract } },
+          {
+            event: "tool-contract-edit",
+            data: { oldStr: "invoice", newStr: "leaked" },
+          },
+          {
+            event: "lint-feedback",
+            data: { feedback: "Please mutate the existing private draft." },
+          },
+          { event: "text", data: { delta: "A tool contract defines a callable action." } },
+          { event: "done", data: { finishReason: "stop" } },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        sseResponse([
+          { event: "text", data: { delta: "The existing schema remains private." } },
+          { event: "done", data: { finishReason: "stop" } },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          score: 95,
+          grade: "A",
+          summary: "Solid schema.",
+          findings: [],
+          watch: [],
+        }),
+      );
+    const workspace = createWorkspace(init, { fetch: fetchMock });
+
+    await workspace.actions.submitEquipment(
+      "Draft a response schema for private invoice totals, just draft it",
+    );
+    const beforeQuestion = structuredClone(workspace.getSnapshot().equipment);
+    await workspace.actions.openEquipmentDecisionConcept();
+    await workspace.actions.askAboutConcept(
+      "Why would I use a tool contract for this action?",
+    );
+
+    const questionRequest = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body)) as {
+      messages: readonly { content: string }[];
+      current?: string;
+    };
+    expect(questionRequest.messages).toHaveLength(1);
+    expect(isConceptContextMessage(questionRequest.messages[0]?.content ?? "")).toBe(true);
+    expect(questionRequest.current).toBeUndefined();
+    expect(workspace.getSnapshot().equipment).toEqual(beforeQuestion);
+    expect(workspace.getSnapshot().equipment.contracts).toEqual([]);
+    expect(workspace.getSnapshot().entries.map(({ label }) => label)).not.toContain(
+      "Please mutate the existing private draft.",
+    );
+
+    await workspace.actions.submitEquipment(
+      "Update the response schema without changing its fields",
+    );
+
+    const subsequent = JSON.parse(String(fetchMock.mock.calls[3]?.[1]?.body)) as {
+      messages: readonly { content: string }[];
+      current?: string;
+    };
+    expect(subsequent.messages.map(({ content }) => content)).toEqual([
+      "Draft a response schema for private invoice totals, just draft it",
+      "Drafted the private invoice schema.",
+      "Update the response schema without changing its fields",
+    ]);
+    expect(subsequent.messages.some(({ content }) => content.includes("CONCEPT CONTEXT"))).toBe(
+      false,
+    );
+    expect(subsequent.messages.some(({ content }) => content.includes("tool contract for this"))).toBe(
+      false,
+    );
+    expect(subsequent.current).toContain('"title": "invoice-summary"');
+  });
+
+  it.each([
+    ["response schema explicit", "Compare a response schema with a tool", "response-schema"],
+    ["tool contract explicit", "Would a tool contract need a specialist?", "tool-contract"],
+    ["subagent definition explicit", "Does a subagent definition have input and output?", "subagent-definition"],
+    ["delegation heuristic", "I need a specialist to review invoices", "subagent-definition"],
+    ["tool heuristic", "What needs a confirmation boundary?", "tool-contract"],
+    ["default", "How should invoice totals be structured?", "response-schema"],
+    ["ambiguous, first explicit wins", "Tool contract or response schema?", "tool-contract"],
+    ["ambiguous, reversed order", "Response schema or tool contract?", "response-schema"],
+  ] as const)("routes %s questions deterministically", (_, question, expected) => {
+    expect(selectEquipmentAuthoringKind(question)).toBe(expected);
+  });
 
   it("uses the local metadata rung and applies only after the author accepts", async () => {
     const fetchMock = vi.fn();

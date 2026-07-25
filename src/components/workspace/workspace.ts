@@ -1,4 +1,4 @@
-import { readSseEvents, type EvaluationEvent } from "@/shared";
+import { isErr, readSseEvents, type EvaluationEvent } from "@/shared";
 import type {
   BuildLoopEvent,
   BuildMessage,
@@ -7,9 +7,13 @@ import type {
   SubagentDefinitionLoopEvent,
 } from "@/modules/build-loop";
 import {
+  formatConceptContext,
   formatTestRunFeedback,
   formatTriggeringEvalFeedback,
 } from "@/modules/build-loop/feedback-formatters";
+import { CONCEPT_GLOSSARY, conceptLibrary } from "@/modules/concept-library";
+import { conceptCapability } from "@/modules/concept";
+import { runCapability } from "@/modules/skill-analysis";
 import {
   applyResponseSchemaEdit,
   createResponseSchemaLintReport,
@@ -415,6 +419,44 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       patch({ equipment: loaded, status: rows.length ? "Equipment loaded." : "No saved equipment yet." });
       refreshEquipmentEntries(loaded);
     } catch (cause) { fail(friendlyError(String(cause))); }
+  }
+
+  async function openEquipmentDecisionConcept(): Promise<void> {
+    const concept = conceptLibrary.find(
+      ({ id }) => id === "equipment-primitive-decision",
+    );
+    if (!concept) {
+      fail("The equipment decision guide is unavailable.");
+      return;
+    }
+    const rendered = await runCapability(conceptCapability, "rendered", concept);
+    if (isErr(rendered)) {
+      fail(rendered.error.message);
+      return;
+    }
+    patch({
+      capability: { kind: "concept", concept: rendered.value },
+      activeTool: null,
+      view: "rendered",
+      status: "Decision guide opened.",
+    });
+  }
+
+  async function askAboutConcept(question: string): Promise<void> {
+    if (snapshot.equipmentBusy || snapshot.busy) return;
+    const active = snapshot.capability;
+    if (active?.kind !== "concept") return;
+    const concept = conceptLibrary.find(({ id }) => id === active.concept.id);
+    if (!concept) {
+      fail("This concept is unavailable.");
+      return;
+    }
+    const message = formatConceptContext({
+      concept,
+      question,
+      glossary: CONCEPT_GLOSSARY,
+    });
+    await sendConceptInterrogation(selectEquipmentAuthoringKind(question), message, question);
   }
 
   async function showHistory(): Promise<void> {
@@ -962,6 +1004,72 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     }
   }
 
+  /**
+   * Concept interrogation deliberately does not share the Equipment authoring
+   * transcript or any working draft. Its gateway turn receives one canonical
+   * user message and its event consumer accepts prose only: mutation, lint,
+   * and tool events are ignored even if a provider emits them unexpectedly.
+   */
+  async function sendConceptInterrogation(
+    kind: EquipmentKind,
+    message: string,
+    question: string,
+  ): Promise<void> {
+    const isContract = kind === "tool-contract";
+    const isDefinition = kind === "subagent-definition";
+    patch({
+      entries: [...snapshot.entries, entry(question)],
+      status: "Answering question…",
+      equipmentBusy: true,
+      capability: null,
+    });
+    let assistantText = "";
+    let failed = false;
+    const assistantEntryId = entry("").id;
+    try {
+      const res = await fetchImpl(
+        isContract
+          ? "/api/tool-contract/build"
+          : isDefinition
+            ? "/api/subagent-definition/build"
+            : "/api/response-schema/build",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: [{ role: "user", content: message }],
+          }),
+        },
+      );
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        fail(friendlyError(body?.error ?? `Request failed (${res.status}).`));
+        return;
+      }
+      if (!res.body) {
+        fail("Answer stream did not open.");
+        return;
+      }
+      for await (const event of readSseEvents<
+        ResponseSchemaLoopEvent | ToolContractLoopEvent | SubagentDefinitionLoopEvent
+      >(res.body)) {
+        if (event.event === "text") {
+          assistantText += event.data.delta;
+          patch({ entries: upsertAssistant(snapshot.entries, assistantEntryId, assistantText) });
+        } else if (event.event === "error") {
+          failed = true;
+          fail(friendlyError(event.data.message));
+        } else if (event.event === "done") {
+          if (!failed) patch({ status: "Question answered." });
+        }
+      }
+    } catch (cause) {
+      fail(friendlyError(String(cause)));
+    } finally {
+      patch({ equipmentBusy: false });
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Branching iteration (ARCHITECTURE §9.3): draft / main version / promote
 
@@ -1496,6 +1604,8 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     showImport,
     showSkills,
     showEquipment,
+    openEquipmentDecisionConcept,
+    askAboutConcept,
     focusSkill,
     showHistory,
     showTemplates,
@@ -1697,7 +1807,20 @@ function appendProgressCase(
  * that parses as a JSON object is treated as a response schema (a JSON Schema
  * document). The server re-parses through the real source models either way.
  */
-function selectEquipmentAuthoringKind(message: string): EquipmentKind {
+export function selectEquipmentAuthoringKind(message: string): EquipmentKind {
+  const explicit: readonly { readonly phrase: RegExp; readonly kind: EquipmentKind }[] = [
+    { phrase: /\bresponse schema\b/i, kind: "response-schema" },
+    { phrase: /\btool contract\b/i, kind: "tool-contract" },
+    { phrase: /\bsubagent definition\b|\bsub-agent definition\b/i, kind: "subagent-definition" },
+  ];
+  const named = explicit
+    .map(({ phrase, kind }) => ({ index: message.search(phrase), kind }))
+    .filter(({ index }) => index >= 0)
+    .sort((left, right) => left.index - right.index)[0];
+  // Comparative questions can name several primitives. The first explicit
+  // mention is the deterministic routing anchor; the canonical envelope makes
+  // every authoring prompt answer-only, so this choice cannot mutate a draft.
+  if (named) return named.kind;
   if (/\b(subagent|sub-agent|helper|specialist|delegate|delegat(?:e|ion|ing))\b/i.test(message)) return "subagent-definition";
   return /\b(tool|contract|input|output|failure mode|confirmation boundary|confirm before)\b/i.test(
     message,

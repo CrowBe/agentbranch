@@ -30,6 +30,63 @@ afterEach(() => {
 });
 
 describe("AppShell capability chips", () => {
+  it("opens the Equipment decision guide by keyboard, returns, and submits a grounded question", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ equipment: [] }))
+      .mockResolvedValueOnce(
+        sseResponse([
+          {
+            event: "text",
+            data: { delta: "A subagent definition gives delegated specialist work its own context." },
+          },
+          { event: "done", data: { finishReason: "stop" } },
+        ]),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    render(<AppShell rendered={rendered} source={source} initialSkill={skill} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Equipment" }));
+    const help = await screen.findByRole("button", {
+      name: "Choose the right building block",
+    });
+    help.focus();
+    await userEvent.keyboard("{Enter}");
+
+    expect(
+      await screen.findByRole("heading", { name: "Which primitive do I need?" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("article", { name: "Which primitive do I need?" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back to skill" })).toBeEnabled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Back to skill" }));
+    expect(screen.getByRole("heading", { name: "inbox-triage" })).toBeInTheDocument();
+
+    await userEvent.click(help);
+    const question = screen.getByLabelText("Ask about this");
+    await userEvent.type(
+      question,
+      "Why would I use a subagent definition for delegated work?",
+    );
+    const ask = screen.getByRole("button", { name: "Ask about this" });
+    ask.focus();
+    await userEvent.keyboard("{Enter}");
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/subagent-definition/build");
+    const request = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)) as {
+      messages: readonly { content: string }[];
+    };
+    expect(request.messages.at(-1)?.content).toContain(
+      "[BEGIN AGENTBRANCH CONCEPT CONTEXT v1]",
+    );
+    expect(request.messages.at(-1)?.content).toContain(
+      "Why would I use a subagent definition for delegated work?",
+    );
+    expect(await screen.findByText(/gives delegated specialist work its own context/)).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Question answered.");
+  });
+
   it("renders and explicitly applies the metadata suggestion", async () => {
     const fetchMock = vi.fn().mockResolvedValue(Response.json({
       name: "inbox-priority-triage",
