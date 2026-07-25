@@ -3,7 +3,7 @@ import { access, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import type { ResolvedModel } from "@/modules/model-router";
 import { isErr } from "@/shared";
@@ -17,11 +17,13 @@ const model: ResolvedModel = {
   viaOverride: false,
 };
 
+beforeEach(() => vi.stubEnv("CODEX_HOME", "/test/codex-home"));
 afterEach(() => vi.unstubAllEnvs());
 
 describe("Codex model calls", () => {
   it("spawns classify with native schema, stdin, inherited Codex auth, and cleans every artifact", async () => {
     vi.stubEnv("CODEX_HOME", "/real/logged-in/codex-home");
+    vi.stubEnv("ANTHROPIC_API_KEY", "must-not-leak");
     let observedRoot = "";
     const fake = fakeSpawn(async ({ args, options, stdin }) => {
       const schemaPath = valueAfter(args, "--output-schema");
@@ -33,6 +35,10 @@ describe("Codex model calls", () => {
         "--ignore-user-config",
         "--ignore-rules",
         "--ephemeral",
+        "--disable",
+        "shell_tool",
+        "--disable",
+        "unified_exec",
         "--sandbox",
         "read-only",
         "--json",
@@ -41,6 +47,9 @@ describe("Codex model calls", () => {
       expect(options.shell).toBe(false);
       expect(options.cwd).toBe(valueAfter(args, "-C"));
       expect(options.env?.CODEX_HOME).toBe("/real/logged-in/codex-home");
+      expect(options.env?.ANTHROPIC_API_KEY).toBeUndefined();
+      expect(options.env?.HOME).toBeUndefined();
+      expect(options.detached).toBe(process.platform !== "win32");
       expect(stdin).toContain("charged twice");
       expect(JSON.parse(await readFile(schemaPath, "utf8"))).toMatchObject({
         properties: { choice: { anyOf: expect.any(Array) } },
@@ -101,19 +110,38 @@ describe("Codex model calls", () => {
   });
 
   it("kills and reaps a timed-out child before cleaning up", async () => {
-    const fake = fakeSpawn(async ({ child }) => {
-      child.kill = vi.fn(() => {
-        queueMicrotask(() => child.emit("close", null, "SIGTERM"));
-        return true;
-      });
-      return { manualClose: true };
+    const fake = fakeSpawn(async () => ({ manualClose: true }));
+    const signals: Array<[number, NodeJS.Signals]> = [];
+    const calls = createCodexModelCalls({
+      spawn: fake.spawn,
+      timeoutMs: 5,
+      killGraceMs: 2,
+      killProcessGroup: (pid, signal) => {
+        signals.push([pid, signal]);
+        if (signal === "SIGKILL") queueMicrotask(() => fake.children[0]?.emit("close", null, signal));
+      },
     });
-    const calls = createCodexModelCalls({ spawn: fake.spawn, timeoutMs: 5 });
 
     const result = await calls.classify(model, { choices: ["yes"], prompt: "yes" });
 
     expect(isErr(result) && result.error.message).toContain("timed out");
-    expect(fake.children[0]?.kill).toHaveBeenCalledWith("SIGTERM");
+    expect(signals).toEqual([[-4321, "SIGTERM"], [-4321, "SIGKILL"]]);
+    await expectArtifactsCleaned(fake.calls[0]!.args);
+  });
+
+  it("bounds combined stdout and stderr and terminates overflow", async () => {
+    const fake = fakeSpawn(async () => ({ stdout: "123456", stderr: "abcdef" }));
+    const signals: Array<NodeJS.Signals> = [];
+    const calls = createCodexModelCalls({
+      spawn: fake.spawn,
+      maxOutputBytes: 10,
+      killProcessGroup: (_pid, signal) => { signals.push(signal); },
+    });
+
+    const result = await calls.classify(model, { choices: ["yes"], prompt: "yes" });
+
+    expect(isErr(result) && result.error.message).toContain("10-byte output limit");
+    expect(signals).toContain("SIGTERM");
     await expectArtifactsCleaned(fake.calls[0]!.args);
   });
 
@@ -204,6 +232,7 @@ type FakeCall = {
 function fakeChild(): ChildProcessWithoutNullStreams {
   const emitter = new EventEmitter() as ChildProcessWithoutNullStreams;
   Object.assign(emitter, {
+    pid: 4321,
     stdin: new PassThrough(),
     stdout: new PassThrough(),
     stderr: new PassThrough(),

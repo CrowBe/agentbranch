@@ -15,7 +15,9 @@ import type { TokenUsageBreakdown } from "@/modules/usage";
 import { domainError, err, ok, type DomainError, type Result } from "@/shared";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
+const DEFAULT_KILL_GRACE_MS = 1_000;
 const DEFAULT_CONCURRENCY = 2;
+const DEFAULT_MAX_OUTPUT_BYTES = 1_048_576;
 const CODEX_AGENT_UNAVAILABLE =
   "The Codex dev rung covers classify/generate; use the Claude Code rung for agent turns.";
 
@@ -28,8 +30,11 @@ type SpawnFn = (
 export type CodexModelCallsOptions = {
   readonly binary?: string;
   readonly timeoutMs?: number;
+  readonly killGraceMs?: number;
+  readonly maxOutputBytes?: number;
   readonly concurrency?: number;
   readonly spawn?: SpawnFn;
+  readonly killProcessGroup?: (pid: number, signal: NodeJS.Signals) => void;
 };
 
 /** Codex CLI dev rung: native structured classify/generate, no agent-tool bridge. */
@@ -100,6 +105,22 @@ function createCodexRunner(options: CodexModelCallsOptions) {
         "--ignore-user-config",
         "--ignore-rules",
         "--ephemeral",
+        "--disable",
+        "shell_tool",
+        "--disable",
+        "unified_exec",
+        "--disable",
+        "shell_snapshot",
+        "--disable",
+        "browser_use",
+        "--disable",
+        "computer_use",
+        "--disable",
+        "apps",
+        "--disable",
+        "multi_agent",
+        "--disable",
+        "web_search_request",
         "--sandbox",
         "read-only",
         "--skip-git-repo-check",
@@ -117,19 +138,38 @@ function createCodexRunner(options: CodexModelCallsOptions) {
 
       const child = spawnProcess(options.binary ?? "codex", args, {
         cwd: scratch,
-        env: { ...process.env },
+        env: codexEnvironment(),
+        detached: process.platform !== "win32",
         shell: false,
         stdio: "pipe",
       });
       let stdout = "";
       let stderr = "";
+      let outputBytes = 0;
+      const watcher = watchChild(child, {
+        timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        killGraceMs: options.killGraceMs ?? DEFAULT_KILL_GRACE_MS,
+        killProcessGroup: options.killProcessGroup ?? process.kill,
+      });
+      const capture = (chunk: string, stream: "stdout" | "stderr") => {
+        const bytes = Buffer.byteLength(chunk);
+        if (outputBytes + bytes > (options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES)) {
+          watcher.terminate(
+            `Codex CLI exceeded the ${(options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES)}-byte output limit.`,
+          );
+          return;
+        }
+        outputBytes += bytes;
+        if (stream === "stdout") stdout += chunk;
+        else stderr += chunk;
+      };
       child.stdout.setEncoding("utf8");
       child.stderr.setEncoding("utf8");
-      child.stdout.on("data", (chunk: string) => { stdout += chunk; });
-      child.stderr.on("data", (chunk: string) => { stderr += chunk; });
-      child.stdin.end(prompt);
+      child.stdout.on("data", (chunk: string) => capture(chunk, "stdout"));
+      child.stderr.on("data", (chunk: string) => capture(chunk, "stderr"));
+      child.stdin.end(pureInferencePrompt(prompt));
 
-      const completed = await waitForChild(child, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+      const completed = await watcher.completed;
       if (!completed.ok) return err(completed.error);
       if (completed.value !== 0) {
         return err(domainError("model_unavailable", cliFailure(stderr, completed.value)));
@@ -154,29 +194,79 @@ function createCodexRunner(options: CodexModelCallsOptions) {
   };
 }
 
-function waitForChild(
+function watchChild(
   child: ChildProcessWithoutNullStreams,
-  timeoutMs: number,
-): Promise<Result<number, DomainError>> {
-  return new Promise((resolve) => {
-    let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill("SIGTERM");
-    }, timeoutMs);
+  options: {
+    readonly timeoutMs: number;
+    readonly killGraceMs: number;
+    readonly killProcessGroup: (pid: number, signal: NodeJS.Signals) => void;
+  },
+): {
+  readonly completed: Promise<Result<number, DomainError>>;
+  terminate(message: string): void;
+} {
+  let terminationMessage: string | undefined;
+  let killTimer: ReturnType<typeof setTimeout> | undefined;
+  const signal = (signalName: NodeJS.Signals) => {
+    if (child.pid !== undefined && process.platform !== "win32") {
+      try {
+        options.killProcessGroup(-child.pid, signalName);
+        return;
+      } catch {
+        // Fall back to the direct child when the process group no longer exists.
+      }
+    }
+    child.kill(signalName);
+  };
+  const terminate = (message: string) => {
+    if (terminationMessage !== undefined) return;
+    terminationMessage = message;
+    signal("SIGTERM");
+    killTimer = setTimeout(() => signal("SIGKILL"), options.killGraceMs);
+  };
+  const completed = new Promise<Result<number, DomainError>>((resolve) => {
+    const timer = setTimeout(
+      () => terminate(`Codex CLI timed out after ${options.timeoutMs}ms.`),
+      options.timeoutMs,
+    );
     child.once("error", (cause) => {
       clearTimeout(timer);
+      if (killTimer) clearTimeout(killTimer);
       resolve(err(domainError("model_unavailable", "Codex CLI could not be started.", cause)));
     });
     child.once("close", (code) => {
       clearTimeout(timer);
+      if (killTimer) clearTimeout(killTimer);
       resolve(
-        timedOut
-          ? err(domainError("model_unavailable", `Codex CLI timed out after ${timeoutMs}ms.`))
+        terminationMessage
+          ? err(domainError("model_unavailable", terminationMessage))
           : ok(code ?? 1),
       );
     });
   });
+  return { completed, terminate };
+}
+
+function codexEnvironment(): NodeJS.ProcessEnv {
+  if (!process.env.CODEX_HOME) {
+    throw new Error("CODEX_HOME is required for the subscription-authenticated Codex rung.");
+  }
+  const allowed = [
+    "PATH",
+    "CODEX_HOME",
+    "TMPDIR",
+    "LANG",
+    "LC_ALL",
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "NO_PROXY",
+    "ALL_PROXY",
+  ] as const;
+  return Object.fromEntries(
+    allowed.flatMap((name) => process.env[name] === undefined ? [] : [[name, process.env[name]]]),
+  ) as NodeJS.ProcessEnv;
 }
 
 function classifyPrompt(input: RawClassifyInput): string {
@@ -184,6 +274,16 @@ function classifyPrompt(input: RawClassifyInput): string {
     "Classify the input using exactly one supplied choice, or null when none fits.",
     `Choices: ${JSON.stringify(input.choices)}`,
     `Input: ${input.prompt}`,
+  ].join("\n");
+}
+
+function pureInferencePrompt(prompt: string): string {
+  return [
+    "This is a pure structured-inference request.",
+    "Do not inspect the host, execute commands, browse, delegate, or call tools.",
+    "Use only the information in this prompt and return the requested structured result.",
+    "",
+    prompt,
   ].join("\n");
 }
 
