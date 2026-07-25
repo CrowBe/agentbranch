@@ -66,13 +66,30 @@ describe("harness-recommendation report (Tier 1)", () => {
     expect(reweight?.rule).toBe("r-bad");
     expect(reweight?.evidence.failRateWith).toBe(1);
     expect(reweight?.evidence.failRateWithout).toBe(0);
-    expect(reweight?.evidence.evalRunIds).toEqual(["f1", "f2", "f3"]);
+    expect(reweight?.evidence.evalRunIds).toEqual(["f1", "f2", "f3", "p1", "p2", "p3"]);
+    expect(reweight?.evidence.comparison).toMatchObject({
+      rule: "r-bad",
+      verdict: "positive-evidence",
+      withRunIds: ["f1", "f2", "f3"],
+      withoutRunIds: ["p1", "p2", "p3"],
+      interval: {
+        method: "newcombe-wilson",
+        version: 1,
+        confidence: 0.95,
+        orientation: "with-minus-without",
+        with: { numerator: 3, denominator: 3, rate: 1 },
+        without: { numerator: 0, denominator: 3, rate: 0 },
+        difference: 1,
+      },
+    });
 
     // The mirror image: r-ok fires only on passing skills — flagged for review.
     const review = report.recommendations.find(
       (r) => r.action === "review-rule" && r.rule === "r-ok",
     );
     expect(review).toBeDefined();
+    expect(review?.evidence.comparison?.verdict).toBe("negative-evidence");
+    expect(review?.evidence.comparison?.interval.upper).toBeLessThan(0);
 
     expect(report.cohort).toMatchObject({
       evalRuns: 6,
@@ -83,6 +100,39 @@ describe("harness-recommendation report (Tier 1)", () => {
       falseFires: 0,
     });
     expect(report.headline).toContain("harness recommendation");
+  });
+
+  it("records no evidence when an eligible cohort interval includes zero", async () => {
+    const report = unwrap(
+      await runCapability(
+        harnessRecommendationCapability,
+        "report",
+        cohort([
+          evalRecord("wf1", false, ["r-mixed"]),
+          evalRecord("wf2", false, ["r-mixed"]),
+          evalRecord("wp1", true, ["r-mixed"]),
+          evalRecord("nf1", false, ["r-other"]),
+          evalRecord("np1", true, ["r-other"]),
+          evalRecord("np2", true, ["r-other"]),
+        ]),
+      ),
+    );
+
+    const comparison = report.comparisons.find(({ rule }) => rule === "r-mixed");
+    expect(comparison).toMatchObject({
+      verdict: "no-evidence",
+      withRunIds: ["wf1", "wf2", "wp1"],
+      withoutRunIds: ["nf1", "np1", "np2"],
+      interval: {
+        with: { numerator: 2, denominator: 3, rate: 2 / 3 },
+        without: { numerator: 1, denominator: 3, rate: 1 / 3 },
+        difference: 1 / 3,
+      },
+    });
+    expect(comparison!.interval.lower).toBeLessThanOrEqual(0);
+    expect(comparison!.interval.upper).toBeGreaterThanOrEqual(0);
+    expect(report.recommendations.some(({ rule }) => rule === "r-mixed")).toBe(false);
+    expect(report.headline).toContain("include zero");
   });
 
   it("stays quiet below the sample threshold and without lint features", async () => {

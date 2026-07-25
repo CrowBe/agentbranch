@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AccountingTag, ModelGateway } from "@/modules/model-gateway";
 import { baselineSkillCorpus } from "@/modules/baseline-corpus";
 import { createMemoryBenchmarkRunRepository } from "@/infra/memory/benchmark.memory-repository";
-import { HarnessVersionId, isErr, unwrap } from "@/shared";
+import { HarnessVersionId, isErr, unwrap, wilson95 } from "@/shared";
 import {
   regressionBenchmarkSet,
   regressionBenchmarkSetHash,
@@ -82,6 +82,14 @@ describe("regression benchmark", () => {
     expect(score.attempts).toBe(1);
     expect(score.totalAttempts).toBe(score.totalCases);
     expect(score.passedAttempts).toBe(score.passedCases);
+    expect(score.attemptPassRateInterval).toMatchObject({
+      method: "wilson",
+      version: 1,
+      confidence: 0.95,
+      numerator: score.passedAttempts,
+      denominator: score.totalAttempts,
+      rate: score.passedAttempts / score.totalAttempts,
+    });
     expect(score.score).toBe(1);
     expect(score.perSkill).toHaveLength(regressionBenchmarkSet.length);
     expect(score.dimensions.responseSchema).toMatchObject({
@@ -90,6 +98,9 @@ describe("regression benchmark", () => {
       passedCases: responseSchemaBenchmarkSet.length,
       score: 1,
     });
+    expect(score.dimensions.responseSchema).not.toHaveProperty("interval");
+    expect(score.dimensions.toolContract).not.toHaveProperty("interval");
+    expect(score.dimensions.safety).not.toHaveProperty("interval");
     expect(score.dimensions.toolContract).toMatchObject({
       benchmarkSetHash: toolContractBenchmarkSetHash,
       totalCases: toolContractBenchmarkSet.length,
@@ -157,6 +168,7 @@ describe("regression benchmark", () => {
       attempts: 1,
       totalAttempts: 60,
       passedAttempts: 54,
+      attemptPassRateInterval: wilson95(54, 60),
       score: 0.9,
       perSkill: [],
       dimensions: {

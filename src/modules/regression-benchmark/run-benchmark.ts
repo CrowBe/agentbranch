@@ -13,6 +13,7 @@ import {
   err,
   isErr,
   ok,
+  wilson95,
   type DomainError,
   type Result,
 } from "@/shared";
@@ -100,6 +101,7 @@ export async function runRegressionBenchmark(
     attempts: options.attempts ?? 1,
     totalAttempts,
     passedAttempts,
+    attemptPassRateInterval: wilson95(passedAttempts, totalAttempts),
     score:
       totalCases === 0
         ? 0

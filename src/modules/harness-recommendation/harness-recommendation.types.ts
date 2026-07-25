@@ -2,6 +2,7 @@ import type { Artifact } from "@/modules/skill-analysis";
 import type { EvalRunAnalysisRecord } from "@/modules/triggering-eval";
 import type { TestRunAnalysisRecord } from "@/modules/test-run";
 import type { EvalRunId } from "@/shared";
+import type { NewcombeDifferenceInterval } from "@/shared";
 
 /**
  * The report's Input — the first capability on the seam whose input is not a
@@ -27,6 +28,22 @@ export type RecommendationEvidence = {
   readonly failRateWith: number | null;
   /** …and among runs whose skill did not. */
   readonly failRateWithout: number | null;
+  /** Present for rule-shaped independent-cohort recommendations. */
+  readonly comparison: RuleComparisonEvidence | null;
+};
+
+export type RuleComparisonVerdict =
+  | "positive-evidence"
+  | "negative-evidence"
+  | "no-evidence";
+
+/** Fully reconstructible comparison of independent eval-run cohorts. */
+export type RuleComparisonEvidence = {
+  readonly rule: string;
+  readonly verdict: RuleComparisonVerdict;
+  readonly withRunIds: readonly EvalRunId[];
+  readonly withoutRunIds: readonly EvalRunId[];
+  readonly interval: NewcombeDifferenceInterval;
 };
 
 export type HarnessRecommendation = {
@@ -54,6 +71,7 @@ export type CohortStats = {
 /** The harness-recommendation report — the artifact this capability emits. */
 export type HarnessRecommendationReport = Artifact<"harness-recommendation"> & {
   readonly cohort: CohortStats;
+  readonly comparisons: readonly RuleComparisonEvidence[];
   readonly recommendations: readonly HarnessRecommendation[];
 };
 
@@ -61,5 +79,6 @@ export type HarnessRecommendationReport = Artifact<"harness-recommendation"> & {
 export type HarnessReportSurface = {
   readonly headline: string;
   readonly cohort: CohortStats;
+  readonly comparisons: readonly RuleComparisonEvidence[];
   readonly recommendations: readonly HarnessRecommendation[];
 };

@@ -1,4 +1,4 @@
-import type { BenchmarkRunId, HarnessVersionId } from "@/shared";
+import type { BenchmarkRunId, HarnessVersionId, WilsonInterval } from "@/shared";
 
 /** One corpus skill's slice of a benchmark score. */
 export type BenchmarkSkillScore = {
@@ -23,6 +23,8 @@ export type BenchmarkScore = {
   readonly attempts: number;
   readonly totalAttempts: number;
   readonly passedAttempts: number;
+  /** Stochastic attempt pass rate with its full-precision 95% Wilson interval. */
+  readonly attemptPassRateInterval: WilsonInterval;
   /** passedCases / totalCases, 0..1. */
   readonly score: number;
   readonly perSkill: readonly BenchmarkSkillScore[];
