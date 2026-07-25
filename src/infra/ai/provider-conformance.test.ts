@@ -7,10 +7,17 @@ import { isErr } from "@/shared";
 import { readConfig } from "@/server/config";
 import { createModelRouter } from "./model-router";
 import { createSdkModelCalls } from "./sdk-model-calls";
+import { createClaudeCodeModelCalls } from "./claude-code-model-calls";
+import { createDispatchingModelCalls } from "./dispatching-model-calls";
 
-const target = process.env.CONFORMANCE_PROVIDER;
-const timeout = 60_000;
-const calls = createSdkModelCalls();
+const configuredTarget = process.env.CONFORMANCE_PROVIDER;
+const target = configuredTarget === "claude-code" ? "claude-code-cli" : configuredTarget;
+if (target === "claude-code-cli") process.env.AGENTBRANCH_DEV_CLI_PROVIDERS = "claude-code";
+const timeout = target === "claude-code-cli" ? 180_000 : 60_000;
+const calls = createDispatchingModelCalls({
+  sdk: createSdkModelCalls(),
+  cli: { "claude-code-cli": createClaudeCodeModelCalls({ timeoutMs: timeout }) },
+});
 const agentInput = {
   system: "Call the echo tool exactly once with the value hello. Do not call any other tool.",
   messages: [{ role: "user" as const, content: "Echo hello." }],
@@ -34,6 +41,7 @@ function router() {
   return createModelRouter({
     profiles: config.providerRegistry,
     serverKeys: config.serverKeys,
+    cliAvailable: (kind) => kind === target,
   });
 }
 

@@ -256,6 +256,7 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
 | `ai/sdk-model-calls.ts` | `RawModelCalls` | SDK translation only: message/tool mapping, stream-part mapping, token-usage shape reading, provider cap-error detection. Admission + recording live above it, in the model-gateway module's accounting shell (`createModelGateway`), so policy holds for every adapter by construction |
 | `ai/model-router.ts` | `ModelRouter` | the provider/model selection authority: builds providers from the registry + server-pool keys, holds the runtime active selection + bring-your-own overrides (process-local), and resolves per primitive. Secret-free snapshot |
 | `ai/dispatching-model-calls.ts` | `RawModelCalls` | kind-aware raw-call dispatcher: SDK providers use the AI-SDK adapter; dev CLI kinds use their registered CLI adapter slot |
+| `ai/claude-code-model-calls.ts` | `RawModelCalls` | dev-only Claude Code Agent SDK translation: schema output, in-process gateway-tool MCP bridge, transcript/stream mapping, bounded concurrency and cancellation |
 | `ai/anthropic-provider.ts` | `ModelProvider` | Claude via `@ai-sdk/anthropic`; `model: null` when no key |
 | `ai/nous-provider.ts` | `ModelProvider` | Nous Portal via `@ai-sdk/openai-compatible`; `model: null` when no key |
 | `ai/stub-provider.ts` | `ModelProvider` | always `model: null` |
