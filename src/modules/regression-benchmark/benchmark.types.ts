@@ -51,12 +51,18 @@ export type BenchmarkDimensionScore = {
 };
 
 export type TaskOutcomeBenchmarkDimensionScore = BenchmarkDimensionScore & {
+  readonly attempts: number;
+  readonly totalAttempts: number;
+  readonly passedAttempts: number;
+  readonly attemptPassRate: number;
+  readonly attemptPassRateInterval: WilsonInterval;
   readonly method: {
     readonly kind: "model";
     readonly grader: "json-output";
     readonly graderVersion: 1;
     readonly method: "generate-then-schema-validate";
     readonly methodVersion: 1;
+    readonly attemptsPerCase: number;
   };
 };
 

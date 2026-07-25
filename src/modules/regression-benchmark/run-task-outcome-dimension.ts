@@ -13,6 +13,7 @@ import {
   err,
   isErr,
   ok,
+  wilson95,
   type DomainError,
   type Result,
 } from "@/shared";
@@ -39,6 +40,8 @@ export async function runTaskOutcomeBenchmarkDimension(
   }
 
   const entries: BenchmarkDimensionEntryScore[] = [];
+  let totalAttempts = 0;
+  let passedAttempts = 0;
   for (const entry of taskOutcomeCorpus) {
     options.observer?.({
       kind: "progress",
@@ -52,6 +55,8 @@ export async function runTaskOutcomeBenchmarkDimension(
       { distractors: [], observer: options.observer, attempts: options.attempts },
     );
     if (isErr(result)) return result;
+    totalAttempts += result.value.reduce((sum, score) => sum + score.attempts, 0);
+    passedAttempts += result.value.reduce((sum, score) => sum + score.passedAttempts, 0);
     entries.push({
       corpusEntryId: entry.id,
       contentHash: entry.contentHash,
@@ -66,12 +71,18 @@ export async function runTaskOutcomeBenchmarkDimension(
     passedCases,
     score: entries.length === 0 ? 0 : Math.round((passedCases / entries.length) * 10_000) / 10_000,
     entries,
+    attempts: attempts.value,
+    totalAttempts,
+    passedAttempts,
+    attemptPassRate: totalAttempts === 0 ? 0 : passedAttempts / totalAttempts,
+    attemptPassRateInterval: wilson95(passedAttempts, totalAttempts),
     method: {
       kind: "model",
       grader: "json-output",
       graderVersion: 1,
       method: "generate-then-schema-validate",
       methodVersion: 1,
+      attemptsPerCase: attempts.value,
     },
   });
 }

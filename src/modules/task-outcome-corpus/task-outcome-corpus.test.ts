@@ -4,12 +4,12 @@ import { taskOutcomeCorpus, taskOutcomeCorpusSetHash } from "./index";
 describe("task outcome corpus", () => {
   it("pins independently hashed entries and the frozen set", () => {
     expect(Object.fromEntries(taskOutcomeCorpus.map((entry) => [entry.id, entry.contentHash]))).toEqual({
-      "overdue-invoice-follow-up": "561615b0d1231d841bf4a4413a75a088e862883ace5affcaf3bbc12125d72dcd",
-      "appointment-request-triage": "8d6e38a414aac6fc7ee9cb32ac0e829900a6d693e3329ef4fa6f4d3a3087ab50",
-      "inventory-reorder-decision": "9bd5f79e563fcbbfba2ab4cae9faf06f90eb6bdbf3228aad55d667c541bde9f1",
-      "weekly-cash-snapshot": "701dc0a78955e8c340dd34c8b1d48d2700f5b7c7e50135d790cf043784658739",
+      "overdue-invoice-follow-up": "a8967e8b45cc5bbdd2432e0770d21eca98923ab0b1b989165be4155ab7bb9862",
+      "appointment-request-triage": "f26624d2615b530e9c060dbb03a48e3d388e69ddfa1b7860c6cb7bd4aa81b087",
+      "inventory-reorder-decision": "124762295699c37fe93a45af7cb0423824f35561d250c3d48431e82d0923153e",
+      "weekly-cash-snapshot": "4592ebaf20587fe895da5df347775f735c620e26f413d39a9e4e422d389bb28b",
     });
-    expect(taskOutcomeCorpusSetHash).toBe("516284a87b45fe59d029bc38a51dbd805c2d4121c35ac080e38a9644cdb7d65c");
+    expect(taskOutcomeCorpusSetHash).toBe("3091d9cb510f7ae922aad908942ee901764ecfd4a6bb98cec8adde36f49d1fae");
   });
 
   it("carries frozen JSON expectations and complete provenance", () => {
@@ -18,6 +18,9 @@ describe("task outcome corpus", () => {
       expect(entry.case.grader).toBe("json-output");
       expect(entry.case.graderVersion).toBe(1);
       expect(entry.case.expectedSchema).toMatchObject({ type: "object", additionalProperties: false });
+      expect(Object.values(
+        (entry.case.expectedSchema.properties ?? {}) as Record<string, Record<string, unknown>>,
+      ).every((property) => Object.hasOwn(property, "const"))).toBe(true);
       expect(entry.provenance).toEqual({
         authoringTool: expect.any(String),
         authoredAt: "2026-07-26",

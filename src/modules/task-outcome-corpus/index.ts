@@ -26,13 +26,13 @@ const seeds: readonly Seed[] = [
     id: "overdue-invoice-follow-up",
     name: "Overdue invoice follow-up",
     description: "Turn an accounts-receivable note into a bounded follow-up decision.",
-    prompt: "Acme owes AUD 2,450 across two overdue invoices. Return a structured follow-up decision.",
+    prompt: "Acme owes exactly AUD 2,450 across exactly two overdue invoices. Under this frozen policy, two or more overdue invoices totaling at least AUD 2,000 have high priority. Return exactly: customer Acme, currency AUD, totalOutstanding 2450, overdueInvoices 2, priority high.",
     expectedSchema: object({
-      customer: string(),
-      currency: string(),
-      totalOutstanding: number(),
-      overdueInvoices: integer(),
-      priority: enumOf(["normal", "high", "urgent"]),
+      customer: constant("Acme"),
+      currency: constant("AUD"),
+      totalOutstanding: constant(2450),
+      overdueInvoices: constant(2),
+      priority: constant("high"),
     }, ["customer", "currency", "totalOutstanding", "overdueInvoices", "priority"]),
     sourcePrompt: "Freeze a recognizable SMB accounts-receivable outcome.",
   }),
@@ -40,12 +40,12 @@ const seeds: readonly Seed[] = [
     id: "appointment-request-triage",
     name: "Appointment request triage",
     description: "Convert a plain-language booking request into a confirmable next action.",
-    prompt: "Jamie wants a 30-minute consultation next Tuesday afternoon. Return the booking decision.",
+    prompt: "Jamie requests a 30-minute consultation in the window Tuesday afternoon. The frozen scheduling policy says an available window is offered and requires customer confirmation. Return exactly: customerName Jamie, requestedWindow Tuesday afternoon, action offer-slot, needsConfirmation true.",
     expectedSchema: object({
-      customerName: string(),
-      requestedWindow: string(),
-      action: enumOf(["offer-slot", "ask-clarification", "decline"]),
-      needsConfirmation: boolean(),
+      customerName: constant("Jamie"),
+      requestedWindow: constant("Tuesday afternoon"),
+      action: constant("offer-slot"),
+      needsConfirmation: constant(true),
     }, ["customerName", "requestedWindow", "action", "needsConfirmation"]),
     sourcePrompt: "Freeze a non-technical service-business scheduling outcome.",
   }),
@@ -53,12 +53,12 @@ const seeds: readonly Seed[] = [
     id: "inventory-reorder-decision",
     name: "Inventory reorder decision",
     description: "Turn stock and sales facts into a constrained reorder recommendation.",
-    prompt: "SKU FILTER-20 has 6 units left, sells 4 per week, and takes 3 weeks to restock. Return a reorder decision.",
+    prompt: "SKU FILTER-20 has exactly 6 units left, demand is exactly 4 units per week, and restock lead time is exactly 3 weeks. The frozen policy orders lead-time demand (12 units) when current stock is below it. Return exactly: sku FILTER-20, reorderQuantity 12, action reorder, rationale Stock cover is shorter than lead time.",
     expectedSchema: object({
-      sku: string(),
-      reorderQuantity: integer(0),
-      action: enumOf(["reorder", "monitor", "do-not-reorder"]),
-      rationale: string(),
+      sku: constant("FILTER-20"),
+      reorderQuantity: constant(12),
+      action: constant("reorder"),
+      rationale: constant("Stock cover is shorter than lead time."),
     }, ["sku", "reorderQuantity", "action", "rationale"]),
     sourcePrompt: "Freeze a moderately technical inventory-planning outcome.",
   }),
@@ -66,12 +66,12 @@ const seeds: readonly Seed[] = [
     id: "weekly-cash-snapshot",
     name: "Weekly cash snapshot",
     description: "Summarize weekly cash movement into bookkeeping-ready numeric fields.",
-    prompt: "This week the business received AUD 8,100 and paid AUD 5,725. Return a cash snapshot.",
+    prompt: "This week the business received exactly AUD 8,100 and paid exactly AUD 5,725. Net cash flow is inflows minus outflows. Return exactly: currency AUD, inflows 8100, outflows 5725, netCashFlow 2375.",
     expectedSchema: object({
-      currency: string(),
-      inflows: number(),
-      outflows: number(),
-      netCashFlow: number(),
+      currency: constant("AUD"),
+      inflows: constant(8100),
+      outflows: constant(5725),
+      netCashFlow: constant(2375),
     }, ["currency", "inflows", "outflows", "netCashFlow"]),
     sourcePrompt: "Freeze a recognizable SMB bookkeeping outcome.",
   }),
@@ -127,11 +127,7 @@ function object(
   return { type: "object", properties, required, additionalProperties: false };
 }
 
-function string() { return { type: "string" }; }
-function number() { return { type: "number" }; }
-function integer(minimum?: number) {
-  return { type: "integer", ...(minimum === undefined ? {} : { minimum }) };
+function constant(value: string | number | boolean) {
+  return { type: typeof value === "number" ? "number" : typeof value, const: value };
 }
-function boolean() { return { type: "boolean" }; }
-function enumOf(values: readonly string[]) { return { type: "string", enum: values }; }
 function sha256(value: string) { return createHash("sha256").update(value).digest("hex"); }

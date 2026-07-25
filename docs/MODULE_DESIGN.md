@@ -219,7 +219,10 @@ candidate excluded from its own distractor field, `platform`-tagged) and
 three deterministic dimensions compare lint grade/finding codes or safety
 verdict/policy codes. The fourth named dimension, `taskOutcome`, makes
 platform-tagged model calls through the shared `runBatteryCases` JSON grader
-and fails `model_unavailable` honestly offline. All scores, method metadata,
+and fails `model_unavailable` honestly offline. It preserves attempts, passed
+attempts, pass rate, and the versioned full-precision Wilson 95% interval;
+method metadata pins attempts per case so configurations remain distinct,
+without effect language. All scores, method metadata,
 and set hashes are recorded per harness version behind
 `BenchmarkRunRepository`. All three surface
 only through the admin routes (below), gated by `isAdmin`.

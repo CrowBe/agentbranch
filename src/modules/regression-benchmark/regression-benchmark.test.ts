@@ -51,7 +51,7 @@ function perfectGateway(observed: {
     async generate(input) {
       const output = input.prompt.includes("Acme owes")
         ? { customer: "Acme", currency: "AUD", totalOutstanding: 2450, overdueInvoices: 2, priority: "high" }
-        : input.prompt.includes("Jamie wants")
+        : input.prompt.includes("Jamie requests")
           ? { customerName: "Jamie", requestedWindow: "Tuesday afternoon", action: "offer-slot", needsConfirmation: true }
           : input.prompt.includes("FILTER-20")
             ? { sku: "FILTER-20", reorderQuantity: 12, action: "reorder", rationale: "Stock cover is shorter than lead time." }
@@ -171,6 +171,19 @@ describe("regression benchmark", () => {
         graderVersion: 1,
         method: "generate-then-schema-validate",
         methodVersion: 1,
+        attemptsPerCase: 1,
+      },
+    });
+    expect(score.dimensions.taskOutcome).toMatchObject({
+      attempts: 1,
+      totalAttempts: taskOutcomeCorpus.length,
+      passedAttempts: taskOutcomeCorpus.length,
+      attemptPassRate: 1,
+      attemptPassRateInterval: {
+        method: "wilson",
+        version: 1,
+        numerator: taskOutcomeCorpus.length,
+        denominator: taskOutcomeCorpus.length,
       },
     });
 
@@ -202,6 +215,26 @@ describe("regression benchmark", () => {
     expect(isErr(result) && result.error.tag === "model_unavailable").toBe(true);
   });
 
+  it("rejects structurally valid but wrong outcomes for every frozen workflow", async () => {
+    const gateway = perfectGateway({ tags: [], choiceFields: [] });
+    const wrong = {
+      ...gateway,
+      async generate({ prompt }: Parameters<ModelGateway["generate"]>[0]) {
+        return ok(prompt.includes("Acme owes")
+          ? { customer: "Acme", currency: "AUD", totalOutstanding: 2450, overdueInvoices: 2, priority: "normal" }
+          : prompt.includes("Jamie requests")
+            ? { customerName: "Jamie", requestedWindow: "Tuesday afternoon", action: "ask-clarification", needsConfirmation: true }
+            : prompt.includes("FILTER-20")
+              ? { sku: "FILTER-20", reorderQuantity: 6, action: "reorder", rationale: "Stock cover is shorter than lead time." }
+              : { currency: "AUD", inflows: 8100, outflows: 5725, netCashFlow: 13825 });
+      },
+    } as ModelGateway;
+    const dimension = unwrap(await runTaskOutcomeBenchmarkDimension(wrong));
+    expect(dimension.entries).toHaveLength(4);
+    expect(dimension.entries.every((entry) => !entry.passed)).toBe(true);
+    expect(dimension.passedAttempts).toBe(0);
+  });
+
   it("repeats triggering cases without changing case totals", async () => {
     const observed: { tags: AccountingTag[]; choiceFields: string[][] } = {
       tags: [],
@@ -214,6 +247,13 @@ describe("regression benchmark", () => {
     expect(score.passedAttempts).toBe(score.totalAttempts);
     expect(observed.tags).toHaveLength(score.totalAttempts);
     expect(score.perSkill.every((skill) => skill.totalAttempts === skill.totalCases * 3)).toBe(true);
+    expect(score.dimensions.taskOutcome).toMatchObject({
+      attempts: 3,
+      totalAttempts: taskOutcomeCorpus.length * 3,
+      passedAttempts: taskOutcomeCorpus.length * 3,
+      attemptPassRate: 1,
+      method: { attemptsPerCase: 3 },
+    });
   });
 
   it("rejects invalid attempts before model availability and observer effects", async () => {
@@ -247,12 +287,18 @@ describe("regression benchmark", () => {
         safety: emptyDimension(safetyBenchmarkSetHash),
         taskOutcome: {
           ...emptyDimension(taskOutcomeCorpusSetHash),
+          attempts: 1,
+          totalAttempts: 1,
+          passedAttempts: 0,
+          attemptPassRate: 0,
+          attemptPassRateInterval: wilson95(0, 1),
           method: {
             kind: "model" as const,
             grader: "json-output" as const,
             graderVersion: 1 as const,
             method: "generate-then-schema-validate" as const,
             methodVersion: 1 as const,
+            attemptsPerCase: 1,
           },
         },
       },

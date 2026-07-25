@@ -37,10 +37,10 @@ beforeEach(() => {
   generate.mockImplementation(async ({ prompt, schema }) => {
     const output = prompt.includes("Acme owes")
       ? { customer: "Acme", currency: "AUD", totalOutstanding: 2450, overdueInvoices: 2, priority: "high" }
-      : prompt.includes("Jamie wants")
+      : prompt.includes("Jamie requests")
         ? { customerName: "Jamie", requestedWindow: "Tuesday afternoon", action: "offer-slot", needsConfirmation: true }
         : prompt.includes("FILTER-20")
-          ? { sku: "FILTER-20", reorderQuantity: 12, action: "reorder", rationale: "Lead time exceeds stock cover." }
+          ? { sku: "FILTER-20", reorderQuantity: 12, action: "reorder", rationale: "Stock cover is shorter than lead time." }
           : { currency: "AUD", inflows: 8100, outflows: 5725, netCashFlow: 2375 };
     return ok(schema.parse(output));
   });
