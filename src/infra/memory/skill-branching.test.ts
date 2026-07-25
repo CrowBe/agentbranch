@@ -206,6 +206,9 @@ describe("retention is a daily tidy, off the write path (memory adapter)", () =>
         result: {
           kind: "triggering-eval",
           passed: true,
+          attempts: 1,
+          totalAttempts: 0,
+          passedAttempts: 0,
           cases: [],
           insight: { verdict: "good", summary: "ok", findings: [], watch: [] },
         },

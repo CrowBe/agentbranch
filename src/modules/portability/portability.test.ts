@@ -19,10 +19,12 @@ function skillFor(description: string): Skill {
 function fakeGateway(options: {
   readonly unavailableProviderIds?: readonly string[];
   readonly generateCalls?: GenerateInput<unknown>[];
+  readonly classifyCalls?: { value: number };
 } = {}): ModelGateway {
   return {
     hasModel: true,
     async classify({ prompt, choices, target }) {
+      if (options.classifyCalls) options.classifyCalls.value += 1;
       if (options.unavailableProviderIds?.includes(target?.providerId ?? "")) {
         return err(domainError("model_unavailable", "No API key for target."));
       }
@@ -113,6 +115,24 @@ describe("cross-runtime validation", () => {
       { targetId: "openai-codex", status: "not_configured" },
     ]);
     expect(result.insight.summary).toBe("Runtime targets behave consistently.");
+  });
+
+  it("threads repeated-attempt configuration to every runtime target", async () => {
+    const classifyCalls = { value: 0 };
+    const result = unwrap(
+      await runCrossRuntimeValidation(
+        {
+          skill: skillFor("Schedule meetings on the calendar."),
+          targets: [claudeTarget, codexTarget],
+          attempts: 3,
+        },
+        fakeGateway({ classifyCalls }),
+      ),
+    );
+    const passedTargets = result.targets.filter(hasCases);
+    const totalCases = passedTargets.reduce((sum, target) => sum + target.cases.length, 0);
+    expect(classifyCalls.value).toBe(totalCases * 3);
+    expect(passedTargets.every((target) => target.cases.every((c) => c.attempts === 3))).toBe(true);
   });
 });
 

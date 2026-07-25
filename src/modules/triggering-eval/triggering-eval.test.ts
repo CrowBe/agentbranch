@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { runTriggeringEval, generatePromptBattery } from "./index";
+import { runTriggeringEval, runBatteryCases, generatePromptBattery } from "./index";
 import { buildPromptBattery } from "./prompt-battery";
 import { makeSkill, parseSkillMd, type Skill } from "@/modules/skill";
 import type { GenerateInput, ModelGateway } from "@/modules/model-gateway";
@@ -107,11 +107,15 @@ describe("triggering eval", () => {
       ),
     );
     expect(result.kind).toBe("triggering-eval");
+    expect(result.attempts).toBe(1);
+    expect(result.totalAttempts).toBe(result.cases.length);
     expect(result.cases).toHaveLength(8);
     expect(typeof result.passed).toBe("boolean");
     for (const c of result.cases) {
       expect(["fire", "silent"]).toContain(c.actual);
       expect(typeof c.rationale).toBe("string");
+      expect(c.caseId).toMatch(/^[0-9a-f]{64}$/);
+      expect(c.attempts).toBe(1);
     }
     // The evaluator populates a plain-language Insight from generate().
     expect(generateCalls).toHaveLength(2);
@@ -143,6 +147,9 @@ describe("triggering eval", () => {
       expected: result.cases[0]?.expected,
       actual: result.cases[0]?.actual,
       pass: result.cases[0]?.pass,
+      attempts: 1,
+      passedAttempts: result.cases[0]?.passedAttempts,
+      passRate: result.cases[0]?.passRate,
       rationale: result.cases[0]?.rationale,
     });
   });
@@ -222,5 +229,98 @@ describe("triggering eval", () => {
     });
     const rejected = await generatePromptBattery(skillFor("Coordinate workshops."), overlongBattery, TAG);
     expect(rejected.ok).toBe(false);
+  });
+
+  it("repeats each case and decides it by strict majority", async () => {
+    const choices = ["candidate", null, "candidate"];
+    let calls = 0;
+    const gateway: ModelGateway = {
+      ...fakeGateway(),
+      async classify({ choices: field }) {
+        const choice = choices[calls++];
+        return ok({ choice: choice === "candidate" ? field[0] ?? null : null, rationale: "first" });
+      },
+    };
+
+    const cases = unwrap(
+      await runBatteryCases(
+        { name: "t", description: "calendar" },
+        [{ prompt: "schedule it", expected: "fire" }],
+        gateway,
+        TAG,
+        { attempts: 3 },
+      ),
+    );
+
+    expect(calls).toBe(3);
+    expect(cases[0]).toMatchObject({
+      actual: "fire",
+      pass: true,
+      attempts: 3,
+      passedAttempts: 2,
+      passRate: 2 / 3,
+      rationale: "first",
+    });
+  });
+
+  it("rejects invalid attempt counts before making any model call", async () => {
+    for (const attempts of [0, -1, 2, 1.5, 11]) {
+      let calls = 0;
+      const gateway: ModelGateway = {
+        ...fakeGateway(),
+        async classify() {
+          calls += 1;
+          return ok({ choice: null, rationale: "" });
+        },
+        async generate(input) {
+          calls += 1;
+          return ok(input.schema.parse({}));
+        },
+      };
+      const result = await runTriggeringEval(skillFor("calendar"), gateway, TAG, { attempts });
+      expect(result.ok).toBe(false);
+      expect(calls).toBe(0);
+    }
+  });
+
+  it("aborts a battery atomically when any attempt errors", async () => {
+    const events: EvaluationRunEvent[] = [];
+    let calls = 0;
+    const gateway: ModelGateway = {
+      ...fakeGateway(),
+      async classify() {
+        calls += 1;
+        return calls === 2
+          ? err(domainError("seam_analyze_failed", "attempt failed"))
+          : ok({ choice: null, rationale: "probe" });
+      },
+    };
+
+    const result = await runBatteryCases(
+      { name: "t", description: "calendar" },
+      [{ prompt: "schedule it", expected: "fire" }],
+      gateway,
+      TAG,
+      { attempts: 3, observer: (event) => events.push(event) },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(calls).toBe(2);
+    expect(events).toEqual([]);
+  });
+
+  it("derives stable case IDs from canonical case content", async () => {
+    const run = (prompt: string, expected: "fire" | "silent", risk?: "trigger-hijack") =>
+      runBatteryCases(
+        { name: "t", description: "calendar" },
+        [{ prompt, expected, ...(risk ? { risk } : {}) }],
+        fakeGateway(),
+        TAG,
+      );
+    const first = unwrap(await run("same prompt", "fire"))[0]!.caseId;
+    expect(unwrap(await run("same prompt", "fire"))[0]!.caseId).toBe(first);
+    expect(unwrap(await run("changed prompt", "fire"))[0]!.caseId).not.toBe(first);
+    expect(unwrap(await run("same prompt", "silent"))[0]!.caseId).not.toBe(first);
+    expect(unwrap(await run("same prompt", "fire", "trigger-hijack"))[0]!.caseId).not.toBe(first);
   });
 });

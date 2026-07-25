@@ -79,6 +79,9 @@ describe("regression benchmark", () => {
       ),
     );
     expect(score.passedCases).toBe(score.totalCases);
+    expect(score.attempts).toBe(1);
+    expect(score.totalAttempts).toBe(score.totalCases);
+    expect(score.passedAttempts).toBe(score.passedCases);
     expect(score.score).toBe(1);
     expect(score.perSkill).toHaveLength(regressionBenchmarkSet.length);
     expect(score.dimensions.responseSchema).toMatchObject({
@@ -118,6 +121,20 @@ describe("regression benchmark", () => {
     );
   });
 
+  it("repeats triggering cases without changing case totals", async () => {
+    const observed: { tags: AccountingTag[]; choiceFields: string[][] } = {
+      tags: [],
+      choiceFields: [],
+    };
+    const score = unwrap(await runRegressionBenchmark(perfectGateway(observed), { attempts: 3 }));
+
+    expect(score.attempts).toBe(3);
+    expect(score.totalAttempts).toBe(score.totalCases * 3);
+    expect(score.passedAttempts).toBe(score.totalAttempts);
+    expect(observed.tags).toHaveLength(score.totalAttempts);
+    expect(score.perSkill.every((skill) => skill.totalAttempts === skill.totalCases * 3)).toBe(true);
+  });
+
   it("records runs pinned to a harness version and lists them newest first", async () => {
     vi.useFakeTimers();
     const repo = createMemoryBenchmarkRunRepository();
@@ -125,6 +142,9 @@ describe("regression benchmark", () => {
       benchmarkSetHash: regressionBenchmarkSetHash,
       totalCases: 60,
       passedCases: 54,
+      attempts: 1,
+      totalAttempts: 60,
+      passedAttempts: 54,
       score: 0.9,
       perSkill: [],
       dimensions: {

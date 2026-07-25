@@ -105,7 +105,7 @@ async function runTarget(
     input.skill,
     gateway,
     tag,
-    { target: target.modelSelection, battery },
+    { target: target.modelSelection, battery, attempts: input.attempts },
   );
 
   if (isErr(result)) {
