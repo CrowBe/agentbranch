@@ -259,6 +259,7 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
 | `ai/model-router.ts` | `ModelRouter` | the provider/model selection authority: builds providers from the registry + server-pool keys, holds the runtime active selection + bring-your-own overrides (process-local), and resolves per primitive. Secret-free snapshot |
 | `ai/dispatching-model-calls.ts` | `RawModelCalls` | kind-aware raw-call dispatcher: SDK providers use the AI-SDK adapter; dev CLI kinds use their registered CLI adapter slot |
 | `ai/claude-code-model-calls.ts` | `RawModelCalls` | dev-only Claude Code Agent SDK translation: schema output, in-process gateway-tool MCP bridge, transcript/stream mapping, bounded concurrency and cancellation |
+| `ai/codex-model-calls.ts` | `RawModelCalls` | Codex CLI dev rung: subscription-authenticated `classify`/`generate` through `codex exec` native output schemas in an ephemeral read-only scratch run; inherits the logged-in `CODEX_HOME` while `--ignore-user-config` + `--ignore-rules` exclude user configuration and policy, with timeout/concurrency bounds and cleanup. Agent primitives are honestly unavailable because caller-owned gateway tools have no in-process bridge. |
 | `ai/anthropic-provider.ts` | `ModelProvider` | Claude via `@ai-sdk/anthropic`; `model: null` when no key |
 | `ai/nous-provider.ts` | `ModelProvider` | Nous Portal via `@ai-sdk/openai-compatible`; `model: null` when no key |
 | `ai/stub-provider.ts` | `ModelProvider` | always `model: null` |
