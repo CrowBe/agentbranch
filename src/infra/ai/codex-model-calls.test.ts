@@ -20,6 +20,7 @@ const model: ResolvedModel = {
 
 let authFixtureRoot = "";
 let sourceCodexHome = "";
+const observedSessionRoots = new Set<string>();
 
 beforeEach(async () => {
   authFixtureRoot = await mkdtemp(join(tmpdir(), "agentbranch-codex-auth-test-"));
@@ -38,17 +39,23 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   vi.unstubAllEnvs();
-  await rm(authFixtureRoot, { recursive: true, force: true });
+  await Promise.all([
+    rm(authFixtureRoot, { recursive: true, force: true }),
+    ...[...observedSessionRoots].map((root) => rm(root, { recursive: true, force: true })),
+  ]);
+  observedSessionRoots.clear();
 });
 
 describe("Codex model calls", () => {
-  it("spawns classify with native schema, stdin, isolated auth-only homes, and cleans every artifact", async () => {
+  it("spawns classify with native schema, stdin, isolated auth-only homes, and cleans call artifacts", async () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "must-not-leak");
-    let observedRoot = "";
+    let observedCallRoot = "";
+    let observedSessionRoot = "";
     const fake = fakeSpawn(async ({ args, options, stdin }) => {
       const schemaPath = valueAfter(args, "--output-schema");
       const outputPath = valueAfter(args, "--output-last-message");
-      observedRoot = join(schemaPath, "..");
+      observedCallRoot = dirname(schemaPath);
+      observedSessionRoot = dirname(observedCallRoot);
       const isolatedHome = options.env?.HOME;
       const isolatedCodexHome = options.env?.CODEX_HOME;
 
@@ -68,8 +75,8 @@ describe("Codex model calls", () => {
       expect(args).not.toContain("-m");
       expect(options.shell).toBe(false);
       expect(options.cwd).toBe(valueAfter(args, "-C"));
-      expect(isolatedHome).toBe(join(observedRoot, "home"));
-      expect(isolatedCodexHome).toBe(join(observedRoot, "codex-home"));
+      expect(isolatedHome).toBe(join(observedSessionRoot, "home"));
+      expect(isolatedCodexHome).toBe(join(observedSessionRoot, "codex-home"));
       expect(isolatedCodexHome).not.toBe(sourceCodexHome);
       expect(options.env?.ANTHROPIC_API_KEY).toBeUndefined();
       expect(options.detached).toBe(process.platform !== "win32");
@@ -102,10 +109,63 @@ describe("Codex model calls", () => {
       expect(result.value.value.choice).toBe("billing");
       expect(result.value.usage).toMatchObject({ inputTokens: 12, outputTokens: 3 });
     }
-    await expect(access(observedRoot)).rejects.toThrow();
+    await expect(access(observedCallRoot)).rejects.toThrow();
+    await expect(access(observedSessionRoot)).resolves.toBeUndefined();
   });
 
-  it("fails closed before spawn when auth.json is unavailable and cleans the isolated run", async () => {
+  it("persists rotated auth and CLI cache across calls without changing or globally copying the source", async () => {
+    const callRoots: string[] = [];
+    const sessionRoots: string[] = [];
+    let invocation = 0;
+    const fake = fakeSpawn(async ({ args, options }) => {
+      invocation += 1;
+      const callRoot = dirname(valueAfter(args, "--output-schema"));
+      const sessionRoot = dirname(callRoot);
+      const codexHome = options.env!.CODEX_HOME!;
+      callRoots.push(callRoot);
+      sessionRoots.push(sessionRoot);
+
+      expect(options.env!.HOME).toBe(join(sessionRoot, "home"));
+      expect(codexHome).toBe(join(sessionRoot, "codex-home"));
+      await expect(access(join(codexHome, "config.toml"))).rejects.toThrow();
+      await expect(access(join(codexHome, "skills"))).rejects.toThrow();
+      if (invocation === 1) {
+        expect(await readFile(join(codexHome, "auth.json"), "utf8"))
+          .toBe('{"tokens":{"access_token":"test-secret"}}');
+        await writeFile(join(codexHome, "auth.json"), '{"tokens":{"access_token":"rotated"}}', { mode: 0o600 });
+        await mkdir(join(codexHome, "cache"));
+        await writeFile(join(codexHome, "cache", "models.json"), "session-cache");
+      } else {
+        expect(await readFile(join(codexHome, "auth.json"), "utf8"))
+          .toBe('{"tokens":{"access_token":"rotated"}}');
+        expect(await readFile(join(codexHome, "cache", "models.json"), "utf8"))
+          .toBe("session-cache");
+      }
+      await writeFile(
+        valueAfter(args, "--output-last-message"),
+        '{"choice":"yes","rationale":"Exact match."}',
+      );
+      return {};
+    });
+    const calls = createCodexModelCalls({ spawn: fake.spawn });
+
+    for (const prompt of ["first", "second"]) {
+      const result = await calls.classify(model, { choices: ["yes"], prompt });
+      expect(isErr(result)).toBe(false);
+      await expect(access(callRoots.at(-1)!)).rejects.toThrow();
+    }
+
+    expect(new Set(sessionRoots).size).toBe(1);
+    expect(new Set(callRoots).size).toBe(2);
+    expect(await readFile(join(sourceCodexHome, "auth.json"), "utf8"))
+      .toBe('{"tokens":{"access_token":"test-secret"}}');
+    expect(await readFile(join(sourceCodexHome, "config.toml"), "utf8"))
+      .toBe('model = "must-not-copy"');
+    expect(await readFile(join(sourceCodexHome, "cache", "models.json"), "utf8"))
+      .toBe("must-not-copy");
+  });
+
+  it("fails closed before spawn when auth.json is unavailable and cleans session setup", async () => {
     const missingHome = join(authFixtureRoot, "missing-codex-home");
     await mkdir(missingHome);
     vi.stubEnv("CODEX_HOME", missingHome);
@@ -204,7 +264,7 @@ describe("Codex model calls", () => {
     await expectArtifactsCleaned(fake.calls[0]!.args);
   });
 
-  it("caps concurrent CLI children", async () => {
+  it("defaults to one concurrent CLI child and rejects a higher configured cap", async () => {
     let active = 0;
     let maximum = 0;
     const fake = fakeSpawn(async ({ args }) => {
@@ -215,7 +275,7 @@ describe("Codex model calls", () => {
       active -= 1;
       return {};
     });
-    const calls = createCodexModelCalls({ spawn: fake.spawn, concurrency: 1 });
+    const calls = createCodexModelCalls({ spawn: fake.spawn });
 
     await Promise.all([
       calls.classify(model, { choices: ["yes"], prompt: "first" }),
@@ -223,6 +283,8 @@ describe("Codex model calls", () => {
     ]);
 
     expect(maximum).toBe(1);
+    expect(() => createCodexModelCalls({ concurrency: 2 }))
+      .toThrow("concurrency must be exactly 1");
   });
 
   it("reports agent primitives as honestly unavailable", async () => {
@@ -248,6 +310,7 @@ function fakeSpawn(
   const children: ChildProcessWithoutNullStreams[] = [];
   const spawn = (command: string, args: readonly string[], options: Parameters<NonNullable<CodexModelCallsOptions["spawn"]>>[2]) => {
     const child = fakeChild();
+    if (options.env?.HOME) observedSessionRoots.add(dirname(options.env.HOME));
     calls.push({ command, args, options });
     children.push(child);
     let stdin = "";

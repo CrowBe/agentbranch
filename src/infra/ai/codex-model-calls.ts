@@ -16,7 +16,7 @@ import { domainError, err, ok, type DomainError, type Result } from "@/shared";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_KILL_GRACE_MS = 1_000;
-const DEFAULT_CONCURRENCY = 2;
+const DEFAULT_CONCURRENCY = 1;
 const DEFAULT_MAX_OUTPUT_BYTES = 1_048_576;
 const CODEX_AGENT_UNAVAILABLE =
   "The Codex dev rung covers classify/generate; use the Claude Code rung for agent turns.";
@@ -84,7 +84,16 @@ export function createCodexModelCalls(options: CodexModelCallsOptions = {}): Raw
 
 function createCodexRunner(options: CodexModelCallsOptions) {
   const spawnProcess = options.spawn ?? (spawn as SpawnFn);
-  const semaphore = new Semaphore(options.concurrency ?? DEFAULT_CONCURRENCY);
+  const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY;
+  if (concurrency !== 1) {
+    throw new Error("Codex concurrency must be exactly 1 to preserve isolated session auth.");
+  }
+  const semaphore = new Semaphore(concurrency);
+  let sessionPromise: Promise<CodexSession> | undefined;
+  const session = () => {
+    sessionPromise ??= createCodexSession();
+    return sessionPromise;
+  };
 
   return async (
     model: ResolvedModel,
@@ -92,21 +101,17 @@ function createCodexRunner(options: CodexModelCallsOptions) {
     outputSchema: unknown,
   ): Promise<Result<{ value: unknown; usage: TokenUsageBreakdown }, DomainError>> => {
     const release = await semaphore.acquire();
-    let runRoot: string | undefined;
+    let callRoot: string | undefined;
     try {
-      runRoot = await mkdtemp(join(tmpdir(), "agentbranch-codex-"));
-      const home = join(runRoot, "home");
-      const codexHome = join(runRoot, "codex-home");
-      const scratch = join(runRoot, "scratch");
-      const schemaPath = join(runRoot, "schema.json");
-      const outputPath = join(runRoot, "last-message.json");
+      const adapterSession = await session();
+      callRoot = await mkdtemp(join(adapterSession.root, "run-"));
+      const scratch = join(callRoot, "scratch");
+      const schemaPath = join(callRoot, "schema.json");
+      const outputPath = join(callRoot, "last-message.json");
       await Promise.all([
-        mkdir(home, { mode: 0o700 }),
-        mkdir(codexHome, { mode: 0o700 }),
         mkdir(scratch, { mode: 0o700 }),
         writeFile(schemaPath, JSON.stringify(outputSchema), { mode: 0o600 }),
       ]);
-      await copyCodexAuth(codexHome);
 
       const args = [
         "exec",
@@ -146,7 +151,7 @@ function createCodexRunner(options: CodexModelCallsOptions) {
 
       const child = spawnProcess(options.binary ?? "codex", args, {
         cwd: scratch,
-        env: codexEnvironment(home, codexHome),
+        env: codexEnvironment(adapterSession.home, adapterSession.codexHome),
         detached: process.platform !== "win32",
         shell: false,
         stdio: "pipe",
@@ -194,12 +199,36 @@ function createCodexRunner(options: CodexModelCallsOptions) {
       return err(domainError("model_unavailable", "Codex CLI could not be started.", cause));
     } finally {
       try {
-        if (runRoot) await rm(runRoot, { recursive: true, force: true });
+        if (callRoot) await rm(callRoot, { recursive: true, force: true });
       } finally {
         release();
       }
     }
   };
+}
+
+type CodexSession = {
+  readonly root: string;
+  readonly home: string;
+  readonly codexHome: string;
+};
+
+async function createCodexSession(): Promise<CodexSession> {
+  const root = await mkdtemp(join(tmpdir(), "agentbranch-codex-"));
+  try {
+    const home = join(root, "home");
+    const codexHome = join(root, "codex-home");
+    await Promise.all([
+      chmod(root, 0o700),
+      mkdir(home, { mode: 0o700 }),
+      mkdir(codexHome, { mode: 0o700 }),
+    ]);
+    await copyCodexAuth(codexHome);
+    return { root, home, codexHome };
+  } catch (cause) {
+    await rm(root, { recursive: true, force: true });
+    throw cause;
+  }
 }
 
 function watchChild(
