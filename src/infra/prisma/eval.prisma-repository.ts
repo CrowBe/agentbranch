@@ -10,6 +10,7 @@ import {
   analysisReadLimit,
   toEvalRunAnalysisRecord,
   triggeringCaseId,
+  validateTriggeringAttempts,
 } from "@/modules/triggering-eval";
 import type { SkillVersionLintSummary } from "@/modules/skill";
 import {
@@ -60,12 +61,20 @@ export function normalizeTriggeringResult(value: unknown): TriggeringResult {
   const hasCurrentCase = value.cases.some(
     (item) => isRecord(item) && item.grader !== undefined,
   );
-  if (hasCurrentCase) {
-    requireNumber(value.attempts, "attempts");
-    requireNumber(value.totalAttempts, "totalAttempts");
-    requireNumber(value.passedAttempts, "passedAttempts");
+  const hasCurrentRoot =
+    value.attempts !== undefined ||
+    value.totalAttempts !== undefined ||
+    value.passedAttempts !== undefined;
+  if (hasCurrentCase || (value.cases.length === 0 && hasCurrentRoot)) {
+    return normalizeCurrentResult(value);
   }
-  const cases = value.cases.map(normalizeStoredCase);
+
+  const cases = value.cases.map((item) => {
+    if (!isRecord(item) || item.grader !== undefined) {
+      throw new TypeError("Persisted legacy triggering case is malformed.");
+    }
+    return normalizeLegacySelection(item);
+  });
   const attempts = value.attempts === undefined ? cases[0]?.attempts ?? 1 : requireNumber(value.attempts, "attempts");
   const totalAttempts = value.totalAttempts === undefined
     ? cases.reduce((sum, item) => sum + item.attempts, 0)
@@ -82,11 +91,54 @@ export function normalizeTriggeringResult(value: unknown): TriggeringResult {
   };
 }
 
-function normalizeStoredCase(value: unknown): CaseResult {
+function normalizeCurrentResult(value: Readonly<Record<string, unknown>>): TriggeringResult {
+  if (
+    value.kind !== "triggering-eval" ||
+    typeof value.passed !== "boolean" ||
+    !Array.isArray(value.cases) ||
+    !isInsight(value.insight)
+  ) {
+    throw new TypeError("Persisted current triggering result has an invalid root.");
+  }
+  const attemptResult = validateTriggeringAttempts(
+    requireNumber(value.attempts, "attempts"),
+  );
+  if (!attemptResult.ok) throw new TypeError(attemptResult.error.message);
+  const cases = value.cases.map(normalizeCurrentCase);
+  if (cases.some((item) => item.attempts !== attemptResult.value)) {
+    throw new TypeError("Persisted case attempt counts do not match the run.");
+  }
+  const totalAttempts = requireNonnegativeInteger(value.totalAttempts, "totalAttempts");
+  const passedAttempts = requireNonnegativeInteger(value.passedAttempts, "passedAttempts");
+  const exactTotal = cases.reduce((sum, item) => sum + item.attempts, 0);
+  const exactPassed = cases.reduce((sum, item) => sum + item.passedAttempts, 0);
+  if (
+    passedAttempts > totalAttempts ||
+    totalAttempts !== exactTotal ||
+    passedAttempts !== exactPassed ||
+    value.passed !== cases.every((item) => item.pass)
+  ) {
+    throw new TypeError("Persisted triggering result aggregates are inconsistent.");
+  }
+  return {
+    kind: "triggering-eval",
+    passed: value.passed,
+    attempts: attemptResult.value,
+    totalAttempts,
+    passedAttempts,
+    cases,
+    insight: {
+      verdict: value.insight.verdict,
+      summary: value.insight.summary,
+      findings: value.insight.findings,
+      watch: value.insight.watch,
+    },
+  };
+}
+
+function normalizeCurrentCase(value: unknown): CaseResult {
   if (!isRecord(value)) throw new TypeError("Persisted triggering case is malformed.");
-  if (value.grader === undefined) return normalizeLegacySelection(value);
   if (value.grader === "selection") {
-    requireCurrentCommon(value);
     if (
       typeof value.prompt !== "string" ||
       (value.expected !== "fire" && value.expected !== "silent") ||
@@ -98,10 +150,28 @@ function normalizeStoredCase(value: unknown): CaseResult {
     ) {
       throw new TypeError("Persisted selection case is malformed.");
     }
-    return value as unknown as CaseResult;
+    const expected: "fire" | "silent" = value.expected;
+    const promptCase = {
+      grader: "selection" as const,
+      prompt: value.prompt,
+      expected,
+      ...(value.risk === "trigger-hijack" ? { risk: "trigger-hijack" as const } : {}),
+    };
+    const metrics = currentCaseMetrics(value, promptCase);
+    if ((value.observed.actual === expected) !== metrics.pass) {
+      throw new TypeError("Persisted selection outcome disagrees with its majority.");
+    }
+    return {
+      ...promptCase,
+      ...metrics,
+      observed: {
+        grader: "selection",
+        actual: value.observed.actual,
+        rationale: value.observed.rationale,
+      },
+    };
   }
   if (value.grader === "json-output") {
-    requireCurrentCommon(value);
     if (
       value.graderVersion !== 1 ||
       typeof value.prompt !== "string" ||
@@ -114,7 +184,25 @@ function normalizeStoredCase(value: unknown): CaseResult {
     ) {
       throw new TypeError("Persisted JSON-output case is malformed.");
     }
-    return value as unknown as CaseResult;
+    const promptCase = {
+      grader: "json-output" as const,
+      graderVersion: 1 as const,
+      prompt: value.prompt,
+      expectedSchema: value.expectedSchema,
+    };
+    const metrics = currentCaseMetrics(value, promptCase);
+    if ((value.observed.validationIssues.length === 0) !== metrics.pass) {
+      throw new TypeError("Persisted JSON-output outcome disagrees with its majority.");
+    }
+    return {
+      ...promptCase,
+      ...metrics,
+      observed: {
+        grader: "json-output",
+        output: value.observed.output,
+        validationIssues: value.observed.validationIssues,
+      },
+    };
   }
   throw new TypeError(`Unknown persisted triggering grader: ${String(value.grader)}.`);
 }
@@ -155,13 +243,34 @@ function normalizeLegacySelection(value: Readonly<Record<string, unknown>>): Cas
   };
 }
 
-function requireCurrentCommon(value: Readonly<Record<string, unknown>>): void {
-  if (typeof value.caseId !== "string" || typeof value.pass !== "boolean") {
-    throw new TypeError("Persisted current triggering case is missing identity or result.");
+function currentCaseMetrics(
+  value: Readonly<Record<string, unknown>>,
+  promptCase: Parameters<typeof triggeringCaseId>[0],
+): Pick<CaseResult, "caseId" | "pass" | "attempts" | "passedAttempts" | "passRate"> {
+  const expectedCaseId = triggeringCaseId(promptCase);
+  if (typeof value.caseId !== "string" || value.caseId.length === 0 || value.caseId !== expectedCaseId) {
+    throw new TypeError("Persisted current triggering case has an invalid identity.");
   }
-  requireNumber(value.attempts, "attempts");
-  requireNumber(value.passedAttempts, "passedAttempts");
-  requireNumber(value.passRate, "passRate");
+  const attemptResult = validateTriggeringAttempts(requireNumber(value.attempts, "case attempts"));
+  if (!attemptResult.ok) throw new TypeError(attemptResult.error.message);
+  const passedAttempts = requireNonnegativeInteger(value.passedAttempts, "case passedAttempts");
+  const passRate = requireNumber(value.passRate, "case passRate");
+  const pass = passedAttempts * 2 > attemptResult.value;
+  if (
+    typeof value.pass !== "boolean" ||
+    passedAttempts > attemptResult.value ||
+    passRate !== passedAttempts / attemptResult.value ||
+    value.pass !== pass
+  ) {
+    throw new TypeError("Persisted current triggering case metrics are inconsistent.");
+  }
+  return {
+    caseId: value.caseId,
+    pass,
+    attempts: attemptResult.value,
+    passedAttempts,
+    passRate,
+  };
 }
 
 function requireNumber(value: unknown, field: string): number {
@@ -169,6 +278,28 @@ function requireNumber(value: unknown, field: string): number {
     throw new TypeError(`Persisted triggering result has invalid ${field}.`);
   }
   return value;
+}
+
+function requireNonnegativeInteger(value: unknown, field: string): number {
+  const number = requireNumber(value, field);
+  if (!Number.isInteger(number) || number < 0) {
+    throw new TypeError(`Persisted triggering result has invalid ${field}.`);
+  }
+  return number;
+}
+
+function isInsight(value: unknown): value is TriggeringResult["insight"] {
+  return (
+    isRecord(value) &&
+    (value.verdict === "good" ||
+      value.verdict === "needs-attention" ||
+      value.verdict === "failing") &&
+    typeof value.summary === "string" &&
+    Array.isArray(value.findings) &&
+    value.findings.every((item) => typeof item === "string") &&
+    Array.isArray(value.watch) &&
+    value.watch.every((item) => typeof item === "string")
+  );
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
