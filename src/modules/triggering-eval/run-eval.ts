@@ -80,13 +80,17 @@ export async function runTriggeringEval(
     attempts: attemptCount.value,
     totalAttempts: cases.reduce((sum, c) => sum + c.attempts, 0),
     passedAttempts: cases.reduce((sum, c) => sum + c.passedAttempts, 0),
-    comparisonMetadata: {
-      evaluationSetHash: evaluationSetHash(cases),
-      grader: "selection",
-      graderVersion: 1,
-      method: "competitive-selection",
-      methodVersion: 1,
-    },
+    ...(cases.every((item) => item.grader === "selection")
+      ? {
+          comparisonMetadata: {
+            evaluationSetHash: evaluationSetHash(cases),
+            grader: "selection" as const,
+            graderVersion: 1 as const,
+            method: "competitive-selection" as const,
+            methodVersion: 1 as const,
+          },
+        }
+      : {}),
     insight: insight.value,
   });
 }

@@ -78,7 +78,7 @@ export type TriggeringResult = Artifact<"triggering-eval"> & {
   readonly attempts: number;
   readonly totalAttempts: number;
   readonly passedAttempts: number;
-  /** Absent only on legacy persisted runs, which are incomparable by design. */
+  /** Absent on legacy runs and non-selection graders, which are incomparable. */
   readonly comparisonMetadata?: EvaluationComparisonMetadata;
   /** The model-written interpretation (CONTEXT.md → Insight); renders to Insights. */
   readonly insight: Insight;

@@ -154,15 +154,19 @@ function run(
   rates: readonly number[],
 ): ComparableEvalRun {
   const cases = rates.map((rate, index) => ({
+    grader: "selection" as const,
     caseId: `case-${index + 1}`,
     prompt: `private prompt ${index + 1}`,
     expected: "fire" as const,
-    actual: rate > 0.5 ? "fire" as const : "silent" as const,
+    observed: {
+      grader: "selection" as const,
+      actual: rate > 0.5 ? "fire" as const : "silent" as const,
+      rationale: "private rationale",
+    },
     pass: rate > 0.5,
     attempts: 1,
     passedAttempts: rate,
     passRate: rate,
-    rationale: "private rationale",
   }));
   return {
     id: EvalRunId(id),

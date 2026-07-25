@@ -159,6 +159,28 @@ describe("Prisma eval run repository", () => {
     );
     expect(isErr(result) && result.error.tag).toBe("persistence_failed");
   });
+
+  it("preserves valid current comparison metadata after complete validation", async () => {
+    const prisma = {
+      evalRun: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "eval-current",
+          skillId: "skill-1",
+          skillVersionId: null,
+          harnessVersionId: null,
+          userId: "user-1",
+          status: "passed",
+          resultJson: currentResult(),
+          createdAt: new Date(),
+        }),
+      },
+    } as unknown as PrismaClient;
+    const run = unwrap(await createPrismaEvalRunRepository(prisma).findById(
+      EvalRunId("eval-current"),
+      UserId("user-1"),
+    ));
+    expect(run?.result.comparisonMetadata).toEqual(currentResult().comparisonMetadata);
+  });
 });
 
 function currentResult() {
@@ -173,6 +195,13 @@ function currentResult() {
     attempts: 3,
     totalAttempts: 3,
     passedAttempts: 2,
+    comparisonMetadata: {
+      evaluationSetHash: "set-hash",
+      grader: "selection" as const,
+      graderVersion: 1 as const,
+      method: "competitive-selection" as const,
+      methodVersion: 1 as const,
+    },
     cases: [{
       ...promptCase,
       caseId: triggeringCaseId(promptCase),

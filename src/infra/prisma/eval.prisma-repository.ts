@@ -127,11 +127,38 @@ function normalizeCurrentResult(value: Readonly<Record<string, unknown>>): Trigg
     totalAttempts,
     passedAttempts,
     cases,
+    ...normalizeComparisonMetadata(value.comparisonMetadata),
     insight: {
       verdict: value.insight.verdict,
       summary: value.insight.summary,
       findings: value.insight.findings,
       watch: value.insight.watch,
+    },
+  };
+}
+
+function normalizeComparisonMetadata(
+  value: unknown,
+): Pick<TriggeringResult, "comparisonMetadata"> | Record<string, never> {
+  if (value === undefined) return {};
+  if (
+    !isRecord(value) ||
+    typeof value.evaluationSetHash !== "string" ||
+    value.evaluationSetHash.length === 0 ||
+    value.grader !== "selection" ||
+    value.graderVersion !== 1 ||
+    value.method !== "competitive-selection" ||
+    value.methodVersion !== 1
+  ) {
+    throw new TypeError("Persisted triggering comparison metadata is malformed.");
+  }
+  return {
+    comparisonMetadata: {
+      evaluationSetHash: value.evaluationSetHash,
+      grader: "selection",
+      graderVersion: 1,
+      method: "competitive-selection",
+      methodVersion: 1,
     },
   };
 }
