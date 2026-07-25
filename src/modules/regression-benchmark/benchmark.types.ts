@@ -32,6 +32,7 @@ export type BenchmarkScore = {
     readonly responseSchema: BenchmarkDimensionScore;
     readonly toolContract: BenchmarkDimensionScore;
     readonly safety: BenchmarkDimensionScore;
+    readonly taskOutcome: TaskOutcomeBenchmarkDimensionScore;
   };
 };
 
@@ -47,6 +48,16 @@ export type BenchmarkDimensionScore = {
   readonly passedCases: number;
   readonly score: number;
   readonly entries: readonly BenchmarkDimensionEntryScore[];
+};
+
+export type TaskOutcomeBenchmarkDimensionScore = BenchmarkDimensionScore & {
+  readonly method: {
+    readonly kind: "model";
+    readonly grader: "json-output";
+    readonly graderVersion: 1;
+    readonly method: "generate-then-schema-validate";
+    readonly methodVersion: 1;
+  };
 };
 
 /** A persisted benchmark run, pinned to the harness version it scored. */

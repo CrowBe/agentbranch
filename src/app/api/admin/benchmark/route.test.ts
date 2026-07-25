@@ -7,11 +7,12 @@ const currentIdentity = vi.fn();
 const listRuns = vi.fn();
 const recordRun = vi.fn();
 const classify = vi.fn();
+const generate = vi.fn();
 const config = {
   flags: { hasAuth: true, hasDatabase: false, hasModel: true },
   admin: { userIds: ["admin-1"], emails: [] },
 };
-const gateway = { hasModel: true, classify };
+const gateway = { hasModel: true, classify, generate };
 
 vi.mock("@/server/container", () => ({
   getContainer: () => ({
@@ -33,6 +34,16 @@ beforeEach(() => {
     );
   // Always silent: negatives pass, positives fail — a deterministic half score.
   classify.mockReset().mockResolvedValue(ok({ choice: null, rationale: "silent" }));
+  generate.mockImplementation(async ({ prompt, schema }) => {
+    const output = prompt.includes("Acme owes")
+      ? { customer: "Acme", currency: "AUD", totalOutstanding: 2450, overdueInvoices: 2, priority: "high" }
+      : prompt.includes("Jamie wants")
+        ? { customerName: "Jamie", requestedWindow: "Tuesday afternoon", action: "offer-slot", needsConfirmation: true }
+        : prompt.includes("FILTER-20")
+          ? { sku: "FILTER-20", reorderQuantity: 12, action: "reorder", rationale: "Lead time exceeds stock cover." }
+          : { currency: "AUD", inflows: 8100, outflows: 5725, netCashFlow: 2375 };
+    return ok(schema.parse(output));
+  });
   gateway.hasModel = true;
   config.flags.hasAuth = true;
 });

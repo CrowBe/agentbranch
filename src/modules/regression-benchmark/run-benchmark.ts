@@ -33,6 +33,7 @@ import type {
   BenchmarkScore,
   BenchmarkSkillScore,
 } from "./benchmark.types";
+import { runTaskOutcomeBenchmarkDimension } from "./run-task-outcome-dimension";
 
 /**
  * Score the triggering eval against the frozen set: every corpus skill's
@@ -94,6 +95,8 @@ export async function runRegressionBenchmark(
   );
   const totalAttempts = perSkill.reduce((sum, skill) => sum + skill.totalAttempts, 0);
   const passedAttempts = perSkill.reduce((sum, skill) => sum + skill.passedAttempts, 0);
+  const taskOutcome = await runTaskOutcomeBenchmarkDimension(gateway, options);
+  if (isErr(taskOutcome)) return taskOutcome;
   return ok({
     benchmarkSetHash: regressionBenchmarkSetHash,
     totalCases,
@@ -119,6 +122,7 @@ export async function runRegressionBenchmark(
         (entry) => createToolContractLintReport(entry.source),
       ),
       safety: scoreSafetyDimension(),
+      taskOutcome: taskOutcome.value,
     },
   });
 }

@@ -198,8 +198,9 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **response-schema-corpus** | `responseSchemaCorpus`, `ResponseSchemaCorpusEntry` | — | real (curated, hash-pinned response-schema fixtures with frozen lint expectations) |
 | **tool-contract-corpus** | `toolContractCorpus`, `toolContractBundleFixtures`, `ToolContractCorpusEntry`, `ToolContractBundleFixture` | — | real (curated, hash-pinned tool-contract fixtures with frozen lint expectations and composed bundle test-run inputs) |
 | **adversarial-safety-battery** | `adversarialSafetyBattery`, `adversarialTriggeringNegativePrompts`, `AdversarialCase` + types | — | real (curated, hash-pinned malicious/deceptive whole-folder fixtures across the §9.1 threat classes; freezes static policy expectations and documented latent non-detection) |
+| **task-outcome-corpus** | `taskOutcomeCorpus`, `taskOutcomeCorpusSetHash`, `TaskOutcomeCorpusEntry` | — | real (curated, provenance-bearing SMB workflow prompts with hash-pinned JSON-output expectations; readable offline) |
 | **harness-recommendation** | `harnessRecommendationCapability`, `CorpusCohort`, `HarnessRecommendationReport` + types | — | real (Tier-1 static correlation) |
-| **regression-benchmark** | `regressionBenchmarkSet`, `responseSchemaBenchmarkSet`, `toolContractBenchmarkSet`, `safetyBenchmarkSet`, their set hashes, `runRegressionBenchmark`, `BenchmarkRun` + types | `BenchmarkRunRepository` | real; stochastic attempt rates persist full-precision versioned 95% Wilson intervals, while deterministic dimensions remain interval-free |
+| **regression-benchmark** | `regressionBenchmarkSet`, its named dimension sets, `runRegressionBenchmark`, `runTaskOutcomeBenchmarkDimension`, `BenchmarkRun` + types | `BenchmarkRunRepository` | real; `responseSchema`, `toolContract`, and `safety` are deterministic and interval-free; `taskOutcome` is model-bearing and uses the shared versioned JSON-output grader |
 
 **Harness improvement loop (admin).** ARCHITECTURE §9 carries the design; the
 build spans three seams. The **aggregate read** is `listForAnalysis` on
@@ -211,12 +212,15 @@ cross into it, and the skill version's stored lint summary (score + fired
 rules) rides along as the static feature set. The **report** is the
 `harness-recommendation` module — an analysis capability whose `Input` is the
 corpus cohort. The **measurement guardrail** is the `regression-benchmark`
-module: the baseline corpus plus the response-schema, tool-contract, and safety
-corpora as independently hash-pinned frozen sets. Triggering is scored through
+module: the baseline corpus plus the response-schema, tool-contract, safety,
+and task-outcome corpora as independently hash-pinned frozen sets. Triggering is scored through
 the eval's competitive selection (`runBatteryCases`,
 candidate excluded from its own distractor field, `platform`-tagged) and
-the other dimensions compare lint grade/finding codes or safety verdict/policy
-codes. All scores and set hashes are recorded per harness version behind
+three deterministic dimensions compare lint grade/finding codes or safety
+verdict/policy codes. The fourth named dimension, `taskOutcome`, makes
+platform-tagged model calls through the shared `runBatteryCases` JSON grader
+and fails `model_unavailable` honestly offline. All scores, method metadata,
+and set hashes are recorded per harness version behind
 `BenchmarkRunRepository`. All three surface
 only through the admin routes (below), gated by `isAdmin`.
 

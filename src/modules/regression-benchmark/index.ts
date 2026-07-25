@@ -25,6 +25,8 @@ export type {
   BenchmarkRun,
   BenchmarkScore,
   BenchmarkSkillScore,
+  TaskOutcomeBenchmarkDimensionScore,
 } from "./benchmark.types";
 export type { BenchmarkRunRepository } from "./benchmark.repository";
 export { runRegressionBenchmark } from "./run-benchmark";
+export { runTaskOutcomeBenchmarkDimension } from "./run-task-outcome-dimension";

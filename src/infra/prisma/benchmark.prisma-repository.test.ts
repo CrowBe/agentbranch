@@ -5,6 +5,7 @@ import {
   safetyBenchmarkSetHash,
   toolContractBenchmarkSetHash,
 } from "@/modules/regression-benchmark";
+import { taskOutcomeCorpusSetHash } from "@/modules/task-outcome-corpus";
 import { HarnessVersionId, unwrap, wilson95 } from "@/shared";
 import { createPrismaBenchmarkRunRepository } from "./benchmark.prisma-repository";
 
@@ -78,6 +79,16 @@ function dimensions() {
     responseSchema: emptyDimension(responseSchemaBenchmarkSetHash),
     toolContract: emptyDimension(toolContractBenchmarkSetHash),
     safety: emptyDimension(safetyBenchmarkSetHash),
+    taskOutcome: {
+      ...emptyDimension(taskOutcomeCorpusSetHash),
+      method: {
+        kind: "model" as const,
+        grader: "json-output" as const,
+        graderVersion: 1 as const,
+        method: "generate-then-schema-validate" as const,
+        methodVersion: 1 as const,
+      },
+    },
   };
 }
 

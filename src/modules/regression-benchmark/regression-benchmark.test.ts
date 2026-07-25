@@ -14,7 +14,9 @@ import {
   toolContractBenchmarkSetHash,
   canonicalBenchmarkCase,
   runRegressionBenchmark,
+  runTaskOutcomeBenchmarkDimension,
 } from "./index";
+import { taskOutcomeCorpus, taskOutcomeCorpusSetHash } from "@/modules/task-outcome-corpus";
 import { ok } from "@/shared";
 
 /** A gateway that answers classify from the corpus's own expectations —
@@ -47,7 +49,14 @@ function perfectGateway(observed: {
       return ok({ transcript: [] });
     },
     async generate(input) {
-      return ok(input.schema.parse({}));
+      const output = input.prompt.includes("Acme owes")
+        ? { customer: "Acme", currency: "AUD", totalOutstanding: 2450, overdueInvoices: 2, priority: "high" }
+        : input.prompt.includes("Jamie wants")
+          ? { customerName: "Jamie", requestedWindow: "Tuesday afternoon", action: "offer-slot", needsConfirmation: true }
+          : input.prompt.includes("FILTER-20")
+            ? { sku: "FILTER-20", reorderQuantity: 12, action: "reorder", rationale: "Stock cover is shorter than lead time." }
+            : { currency: "AUD", inflows: 8100, outflows: 5725, netCashFlow: 2375 };
+      return ok(input.schema.parse(output));
     },
   };
 }
@@ -151,6 +160,19 @@ describe("regression benchmark", () => {
       benchmarkSetHash: safetyBenchmarkSetHash,
       totalCases: safetyBenchmarkSet.length,
     });
+    expect(score.dimensions.taskOutcome).toMatchObject({
+      benchmarkSetHash: taskOutcomeCorpusSetHash,
+      totalCases: taskOutcomeCorpus.length,
+      passedCases: taskOutcomeCorpus.length,
+      score: 1,
+      method: {
+        kind: "model",
+        grader: "json-output",
+        graderVersion: 1,
+        method: "generate-then-schema-validate",
+        methodVersion: 1,
+      },
+    });
 
     // Measuring our own harness is platform spend, never a user's.
     expect(observed.tags.every((tag) => tag.kind === "platform")).toBe(true);
@@ -170,6 +192,14 @@ describe("regression benchmark", () => {
     expect(isErr(result) && result.error.tag === "model_unavailable").toBe(
       true,
     );
+  });
+
+  it("fails the independently runnable model-bearing dimension honestly offline", async () => {
+    const result = await runTaskOutcomeBenchmarkDimension({
+      ...perfectGateway({ tags: [], choiceFields: [] }),
+      hasModel: false,
+    });
+    expect(isErr(result) && result.error.tag === "model_unavailable").toBe(true);
   });
 
   it("repeats triggering cases without changing case totals", async () => {
@@ -215,6 +245,16 @@ describe("regression benchmark", () => {
         responseSchema: emptyDimension(responseSchemaBenchmarkSetHash),
         toolContract: emptyDimension(toolContractBenchmarkSetHash),
         safety: emptyDimension(safetyBenchmarkSetHash),
+        taskOutcome: {
+          ...emptyDimension(taskOutcomeCorpusSetHash),
+          method: {
+            kind: "model" as const,
+            grader: "json-output" as const,
+            graderVersion: 1 as const,
+            method: "generate-then-schema-validate" as const,
+            methodVersion: 1 as const,
+          },
+        },
       },
     };
     vi.setSystemTime(new Date("2026-07-01T00:00:00Z"));
