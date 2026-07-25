@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Skill } from "@/modules/skill";
 import { skillName, skillDescription } from "@/modules/skill";
 import type { ModelGateway, AccountingTag } from "@/modules/model-gateway";
@@ -9,6 +10,7 @@ import { distractorLibrary } from "./distractor-library";
 import type { CaseResult, Distractor, PromptCase, TriggeringResult } from "./triggering-eval.types";
 
 const INSIGHT_CASE_TEXT_MAX = 240;
+const MAX_ATTEMPTS = 9;
 
 /**
  * Run the triggering eval: does the skill fire on the right prompts and stay
@@ -29,8 +31,11 @@ export async function runTriggeringEval(
     readonly observer?: EvaluationObserver;
     readonly target?: ModelSelection;
     readonly battery?: readonly PromptCase[];
+    readonly attempts?: number;
   } = {},
 ): Promise<Result<TriggeringResult, DomainError>> {
+  const attemptCount = validateTriggeringAttempts(options.attempts);
+  if (isErr(attemptCount)) return attemptCount;
   let battery: Result<readonly PromptCase[], DomainError>;
   if (options.battery) {
     battery = ok(options.battery);
@@ -61,7 +66,15 @@ export async function runTriggeringEval(
   });
   if (isErr(insight)) return insight;
 
-  return ok({ kind: "triggering-eval", cases, passed, insight: insight.value });
+  return ok({
+    kind: "triggering-eval",
+    cases,
+    passed,
+    attempts: attemptCount.value,
+    totalAttempts: cases.reduce((sum, c) => sum + c.attempts, 0),
+    passedAttempts: cases.reduce((sum, c) => sum + c.passedAttempts, 0),
+    insight: insight.value,
+  });
 }
 
 /**
@@ -81,28 +94,44 @@ export async function runBatteryCases(
     readonly observer?: EvaluationObserver;
     readonly target?: ModelSelection;
     readonly distractors?: readonly Distractor[];
+    readonly attempts?: number;
   } = {},
 ): Promise<Result<readonly CaseResult[], DomainError>> {
+  const attempts = validateTriggeringAttempts(options.attempts);
+  if (isErr(attempts)) return attempts;
   const candidateChoice = `${candidate.name}: ${candidate.description}`;
   const field = options.distractors ?? distractorLibrary;
   const choices = [candidateChoice, ...field.map((d) => `${d.name}: ${d.description}`)];
 
   const cases: CaseResult[] = [];
   for (const [index, c] of battery.entries()) {
-    const selected = await gateway.classify({
-      prompt: c.prompt,
-      choices,
-      tag,
-      target: options.target,
-    });
-    if (isErr(selected)) return selected;
+    let fireAttempts = 0;
+    let passedAttempts = 0;
+    let rationale = "";
+    for (let attempt = 0; attempt < attempts.value; attempt += 1) {
+      const selected = await gateway.classify({
+        prompt: c.prompt,
+        choices,
+        tag,
+        target: options.target,
+      });
+      if (isErr(selected)) return selected;
+      const actual = selected.value.choice === candidateChoice ? "fire" : "silent";
+      if (actual === "fire") fireAttempts += 1;
+      if (actual === c.expected) passedAttempts += 1;
+      if (attempt === 0) rationale = selected.value.rationale;
+    }
     const actual: CaseResult["actual"] =
-      selected.value.choice === candidateChoice ? "fire" : "silent";
+      fireAttempts * 2 > attempts.value ? "fire" : "silent";
     const result: CaseResult = {
       ...c,
+      caseId: triggeringCaseId(c),
       actual,
-      pass: actual === c.expected,
-      rationale: selected.value.rationale,
+      pass: passedAttempts * 2 > attempts.value,
+      attempts: attempts.value,
+      passedAttempts,
+      passRate: passedAttempts / attempts.value,
+      rationale,
     };
     cases.push(result);
     options.observer?.({
@@ -113,10 +142,38 @@ export async function runBatteryCases(
       expected: result.expected,
       actual: result.actual,
       pass: result.pass,
+      attempts: result.attempts,
+      passedAttempts: result.passedAttempts,
+      passRate: result.passRate,
       rationale: result.rationale,
     });
   }
   return ok(cases);
+}
+
+export function validateTriggeringAttempts(
+  value: number | undefined,
+): Result<number, DomainError> {
+  const attempts = value ?? 1;
+  return Number.isInteger(attempts) &&
+    attempts > 0 &&
+    attempts <= MAX_ATTEMPTS &&
+    attempts % 2 === 1
+    ? ok(attempts)
+    : {
+        ok: false,
+        error: {
+          tag: "invalid_operation",
+          message: `Attempts must be a positive odd integer no greater than ${MAX_ATTEMPTS}.`,
+        },
+      };
+}
+
+/** Versioned canonical identity; display ordering and model output do not affect it. */
+export function triggeringCaseId(c: PromptCase): string {
+  return createHash("sha256")
+    .update(JSON.stringify(["triggering-case", 1, c.expected, c.risk ?? null, c.prompt]))
+    .digest("hex");
 }
 
 const INSIGHT_SYSTEM = `You explain a skill's triggering-eval result to its

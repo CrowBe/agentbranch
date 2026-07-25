@@ -17,6 +17,9 @@ describe("eval feedback formatters", () => {
     const result: TriggeringResult = {
       kind: "triggering-eval",
       passed: false,
+      attempts: 1,
+      totalAttempts: 2,
+      passedAttempts: 1,
       insight: {
         verdict: "failing",
         summary: "The skill fires on unrelated email prompts.",
@@ -25,17 +28,25 @@ describe("eval feedback formatters", () => {
       },
       cases: [
         {
+          caseId: "case-1",
           prompt: "Schedule a meeting for tomorrow.",
           expected: "fire",
           actual: "fire",
           pass: true,
+          attempts: 1,
+          passedAttempts: 1,
+          passRate: 1,
           rationale: "Calendar scheduling matches.",
         },
         {
+          caseId: "case-2",
           prompt: "Draft a customer follow-up email.",
           expected: "silent",
           actual: "fire",
           pass: false,
+          attempts: 1,
+          passedAttempts: 0,
+          passRate: 0,
           rationale: "The description mentions customer follow-up work.",
         },
       ],
@@ -64,6 +75,9 @@ describe("eval feedback formatters", () => {
     const result: TriggeringResult = {
       kind: "triggering-eval",
       passed: true,
+      attempts: 1,
+      totalAttempts: 1,
+      passedAttempts: 1,
       insight: {
         verdict: "good",
         summary: "The trigger surface is precise.",
@@ -72,10 +86,14 @@ describe("eval feedback formatters", () => {
       },
       cases: [
         {
+          caseId: "case-1",
           prompt: "Schedule a meeting for tomorrow.",
           expected: "fire",
           actual: "fire",
           pass: true,
+          attempts: 1,
+          passedAttempts: 1,
+          passRate: 1,
           rationale: "Calendar scheduling matches.",
         },
       ],

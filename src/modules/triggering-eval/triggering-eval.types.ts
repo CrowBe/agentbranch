@@ -18,8 +18,13 @@ export type PromptCase = {
 
 /** Result of a single case after running selection. */
 export type CaseResult = PromptCase & {
+  /** Stable identity of the versioned graded case definition. */
+  readonly caseId: string;
   readonly actual: "fire" | "silent";
   readonly pass: boolean;
+  readonly attempts: number;
+  readonly passedAttempts: number;
+  readonly passRate: number;
   /** The model's stated reason for this selection (from `classify`). */
   readonly rationale: string;
 };
@@ -34,6 +39,9 @@ export type EvalStatus = "queued" | "running" | "passed" | "failed";
 export type TriggeringResult = Artifact<"triggering-eval"> & {
   readonly cases: readonly CaseResult[];
   readonly passed: boolean;
+  readonly attempts: number;
+  readonly totalAttempts: number;
+  readonly passedAttempts: number;
   /** The model-written interpretation (CONTEXT.md → Insight); renders to Insights. */
   readonly insight: Insight;
 };
@@ -60,9 +68,13 @@ export type AnalysisReadFilter = {
 /** A case outcome with the prompt text stripped: expectation, result, and the
  * classifier's rationale — the features the loop mines, not the content. */
 export type EvalCaseOutcome = {
+  readonly caseId: string;
   readonly expected: "fire" | "silent";
   readonly actual: "fire" | "silent";
   readonly pass: boolean;
+  readonly attempts: number;
+  readonly passedAttempts: number;
+  readonly passRate: number;
   readonly rationale: string;
   readonly risk?: "trigger-hijack";
 };
@@ -80,6 +92,9 @@ export type EvalRunAnalysisRecord = {
   readonly harnessVersionId: HarnessVersionId | null;
   readonly status: EvalStatus;
   readonly passed: boolean;
+  readonly attempts: number;
+  readonly totalAttempts: number;
+  readonly passedAttempts: number;
   readonly cases: readonly EvalCaseOutcome[];
   readonly skillLintSummary: SkillVersionLintSummary | null;
   readonly createdAt: Date;

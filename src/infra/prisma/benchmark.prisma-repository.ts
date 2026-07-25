@@ -22,14 +22,24 @@ type BenchmarkRunRow = {
 
 function toBenchmarkRun(row: BenchmarkRunRow): BenchmarkRun {
   const score = row.scoreJson as Omit<BenchmarkScore, "benchmarkSetHash">;
+  const attempts = score.attempts ?? 1;
+  const totalAttempts = score.totalAttempts ?? score.totalCases;
+  const passedAttempts = score.passedAttempts ?? score.passedCases;
   return {
     id: BenchmarkRunId(row.id),
     harnessVersionId: HarnessVersionId(row.harnessVersionId),
     benchmarkSetHash: row.benchmarkSetHash,
     totalCases: score.totalCases,
     passedCases: score.passedCases,
+    attempts,
+    totalAttempts,
+    passedAttempts,
     score: score.score,
-    perSkill: score.perSkill,
+    perSkill: score.perSkill.map((skill) => ({
+      ...skill,
+      totalAttempts: skill.totalAttempts ?? skill.totalCases,
+      passedAttempts: skill.passedAttempts ?? skill.passedCases,
+    })),
     dimensions: score.dimensions,
     createdAt: row.createdAt,
   };
@@ -49,6 +59,9 @@ export function createPrismaBenchmarkRunRepository(
             scoreJson: {
               totalCases: run.totalCases,
               passedCases: run.passedCases,
+              attempts: run.attempts,
+              totalAttempts: run.totalAttempts,
+              passedAttempts: run.passedAttempts,
               score: run.score,
               perSkill: run.perSkill,
               dimensions: run.dimensions,

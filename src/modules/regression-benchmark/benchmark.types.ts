@@ -7,6 +7,8 @@ export type BenchmarkSkillScore = {
   readonly contentHash: string;
   readonly totalCases: number;
   readonly passedCases: number;
+  readonly totalAttempts: number;
+  readonly passedAttempts: number;
 };
 
 /**
@@ -18,6 +20,9 @@ export type BenchmarkScore = {
   readonly benchmarkSetHash: string;
   readonly totalCases: number;
   readonly passedCases: number;
+  readonly attempts: number;
+  readonly totalAttempts: number;
+  readonly passedAttempts: number;
   /** passedCases / totalCases, 0..1. */
   readonly score: number;
   readonly perSkill: readonly BenchmarkSkillScore[];

@@ -1,5 +1,9 @@
 import type { ModelGateway } from "@/modules/model-gateway";
-import { distractorLibrary, runBatteryCases } from "@/modules/triggering-eval";
+import {
+  distractorLibrary,
+  runBatteryCases,
+  validateTriggeringAttempts,
+} from "@/modules/triggering-eval";
 import { createResponseSchemaLintReport } from "@/modules/response-schema";
 import { createToolContractLintReport } from "@/modules/tool-contract";
 import { createLintReportForSource } from "@/modules/lint";
@@ -41,8 +45,13 @@ import type {
  */
 export async function runRegressionBenchmark(
   gateway: ModelGateway,
-  options: { readonly observer?: EvaluationObserver } = {},
+  options: {
+    readonly observer?: EvaluationObserver;
+    readonly attempts?: number;
+  } = {},
 ): Promise<Result<BenchmarkScore, DomainError>> {
+  const attempts = validateTriggeringAttempts(options.attempts);
+  if (isErr(attempts)) return attempts;
   if (!gateway.hasModel) {
     return err(
       domainError(
@@ -63,6 +72,7 @@ export async function runRegressionBenchmark(
       {
         distractors: distractorLibrary.filter((d) => d.name !== entry.name),
         observer: options.observer,
+        attempts: options.attempts,
       },
     );
     if (isErr(cases)) return cases;
@@ -71,6 +81,8 @@ export async function runRegressionBenchmark(
       contentHash: entry.contentHash,
       totalCases: cases.value.length,
       passedCases: cases.value.filter((c) => c.pass).length,
+      totalAttempts: cases.value.reduce((sum, c) => sum + c.attempts, 0),
+      passedAttempts: cases.value.reduce((sum, c) => sum + c.passedAttempts, 0),
     });
   }
 
@@ -79,10 +91,15 @@ export async function runRegressionBenchmark(
     (sum, skill) => sum + skill.passedCases,
     0,
   );
+  const totalAttempts = perSkill.reduce((sum, skill) => sum + skill.totalAttempts, 0);
+  const passedAttempts = perSkill.reduce((sum, skill) => sum + skill.passedAttempts, 0);
   return ok({
     benchmarkSetHash: regressionBenchmarkSetHash,
     totalCases,
     passedCases,
+    attempts: options.attempts ?? 1,
+    totalAttempts,
+    passedAttempts,
     score:
       totalCases === 0
         ? 0

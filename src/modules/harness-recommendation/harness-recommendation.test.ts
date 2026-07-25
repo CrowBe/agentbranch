@@ -11,9 +11,13 @@ function evalRecord(
   rules: readonly string[] | undefined,
   cases: readonly EvalCaseOutcome[] = [
     {
+      caseId: "case-1",
       expected: "fire",
       actual: passed ? "fire" : "silent",
       pass: passed,
+      attempts: 1,
+      passedAttempts: passed ? 1 : 0,
+      passRate: passed ? 1 : 0,
       rationale: "keyword overlap",
     },
   ],
@@ -25,6 +29,9 @@ function evalRecord(
     harnessVersionId: HarnessVersionId("h1"),
     status: passed ? "passed" : "failed",
     passed,
+    attempts: 1,
+    totalAttempts: cases.length,
+    passedAttempts: cases.filter((caseResult) => caseResult.pass).length,
     cases,
     skillLintSummary:
       rules === undefined
@@ -121,9 +128,13 @@ describe("harness-recommendation report (Tier 1)", () => {
 
   it("surfaces fired trigger-hijack probes as policy-rule evidence", async () => {
     const hijackCase: EvalCaseOutcome = {
+      caseId: "hijack-case",
       expected: "silent",
       actual: "fire",
       pass: false,
+      attempts: 1,
+      passedAttempts: 0,
+      passRate: 0,
       rationale: "the broad description won",
       risk: "trigger-hijack",
     };

@@ -97,6 +97,9 @@ export type EvaluationRunEvent =
       readonly expected: "fire" | "silent";
       readonly actual: "fire" | "silent";
       readonly pass: boolean;
+      readonly attempts: number;
+      readonly passedAttempts: number;
+      readonly passRate: number;
       readonly rationale: string;
     };
 

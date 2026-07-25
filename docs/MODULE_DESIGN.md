@@ -139,7 +139,7 @@ most capabilities read a `Skill`, the equipment primitives (`response-schema`,
 | Tool contract quality | analysis | `tool-contract` | I/O typing, description/example quality, failure modes, safety notes (pure) | `insights`, `breakdown` | real |
 | Subagent definition quality | analysis | `subagent-definition` | delegation description, role/instruction depth, tool boundaries, metadata smells (pure) | `insights`, `breakdown` | real |
 | Test run | evaluation | `test-run` | composes `gateway.runAgent` + mock-tool registry over a `TestRunInput` bundle; contracts drive the mocks + per-call validation | `insights`, `breakdown` | run + world generation real (scenario + mock tools generated, cached); contract-driven mocks + checks real; email mock = offline fallback |
-| Triggering eval | evaluation | `triggering-eval` | composes `gateway.classify` over the field | `insights`, `breakdown` | run + battery generation real (cached); distractor library a static v1 seed |
+| Triggering eval | evaluation | `triggering-eval` | composes `gateway.classify` over the field, optionally repeating each case by an odd attempt count (1–9) and deciding by strict majority | `insights`, `breakdown` | run + battery generation real (cached); distractor library a static v1 seed; case ids are content-derived and attempt failures abort atomically |
 | Harness recommendation | analysis | `harness-recommendation` | Tier-1 correlation over a corpus cohort (fired lint rules × eval outcomes) | `report` | real; the first capability whose `Input` is not a `Skill` |
 
 Run an analysis: `runCapability(heroCapability, "rendered", skill)` →

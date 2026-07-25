@@ -32,6 +32,8 @@ export type RuntimeTargetResult =
 export type CrossRuntimeValidationInput = {
   readonly skill: Skill;
   readonly targets: readonly RuntimeTarget[];
+  /** Positive odd attempt count per battery case; defaults to one. */
+  readonly attempts?: number;
 };
 
 /**
