@@ -1,18 +1,16 @@
 import type { Analyzer } from "@/modules/skill-analysis";
 import type { EvalRunAnalysisRecord } from "@/modules/triggering-eval";
-import { ok, type EvalRunId } from "@/shared";
+import { newcombeWilsonDifference95, ok } from "@/shared";
 import type {
   CohortStats,
   CorpusCohort,
   HarnessRecommendation,
   HarnessRecommendationReport,
+  RuleComparisonEvidence,
 } from "./harness-recommendation.types";
 
 /** Both sides of a correlation split need this many runs before it counts. */
 const MIN_SAMPLE = 3;
-/** How far apart the fail rates must sit before a rule earns a recommendation. */
-const FAIL_RATE_DIFFERENTIAL = 0.25;
-
 /**
  * Tier 1 of the harness improvement loop (ARCHITECTURE §9): zero-token, fully
  * auditable correlation of static skill features — the lint rules a skill
@@ -23,11 +21,13 @@ const FAIL_RATE_DIFFERENTIAL = 0.25;
 export const harnessRecommendationAnalyzer: Analyzer<CorpusCohort, HarnessRecommendationReport> = {
   kind: "harness-recommendation",
   async analyze(cohort: CorpusCohort) {
+    const rules = ruleCorrelations(cohort.evalRuns);
     return ok({
       kind: "harness-recommendation" as const,
       cohort: cohortStats(cohort),
+      comparisons: rules.comparisons,
       recommendations: [
-        ...ruleCorrelations(cohort.evalRuns),
+        ...rules.recommendations,
         ...lintBlindSpot(cohort.evalRuns),
         ...hijackProbeFindings(cohort.evalRuns),
       ],
@@ -70,25 +70,52 @@ function cohortStats(cohort: CorpusCohort): CohortStats {
  * passing skills is noise. Runs without a lint summary (or one persisted before
  * fired rules were recorded) can't join a split and are left out.
  */
-function ruleCorrelations(runs: readonly EvalRunAnalysisRecord[]): HarnessRecommendation[] {
+function ruleCorrelations(runs: readonly EvalRunAnalysisRecord[]): {
+  readonly comparisons: readonly RuleComparisonEvidence[];
+  readonly recommendations: readonly HarnessRecommendation[];
+} {
   const featured = runs.filter((run) => run.skillLintSummary?.rules !== undefined);
   const rules = new Set(featured.flatMap((run) => run.skillLintSummary?.rules ?? []));
 
+  const comparisons: RuleComparisonEvidence[] = [];
   const recommendations: HarnessRecommendation[] = [];
   for (const rule of [...rules].sort()) {
     const withRule = featured.filter((run) => run.skillLintSummary?.rules?.includes(rule));
     const withoutRule = featured.filter((run) => !run.skillLintSummary?.rules?.includes(rule));
     if (withRule.length < MIN_SAMPLE || withoutRule.length < MIN_SAMPLE) continue;
 
-    const failRateWith = rate(withRule.filter((r) => !r.passed).length, withRule.length);
-    const failRateWithout = rate(withoutRule.filter((r) => !r.passed).length, withoutRule.length);
+    const failuresWith = withRule.filter((run) => !run.passed).length;
+    const failuresWithout = withoutRule.filter((run) => !run.passed).length;
+    const interval = newcombeWilsonDifference95(
+      failuresWith,
+      withRule.length,
+      failuresWithout,
+      withoutRule.length,
+    );
+    const verdict =
+      interval.lower > 0
+        ? "positive-evidence"
+        : interval.upper < 0
+          ? "negative-evidence"
+          : "no-evidence";
+    const comparison: RuleComparisonEvidence = {
+      rule,
+      verdict,
+      withRunIds: withRule.map((run) => run.id),
+      withoutRunIds: withoutRule.map((run) => run.id),
+      interval,
+    };
+    comparisons.push(comparison);
+    const failRateWith = interval.with.rate;
+    const failRateWithout = interval.without.rate;
     const evidence = {
-      evalRunIds: failingIds(withRule),
+      evalRunIds: [...comparison.withRunIds, ...comparison.withoutRunIds],
       failRateWith,
       failRateWithout,
+      comparison,
     };
 
-    if (failRateWith - failRateWithout >= FAIL_RATE_DIFFERENTIAL) {
+    if (verdict === "positive-evidence") {
       recommendations.push({
         target: "lint-rules",
         action: "reweight-rule",
@@ -98,7 +125,7 @@ function ruleCorrelations(runs: readonly EvalRunAnalysisRecord[]): HarnessRecomm
           `vs ${percent(failRateWithout)} without it — consider raising its severity or weight.`,
         evidence,
       });
-    } else if (failRateWithout - failRateWith >= FAIL_RATE_DIFFERENTIAL) {
+    } else if (verdict === "negative-evidence") {
       recommendations.push({
         target: "lint-rules",
         action: "review-rule",
@@ -111,7 +138,7 @@ function ruleCorrelations(runs: readonly EvalRunAnalysisRecord[]): HarnessRecomm
       });
     }
   }
-  return recommendations;
+  return { comparisons, recommendations };
 }
 
 /**
@@ -138,6 +165,7 @@ function lintBlindSpot(runs: readonly EvalRunAnalysisRecord[]): HarnessRecommend
         evalRunIds: cleanButFailing.map((run) => run.id),
         failRateWith: null,
         failRateWithout: null,
+        comparison: null,
       },
     },
   ];
@@ -165,17 +193,14 @@ function hijackProbeFindings(runs: readonly EvalRunAnalysisRecord[]): HarnessRec
         evalRunIds: hit.map((run) => run.id),
         failRateWith: null,
         failRateWithout: null,
+        comparison: null,
       },
     },
   ];
 }
 
-function failingIds(runs: readonly EvalRunAnalysisRecord[]): readonly EvalRunId[] {
-  return runs.filter((run) => !run.passed).map((run) => run.id);
-}
-
 function rate(part: number, whole: number): number {
-  return whole === 0 ? 0 : Math.round((part / whole) * 100) / 100;
+  return whole === 0 ? 0 : part / whole;
 }
 
 function percent(value: number): string {

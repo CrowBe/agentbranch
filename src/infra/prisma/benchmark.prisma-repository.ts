@@ -10,6 +10,7 @@ import {
   domainError,
   err,
   ok,
+  wilson95,
 } from "@/shared";
 
 type BenchmarkRunRow = {
@@ -25,6 +26,8 @@ function toBenchmarkRun(row: BenchmarkRunRow): BenchmarkRun {
   const attempts = score.attempts ?? 1;
   const totalAttempts = score.totalAttempts ?? score.totalCases;
   const passedAttempts = score.passedAttempts ?? score.passedCases;
+  const attemptPassRateInterval =
+    score.attemptPassRateInterval ?? wilson95(passedAttempts, totalAttempts);
   return {
     id: BenchmarkRunId(row.id),
     harnessVersionId: HarnessVersionId(row.harnessVersionId),
@@ -34,6 +37,7 @@ function toBenchmarkRun(row: BenchmarkRunRow): BenchmarkRun {
     attempts,
     totalAttempts,
     passedAttempts,
+    attemptPassRateInterval,
     score: score.score,
     perSkill: score.perSkill.map((skill) => ({
       ...skill,
@@ -62,6 +66,7 @@ export function createPrismaBenchmarkRunRepository(
               attempts: run.attempts,
               totalAttempts: run.totalAttempts,
               passedAttempts: run.passedAttempts,
+              attemptPassRateInterval: run.attemptPassRateInterval,
               score: run.score,
               perSkill: run.perSkill,
               dimensions: run.dimensions,

@@ -140,7 +140,7 @@ most capabilities read a `Skill`, the equipment primitives (`response-schema`,
 | Subagent definition quality | analysis | `subagent-definition` | delegation description, role/instruction depth, tool boundaries, metadata smells (pure) | `insights`, `breakdown` | real |
 | Test run | evaluation | `test-run` | composes `gateway.runAgent` + mock-tool registry over a `TestRunInput` bundle; contracts drive the mocks + per-call validation | `insights`, `breakdown` | run + world generation real (scenario + mock tools generated, cached); contract-driven mocks + checks real; email mock = offline fallback |
 | Triggering eval | evaluation | `triggering-eval` | composes `gateway.classify` over the field, optionally repeating each case by an odd attempt count (1–9) and deciding by strict majority | `insights`, `breakdown` | run + battery generation real (cached); distractor library a static v1 seed; case ids are content-derived and attempt failures abort atomically |
-| Harness recommendation | analysis | `harness-recommendation` | Tier-1 correlation over a corpus cohort (fired lint rules × eval outcomes) | `report` | real; the first capability whose `Input` is not a `Skill` |
+| Harness recommendation | analysis | `harness-recommendation` | Tier-1 correlation over independent eval-run cohorts (fired lint rules × eval failures), with 95% Newcombe/Wilson difference intervals and explicit no-evidence outcomes | `report` | real; reconstructible cohort counts + run ids; the first capability whose `Input` is not a `Skill` |
 
 Run an analysis: `runCapability(heroCapability, "rendered", skill)` →
 `Result<RenderedDoc, DomainError>`. Run an evaluation:
@@ -198,7 +198,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **tool-contract-corpus** | `toolContractCorpus`, `toolContractBundleFixtures`, `ToolContractCorpusEntry`, `ToolContractBundleFixture` | — | real (curated, hash-pinned tool-contract fixtures with frozen lint expectations and composed bundle test-run inputs) |
 | **adversarial-safety-battery** | `adversarialSafetyBattery`, `adversarialTriggeringNegativePrompts`, `AdversarialCase` + types | — | real (curated, hash-pinned malicious/deceptive whole-folder fixtures across the §9.1 threat classes; freezes static policy expectations and documented latent non-detection) |
 | **harness-recommendation** | `harnessRecommendationCapability`, `CorpusCohort`, `HarnessRecommendationReport` + types | — | real (Tier-1 static correlation) |
-| **regression-benchmark** | `regressionBenchmarkSet`, `responseSchemaBenchmarkSet`, `toolContractBenchmarkSet`, `safetyBenchmarkSet`, their set hashes, `runRegressionBenchmark`, `BenchmarkRun` + types | `BenchmarkRunRepository` | real |
+| **regression-benchmark** | `regressionBenchmarkSet`, `responseSchemaBenchmarkSet`, `toolContractBenchmarkSet`, `safetyBenchmarkSet`, their set hashes, `runRegressionBenchmark`, `BenchmarkRun` + types | `BenchmarkRunRepository` | real; stochastic attempt rates persist full-precision versioned 95% Wilson intervals, while deterministic dimensions remain interval-free |
 
 **Harness improvement loop (admin).** ARCHITECTURE §9 carries the design; the
 build spans three seams. The **aggregate read** is `listForAnalysis` on

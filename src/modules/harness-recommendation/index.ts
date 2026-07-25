@@ -23,6 +23,8 @@ export type {
   HarnessReportSurface,
   RecommendationAction,
   RecommendationEvidence,
+  RuleComparisonEvidence,
+  RuleComparisonVerdict,
 } from "./harness-recommendation.types";
 
 /** Report — the admin surface: a headline over the stats + recommendations. */
@@ -31,11 +33,14 @@ const reportRenderer: Renderer<HarnessRecommendationReport, HarnessReportSurface
   render: (report) => ({
     headline:
       report.recommendations.length === 0
-        ? `No harness recommendations from ${report.cohort.evalRuns} eval runs — the ruleset and the outcomes agree.`
+        ? report.comparisons.some((comparison) => comparison.verdict === "no-evidence")
+          ? `No harness recommendations from ${report.cohort.evalRuns} eval runs — eligible cohort differences include zero.`
+          : `No harness recommendations from ${report.cohort.evalRuns} eval runs — no rule has two eligible cohorts.`
         : `${report.recommendations.length} harness recommendation${
             report.recommendations.length === 1 ? "" : "s"
           } from ${report.cohort.evalRuns} eval runs across ${report.cohort.skillVersions} skill versions.`,
     cohort: report.cohort,
+    comparisons: report.comparisons,
     recommendations: report.recommendations,
   }),
 };
