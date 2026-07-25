@@ -17,6 +17,7 @@ export type {
 } from "./build-loop.types";
 export { buildTools, type BuildToolName } from "./tools";
 export {
+  formatConceptContext,
   formatLintFeedback,
   formatResponseSchemaLintFeedback,
   formatToolContractLintFeedback,
@@ -24,6 +25,8 @@ export {
   formatTestRunFeedback,
   formatTriggeringEvalFeedback,
 } from "./feedback-formatters";
+export type { ConceptGlossary } from "./feedback-formatters";
+export { isConceptContextMessage } from "./concept-context";
 export { runBuildLoop } from "./build-loop";
 export { BUILD_LOOP_SYSTEM_PROMPT } from "./system-prompt";
 export {

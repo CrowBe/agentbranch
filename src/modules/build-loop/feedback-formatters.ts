@@ -4,6 +4,26 @@ import type { LintFinding, LintReport } from "@/modules/lint";
 import type { ResponseSchemaLintReport } from "@/modules/response-schema";
 import type { ToolContractLintReport } from "@/modules/tool-contract";
 import type { SubagentDefinitionLintReport } from "@/modules/subagent-definition";
+import type { Concept } from "@/modules/concept-library";
+import {
+  createConceptContextMessage,
+  type ConceptGlossary,
+} from "./concept-context";
+export type { ConceptGlossary } from "./concept-context";
+
+/**
+ * Seed one grounded concept-interrogation turn through an existing authoring
+ * loop. The JSON payload is data, not an instruction surface: angle brackets
+ * and delimiter characters are unicode-escaped so evidence cannot forge the
+ * outer delimiter even when a reviewed string contains prompt-like text.
+ */
+export function formatConceptContext(input: {
+  readonly concept: Concept;
+  readonly question: string;
+  readonly glossary: ConceptGlossary;
+}): string {
+  return createConceptContextMessage(input);
+}
 
 export function formatTriggeringEvalFeedback(result: TriggeringResult): string {
   const lines = [

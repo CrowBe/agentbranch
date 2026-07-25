@@ -5,6 +5,7 @@ import { buildTools } from "./tools";
 import { BUILD_LOOP_SYSTEM_PROMPT } from "./system-prompt";
 import { withLatestMessageCacheControl } from "./gateway-messages";
 import type { BuildLoopInput, BuildLoopEvent } from "./build-loop.types";
+import { latestMessageIsConceptContext } from "./concept-context";
 
 /**
  * Run the build loop and stream typed events.
@@ -27,7 +28,7 @@ export async function* runBuildLoop(
   const opened = await gateway.streamAgent({
     system: BUILD_LOOP_SYSTEM_PROMPT,
     messages: withLatestMessageCacheControl(input.messages),
-    tools: buildTools,
+    tools: latestMessageIsConceptContext(input.messages) ? [] : buildTools,
     // The build loop spends a user's allowance under the `build` capability; the
     // gateway clears it against the tier cap before any part streams.
     tag: { kind: "account", userId, capability: "build" },
