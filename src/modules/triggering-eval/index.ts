@@ -34,7 +34,12 @@ export type {
 } from "./triggering-eval.types";
 export { distractorLibrary } from "./distractor-library";
 export { generatePromptBattery, PROMPT_BATTERY_GENERATOR_VERSION } from "./prompt-battery";
-export { runTriggeringEval, runBatteryCases } from "./run-eval";
+export {
+  runTriggeringEval,
+  runBatteryCases,
+  triggeringCaseId,
+  validateTriggeringAttempts,
+} from "./run-eval";
 export { analysisReadLimit, toEvalRunAnalysisRecord } from "./analysis-read";
 export type { EvalRunRepository } from "./eval.repository";
 

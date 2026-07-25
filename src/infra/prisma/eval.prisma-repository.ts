@@ -3,9 +3,14 @@ import type {
   EvalRun,
   EvalRunRepository,
   EvalStatus,
+  CaseResult,
   TriggeringResult,
 } from "@/modules/triggering-eval";
-import { analysisReadLimit, toEvalRunAnalysisRecord } from "@/modules/triggering-eval";
+import {
+  analysisReadLimit,
+  toEvalRunAnalysisRecord,
+  triggeringCaseId,
+} from "@/modules/triggering-eval";
 import type { SkillVersionLintSummary } from "@/modules/skill";
 import {
   domainError,
@@ -37,8 +42,43 @@ function toEvalRun(row: EvalRunRow): EvalRun {
     harnessVersionId: row.harnessVersionId ? HarnessVersionId(row.harnessVersionId) : null,
     userId: UserId(row.userId),
     status: row.status as EvalStatus,
-    result: row.resultJson as TriggeringResult,
+    result: normalizeTriggeringResult(row.resultJson),
     createdAt: row.createdAt,
+  };
+}
+
+function normalizeTriggeringResult(value: unknown): TriggeringResult {
+  const legacy = value as Omit<
+    TriggeringResult,
+    "cases" | "attempts" | "totalAttempts" | "passedAttempts"
+  > & Partial<Pick<TriggeringResult, "attempts" | "totalAttempts" | "passedAttempts">> & {
+    readonly cases: readonly (Omit<
+      CaseResult,
+      "caseId" | "attempts" | "passedAttempts" | "passRate"
+    > & Partial<
+      Pick<CaseResult, "caseId" | "attempts" | "passedAttempts" | "passRate">
+    >)[];
+  };
+  const cases = legacy.cases.map((item) => {
+    const attempts = item.attempts ?? 1;
+    const passedAttempts = item.passedAttempts ?? (item.pass ? attempts : 0);
+    return {
+      ...item,
+      caseId: item.caseId ?? triggeringCaseId(item),
+      attempts,
+      passedAttempts,
+      passRate: item.passRate ?? passedAttempts / attempts,
+    };
+  });
+  return {
+    ...legacy,
+    cases,
+    attempts: legacy.attempts ?? cases[0]?.attempts ?? 1,
+    totalAttempts:
+      legacy.totalAttempts ?? cases.reduce((sum, item) => sum + item.attempts, 0),
+    passedAttempts:
+      legacy.passedAttempts ??
+      cases.reduce((sum, item) => sum + item.passedAttempts, 0),
   };
 }
 

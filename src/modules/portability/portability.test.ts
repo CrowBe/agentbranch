@@ -134,6 +134,29 @@ describe("cross-runtime validation", () => {
     expect(classifyCalls.value).toBe(totalCases * 3);
     expect(passedTargets.every((target) => target.cases.every((c) => c.attempts === 3))).toBe(true);
   });
+
+  it("rejects invalid attempts before gateway work even with no targets", async () => {
+    let gatewayCalls = 0;
+    const gateway: ModelGateway = {
+      ...fakeGateway(),
+      async classify() {
+        gatewayCalls += 1;
+        return ok({ choice: null, rationale: "" });
+      },
+      async generate(input) {
+        gatewayCalls += 1;
+        return ok(input.schema.parse({}));
+      },
+    };
+
+    const result = await runCrossRuntimeValidation(
+      { skill: skillFor("Schedule meetings."), targets: [], attempts: 2 },
+      gateway,
+    );
+
+    expect(result.ok).toBe(false);
+    expect(gatewayCalls).toBe(0);
+  });
 });
 
 function hasCases(

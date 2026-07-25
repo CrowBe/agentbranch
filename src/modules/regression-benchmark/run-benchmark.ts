@@ -1,5 +1,9 @@
 import type { ModelGateway } from "@/modules/model-gateway";
-import { distractorLibrary, runBatteryCases } from "@/modules/triggering-eval";
+import {
+  distractorLibrary,
+  runBatteryCases,
+  validateTriggeringAttempts,
+} from "@/modules/triggering-eval";
 import { createResponseSchemaLintReport } from "@/modules/response-schema";
 import { createToolContractLintReport } from "@/modules/tool-contract";
 import { createLintReportForSource } from "@/modules/lint";
@@ -46,6 +50,8 @@ export async function runRegressionBenchmark(
     readonly attempts?: number;
   } = {},
 ): Promise<Result<BenchmarkScore, DomainError>> {
+  const attempts = validateTriggeringAttempts(options.attempts);
+  if (isErr(attempts)) return attempts;
   if (!gateway.hasModel) {
     return err(
       domainError(

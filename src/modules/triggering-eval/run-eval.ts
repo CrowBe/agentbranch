@@ -34,7 +34,7 @@ export async function runTriggeringEval(
     readonly attempts?: number;
   } = {},
 ): Promise<Result<TriggeringResult, DomainError>> {
-  const attemptCount = validateAttempts(options.attempts);
+  const attemptCount = validateTriggeringAttempts(options.attempts);
   if (isErr(attemptCount)) return attemptCount;
   let battery: Result<readonly PromptCase[], DomainError>;
   if (options.battery) {
@@ -97,7 +97,7 @@ export async function runBatteryCases(
     readonly attempts?: number;
   } = {},
 ): Promise<Result<readonly CaseResult[], DomainError>> {
-  const attempts = validateAttempts(options.attempts);
+  const attempts = validateTriggeringAttempts(options.attempts);
   if (isErr(attempts)) return attempts;
   const candidateChoice = `${candidate.name}: ${candidate.description}`;
   const field = options.distractors ?? distractorLibrary;
@@ -125,7 +125,7 @@ export async function runBatteryCases(
       fireAttempts * 2 > attempts.value ? "fire" : "silent";
     const result: CaseResult = {
       ...c,
-      caseId: caseId(c),
+      caseId: triggeringCaseId(c),
       actual,
       pass: passedAttempts * 2 > attempts.value,
       attempts: attempts.value,
@@ -151,7 +151,9 @@ export async function runBatteryCases(
   return ok(cases);
 }
 
-function validateAttempts(value: number | undefined): Result<number, DomainError> {
+export function validateTriggeringAttempts(
+  value: number | undefined,
+): Result<number, DomainError> {
   const attempts = value ?? 1;
   return Number.isInteger(attempts) &&
     attempts > 0 &&
@@ -168,7 +170,7 @@ function validateAttempts(value: number | undefined): Result<number, DomainError
 }
 
 /** Versioned canonical identity; display ordering and model output do not affect it. */
-function caseId(c: PromptCase): string {
+export function triggeringCaseId(c: PromptCase): string {
   return createHash("sha256")
     .update(JSON.stringify(["triggering-case", 1, c.expected, c.risk ?? null, c.prompt]))
     .digest("hex");

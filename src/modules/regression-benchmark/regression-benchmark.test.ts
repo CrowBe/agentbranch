@@ -135,6 +135,18 @@ describe("regression benchmark", () => {
     expect(score.perSkill.every((skill) => skill.totalAttempts === skill.totalCases * 3)).toBe(true);
   });
 
+  it("rejects invalid attempts before model availability and observer effects", async () => {
+    const observed = { tags: [] as AccountingTag[], choiceFields: [] as string[][] };
+    const observer = vi.fn();
+    const gateway = { ...perfectGateway(observed), hasModel: false };
+
+    const result = await runRegressionBenchmark(gateway, { attempts: 2, observer });
+
+    expect(isErr(result) && result.error.tag).toBe("invalid_operation");
+    expect(observer).not.toHaveBeenCalled();
+    expect(observed.tags).toEqual([]);
+  });
+
   it("records runs pinned to a harness version and lists them newest first", async () => {
     vi.useFakeTimers();
     const repo = createMemoryBenchmarkRunRepository();

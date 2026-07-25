@@ -5,6 +5,7 @@ import { skillName } from "@/modules/skill";
 import {
   generatePromptBattery,
   runTriggeringEval,
+  validateTriggeringAttempts,
   type PromptCase,
 } from "@/modules/triggering-eval";
 import { err, isErr, ok, type DomainError, type Result } from "@/shared";
@@ -30,6 +31,8 @@ export async function runCrossRuntimeValidation(
   input: CrossRuntimeValidationInput,
   gateway: ModelGateway,
 ): Promise<Result<CrossRuntimeValidationResult, DomainError>> {
+  const attempts = validateTriggeringAttempts(input.attempts);
+  if (isErr(attempts)) return attempts;
   const tag = triggeringEvalTag(input);
   const battery = await generateSharedBattery(input, gateway, tag);
   if (isErr(battery)) return battery;
