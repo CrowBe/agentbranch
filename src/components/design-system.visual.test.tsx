@@ -185,6 +185,7 @@ describe("concept", () => {
           view="rendered"
           capability={{ kind: "concept", concept }}
           onBackToSkill={onBackToSkill}
+          onAskAboutConcept={() => {}}
         />
       </Frame>,
     );
@@ -312,6 +313,7 @@ describe("compact shell (mobile-first arrangement)", () => {
   // baseline creation) so the phone viewport never leaks into later tests.
   afterEach(async () => {
     await page.viewport(1024, 768);
+    vi.unstubAllGlobals();
   });
 
   async function renderCompactShell() {
@@ -338,6 +340,26 @@ describe("compact shell (mobile-first arrangement)", () => {
     await renderCompactShell();
     await page.getByRole("button", { name: "Skill", exact: true }).click();
     await screenshotFrame("compact-skill");
+  });
+
+  test("Equipment decision guide and question control fit the skill tab", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ equipment: [] })));
+    await renderCompactShell();
+    await page.getByRole("button", { name: "Equipment" }).first().click();
+    const guideLink = Array.from(document.querySelectorAll("button")).find(
+      (button) => button.textContent === "Choose the right building block",
+    );
+    expect(guideLink).toBeDefined();
+    guideLink!.click();
+    await page.getByRole("button", { name: "Skill", exact: true }).click();
+    await expect.element(
+      page.getByRole("heading", { name: "Which primitive do I need?" }),
+    ).toBeVisible();
+    await expect.element(page.getByLabelText("Ask about this")).toBeVisible();
+    Array.from(document.querySelectorAll("button"))
+      .find((button) => button.textContent === "Ask about this")
+      ?.scrollIntoView({ block: "end" });
+    await screenshotFrame("compact-equipment-decision");
   });
 });
 

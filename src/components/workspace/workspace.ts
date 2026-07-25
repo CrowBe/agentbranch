@@ -1,4 +1,4 @@
-import { readSseEvents, type EvaluationEvent } from "@/shared";
+import { isErr, readSseEvents, type EvaluationEvent } from "@/shared";
 import type {
   BuildLoopEvent,
   BuildMessage,
@@ -7,9 +7,13 @@ import type {
   SubagentDefinitionLoopEvent,
 } from "@/modules/build-loop";
 import {
+  formatConceptContext,
   formatTestRunFeedback,
   formatTriggeringEvalFeedback,
 } from "@/modules/build-loop/feedback-formatters";
+import { CONCEPT_GLOSSARY, conceptLibrary } from "@/modules/concept-library";
+import { conceptCapability } from "@/modules/concept";
+import { runCapability } from "@/modules/skill-analysis";
 import {
   applyResponseSchemaEdit,
   createResponseSchemaLintReport,
@@ -417,6 +421,49 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     } catch (cause) { fail(friendlyError(String(cause))); }
   }
 
+  async function openEquipmentDecisionConcept(): Promise<void> {
+    const concept = conceptLibrary.find(
+      ({ id }) => id === "equipment-primitive-decision",
+    );
+    if (!concept) {
+      fail("The equipment decision guide is unavailable.");
+      return;
+    }
+    const rendered = await runCapability(conceptCapability, "rendered", concept);
+    if (isErr(rendered)) {
+      fail(rendered.error.message);
+      return;
+    }
+    patch({
+      capability: { kind: "concept", concept: rendered.value },
+      activeTool: null,
+      view: "rendered",
+      status: "Decision guide opened.",
+    });
+  }
+
+  async function askAboutConcept(question: string): Promise<void> {
+    if (snapshot.equipmentBusy || snapshot.busy) return;
+    const active = snapshot.capability;
+    if (active?.kind !== "concept") return;
+    const concept = conceptLibrary.find(({ id }) => id === active.concept.id);
+    if (!concept) {
+      fail("This concept is unavailable.");
+      return;
+    }
+    const message = formatConceptContext({
+      concept,
+      question,
+      glossary: CONCEPT_GLOSSARY,
+    });
+    await sendEquipmentAuthoring(
+      selectEquipmentAuthoringKind(question),
+      message,
+      false,
+      { displayMessage: question, answerOnly: true },
+    );
+  }
+
   async function showHistory(): Promise<void> {
     if (snapshot.busy) return;
     patch({ mode: "history", capability: null, activeTool: null, entries: [] });
@@ -783,7 +830,13 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     kind: EquipmentKind,
     message: string,
     allowLintAutoFeedback: boolean,
+    options: {
+      readonly displayMessage?: string;
+      readonly answerOnly?: boolean;
+    } = {},
   ): Promise<void> {
+    const displayMessage = options.displayMessage ?? message;
+    const answerOnly = options.answerOnly ?? false;
     const nextMessages: readonly BuildMessage[] = [
       ...equipmentMessages,
       { role: "user", content: message },
@@ -792,7 +845,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     const isContract = kind === "tool-contract";
     const isDefinition = kind === "subagent-definition";
     patch({
-      entries: [...snapshot.entries, entry(message)],
+      entries: [...snapshot.entries, entry(displayMessage)],
       status: isContract ? "Building tool contract…" : isDefinition ? "Building subagent definition…" : "Building response schema…",
       equipmentBusy: true,
       capability: null,
@@ -900,6 +953,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
           appendEntry(entry(friendlyError(event.data.message), "error"));
         } else if (event.event === "done") {
           completed = true;
+          if (answerOnly) patch({ status: "Question answered." });
         }
       }
 
@@ -931,7 +985,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       : responseSchemaDraft
         ? serializeResponseSchema(responseSchemaDraft)
         : null;
-    if (completed && finishedRaw) {
+    if (completed && finishedRaw && !answerOnly) {
       const name = isContract
         ? toolContractDraft?.name || "untitled contract"
         : isDefinition
@@ -1496,6 +1550,8 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     showImport,
     showSkills,
     showEquipment,
+    openEquipmentDecisionConcept,
+    askAboutConcept,
     focusSkill,
     showHistory,
     showTemplates,

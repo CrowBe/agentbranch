@@ -1,7 +1,27 @@
+"use client";
+
+import { useState, type FormEvent } from "react";
 import type { ConceptClaim, ConceptCitation } from "@/modules/concept-library";
 import type { ConceptView as ConceptViewModel } from "@/modules/concept";
+import { Button } from "./ui/button";
 
-export function ConceptView({ concept }: { concept: ConceptViewModel }) {
+export function ConceptView({
+  concept,
+  busy = false,
+  onAsk,
+}: {
+  concept: ConceptViewModel;
+  busy?: boolean;
+  onAsk?: (question: string) => void;
+}) {
+  const [question, setQuestion] = useState("");
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    const value = question.trim();
+    if (!value || busy) return;
+    onAsk?.(value);
+  };
+
   return (
     <article className="flex flex-col gap-5" aria-labelledby={`concept-${concept.id}`}>
       <header className="flex flex-col gap-1">
@@ -27,6 +47,27 @@ export function ConceptView({ concept }: { concept: ConceptViewModel }) {
             </div>
           ))}
         </section>
+      ) : null}
+
+      {onAsk ? (
+        <form className="flex flex-col gap-2 border-t border-outline-variant pt-4" onSubmit={submit}>
+          <label htmlFor={`concept-question-${concept.id}`} className="text-label text-on-surface-variant">
+            Ask about this
+          </label>
+          <textarea
+            id={`concept-question-${concept.id}`}
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+            rows={2}
+            placeholder="What would you like to understand?"
+            className="resize-none rounded-[var(--radius-sm)] border border-outline-variant bg-surface px-3 py-2 text-doc-rendered outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
+          />
+          <div>
+            <Button type="submit" variant="secondary" disabled={busy || question.trim().length === 0}>
+              {busy ? "Answering…" : "Ask about this"}
+            </Button>
+          </div>
+        </form>
       ) : null}
     </article>
   );

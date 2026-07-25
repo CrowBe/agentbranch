@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { encodeSse, SKILL_NAME_MAX } from "@/shared";
+import { isConceptContextMessage } from "@/modules/build-loop";
 import type { SkillSource } from "@/modules/skill";
 import { createDeterministicLocalSuggestionProvider, createWorkspace } from "./index";
 
@@ -46,6 +47,56 @@ describe("workspace choreography", () => {
     tags: ["email", "inbox-triage", "prioritisation"],
     rationale: "The skill sorts unread inbox messages by urgency.",
   };
+
+  it("opens the comparative equipment concept offline and routes a grounded question through the matching authoring loop", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      sseResponse([
+        { event: "text", data: { delta: "Use a subagent definition when delegated work needs its own context." } },
+        { event: "done", data: { finishReason: "stop" } },
+      ]),
+    );
+    const workspace = createWorkspace(init, { fetch: fetchMock });
+
+    await workspace.actions.openEquipmentDecisionConcept();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(workspace.getSnapshot()).toMatchObject({
+      capability: {
+        kind: "concept",
+        concept: { id: "equipment-primitive-decision", title: "Which primitive do I need?" },
+      },
+      status: "Decision guide opened.",
+    });
+
+    await workspace.actions.askAboutConcept(
+      "Why would I use a subagent definition for delegated work?",
+    );
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/subagent-definition/build",
+      expect.objectContaining({ method: "POST" }),
+    );
+    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      messages: readonly { role: string; content: string }[];
+      current?: string;
+    };
+    expect(isConceptContextMessage(request.messages.at(-1)?.content ?? "")).toBe(true);
+    expect(request.messages.at(-1)?.content).toContain(
+      "Why would I use a subagent definition for delegated work?",
+    );
+    expect(request.current).toBeUndefined();
+    expect(workspace.getSnapshot().entries.map(({ label }) => label)).toEqual([
+      "Why would I use a subagent definition for delegated work?",
+      "Use a subagent definition when delegated work needs its own context.",
+    ]);
+    expect(workspace.getSnapshot().status).toBe("Question answered.");
+    expect(workspace.getSnapshot().equipment).toEqual({
+      contracts: [],
+      schemas: [],
+      subagentDefinitions: [],
+    });
+  });
 
   it("uses the local metadata rung and applies only after the author accepts", async () => {
     const fetchMock = vi.fn();

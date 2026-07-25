@@ -103,6 +103,7 @@ export function AppShell({
             onSafetySurfaceChange={(surface) => actions.selectSafetySurface(surface)}
             onReviseWithFeedback={actions.reviseWithFeedback}
             onApplyMetadataSuggestion={actions.applyMetadataSuggestion}
+            onAskAboutConcept={(question) => void actions.askAboutConcept(question)}
             feedbackBusy={snapshot.busy || snapshot.toolBusy}
             equipmentFocus={snapshot.heroFocus.kind !== "skill"}
             onBackToSkill={actions.focusSkill}
@@ -128,6 +129,7 @@ export function AppShell({
           onSend={(message) => void actions.send(message)}
           onImport={(raw) => void actions.importSkill(raw)}
           onEquipment={(raw) => void actions.submitEquipment(raw)}
+          onEquipmentHelp={() => void actions.openEquipmentDecisionConcept()}
           onTemplates={(query) => void actions.showTemplates(query)}
         />
       </div>
