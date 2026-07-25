@@ -1,13 +1,21 @@
 import { createHash } from "node:crypto";
+import { z } from "zod";
 import type { Skill } from "@/modules/skill";
 import { skillName, skillDescription } from "@/modules/skill";
 import type { ModelGateway, AccountingTag } from "@/modules/model-gateway";
 import type { ModelSelection } from "@/modules/model-router";
 import { insightSchema, type EvaluationObserver } from "@/modules/skill-analysis";
-import { ok, isErr, type Result, type DomainError } from "@/shared";
+import { canonicalJson, ok, isErr, type Result, type DomainError } from "@/shared";
 import { generatePromptBattery } from "./prompt-battery";
 import { distractorLibrary } from "./distractor-library";
-import type { CaseResult, Distractor, PromptCase, TriggeringResult } from "./triggering-eval.types";
+import type {
+  CaseResult,
+  Distractor,
+  JsonOutputPromptCase,
+  PromptCase,
+  SelectionPromptCase,
+  TriggeringResult,
+} from "./triggering-eval.types";
 
 const INSIGHT_CASE_TEXT_MAX = 240;
 const MAX_ATTEMPTS = 9;
@@ -18,9 +26,8 @@ const MAX_ATTEMPTS = 9;
  *
  * Method (the evaluator owns this): build the prompt battery + the competitive
  * field (candidate skill vs. the distractor library), then for each case ask the
- * gateway's `classify` primitive *which* skill the prompt selects. The candidate
- * "fires" iff it wins; selecting a distractor or nothing = "silent". The gateway
- * is pure resource — this composes the eval from one primitive.
+ * selection cases use `classify`; JSON-output cases use `generate`, followed by
+ * deterministic offline validation against the case's expected schema.
  */
 export async function runTriggeringEval(
   skill: Skill,
@@ -73,18 +80,22 @@ export async function runTriggeringEval(
     attempts: attemptCount.value,
     totalAttempts: cases.reduce((sum, c) => sum + c.attempts, 0),
     passedAttempts: cases.reduce((sum, c) => sum + c.passedAttempts, 0),
-    comparisonMetadata: {
-      evaluationSetHash: evaluationSetHash(cases),
-      grader: "selection",
-      graderVersion: 1,
-      method: "competitive-selection",
-      methodVersion: 1,
-    },
+    ...(cases.every((item) => item.grader === "selection")
+      ? {
+          comparisonMetadata: {
+            evaluationSetHash: triggeringEvaluationSetHash(cases),
+            grader: "selection" as const,
+            graderVersion: 1 as const,
+            method: "competitive-selection" as const,
+            methodVersion: 1 as const,
+          },
+        }
+      : {}),
     insight: insight.value,
   });
 }
 
-function evaluationSetHash(cases: readonly CaseResult[]): string {
+export function triggeringEvaluationSetHash(cases: readonly Pick<CaseResult, "caseId">[]): string {
   return createHash("sha256")
     .update(JSON.stringify(["triggering-evaluation-set", 1, ...cases.map((item) => item.caseId)]))
     .digest("hex");
@@ -118,48 +129,13 @@ export async function runBatteryCases(
 
   const cases: CaseResult[] = [];
   for (const [index, c] of battery.entries()) {
-    let fireAttempts = 0;
-    let passedAttempts = 0;
-    let rationale = "";
-    for (let attempt = 0; attempt < attempts.value; attempt += 1) {
-      const selected = await gateway.classify({
-        prompt: c.prompt,
-        choices,
-        tag,
-        target: options.target,
-      });
-      if (isErr(selected)) return selected;
-      const actual = selected.value.choice === candidateChoice ? "fire" : "silent";
-      if (actual === "fire") fireAttempts += 1;
-      if (actual === c.expected) passedAttempts += 1;
-      if (attempt === 0) rationale = selected.value.rationale;
-    }
-    const actual: CaseResult["actual"] =
-      fireAttempts * 2 > attempts.value ? "fire" : "silent";
-    const result: CaseResult = {
-      ...c,
-      caseId: triggeringCaseId(c),
-      actual,
-      pass: passedAttempts * 2 > attempts.value,
-      attempts: attempts.value,
-      passedAttempts,
-      passRate: passedAttempts / attempts.value,
-      rationale,
-    };
+    const graded = c.grader === "selection"
+      ? await gradeSelectionCase(c, gateway, tag, options.target, candidateChoice, choices, attempts.value)
+      : await gradeJsonOutputCase(c, gateway, tag, options.target, attempts.value);
+    if (isErr(graded)) return graded;
+    const result = graded.value;
     cases.push(result);
-    options.observer?.({
-      kind: "case",
-      index: index + 1,
-      total: battery.length,
-      prompt: result.prompt,
-      expected: result.expected,
-      actual: result.actual,
-      pass: result.pass,
-      attempts: result.attempts,
-      passedAttempts: result.passedAttempts,
-      passRate: result.passRate,
-      rationale: result.rationale,
-    });
+    options.observer?.({ kind: "case", index: index + 1, total: battery.length, result });
   }
   return ok(cases);
 }
@@ -184,9 +160,105 @@ export function validateTriggeringAttempts(
 
 /** Versioned canonical identity; display ordering and model output do not affect it. */
 export function triggeringCaseId(c: PromptCase): string {
-  return createHash("sha256")
-    .update(JSON.stringify(["triggering-case", 1, c.expected, c.risk ?? null, c.prompt]))
-    .digest("hex");
+  const identity = c.grader === "selection"
+    ? ["triggering-case", 1, c.expected, c.risk ?? null, c.prompt]
+    : ["triggering-case", 2, "json-output", c.graderVersion, c.prompt, canonicalJson(c.expectedSchema)];
+  return createHash("sha256").update(JSON.stringify(identity)).digest("hex");
+}
+
+async function gradeSelectionCase(
+  c: SelectionPromptCase,
+  gateway: ModelGateway,
+  tag: AccountingTag,
+  target: ModelSelection | undefined,
+  candidateChoice: string,
+  choices: readonly string[],
+  attempts: number,
+): Promise<Result<CaseResult, DomainError>> {
+  let fireAttempts = 0;
+  let passedAttempts = 0;
+  let rationale = "";
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const selected = await gateway.classify({ prompt: c.prompt, choices, tag, target });
+    if (isErr(selected)) return selected;
+    const actual = selected.value.choice === candidateChoice ? "fire" : "silent";
+    if (actual === "fire") fireAttempts += 1;
+    if (actual === c.expected) passedAttempts += 1;
+    if (attempt === 0) rationale = selected.value.rationale;
+  }
+  const actual = fireAttempts * 2 > attempts ? "fire" : "silent";
+  return ok({
+    ...c,
+    caseId: triggeringCaseId(c),
+    observed: {
+      grader: "selection",
+      actual,
+      rationale,
+    },
+    pass: passedAttempts * 2 > attempts,
+    attempts,
+    passedAttempts,
+    passRate: passedAttempts / attempts,
+  });
+}
+
+async function gradeJsonOutputCase(
+  c: JsonOutputPromptCase,
+  gateway: ModelGateway,
+  tag: AccountingTag,
+  target: ModelSelection | undefined,
+  attempts: number,
+): Promise<Result<CaseResult, DomainError>> {
+  let validator: z.ZodType;
+  try {
+    validator = z.fromJSONSchema(c.expectedSchema);
+  } catch (cause) {
+    return {
+      ok: false,
+      error: {
+        tag: "invalid_operation",
+        message: "The JSON-output grader schema is invalid or unsupported.",
+        cause,
+      },
+    };
+  }
+  const outcomes: { output: unknown; issues: readonly string[]; pass: boolean }[] = [];
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const generated = await gateway.generate({
+      system: "Produce the requested JSON value. Output JSON only.",
+      prompt: c.prompt,
+      schema: z.json(),
+      tag,
+      target,
+    });
+    if (isErr(generated)) return generated;
+    const parsed = validator.safeParse(generated.value);
+    outcomes.push({
+      output: generated.value,
+      pass: parsed.success,
+      issues: parsed.success
+        ? []
+        : parsed.error.issues.map((issue) =>
+            `${issue.path.length === 0 ? "$" : `$.${issue.path.join(".")}`}: ${issue.message}`
+          ),
+    });
+  }
+  const passedAttempts = outcomes.filter((outcome) => outcome.pass).length;
+  const pass = passedAttempts * 2 > attempts;
+  const representative = outcomes.find((outcome) => outcome.pass === pass) ?? outcomes[0]!;
+  return ok({
+    ...c,
+    caseId: triggeringCaseId(c),
+    observed: {
+      grader: "json-output",
+      output: representative.output,
+      validationIssues: representative.issues,
+    },
+    pass,
+    attempts,
+    passedAttempts,
+    passRate: passedAttempts / attempts,
+  });
 }
 
 const INSIGHT_SYSTEM = `You explain a skill's triggering-eval result to its
@@ -196,12 +268,19 @@ quiet on the rest, and call out anything worth adjusting.`;
 
 function insightPrompt(name: string, cases: readonly CaseResult[], passed: boolean): string {
   const lines = cases
-    .map(
-      (c) =>
-        `- "${clampText(c.prompt, INSIGHT_CASE_TEXT_MAX)}" — expected ${c.expected}, got ${c.actual} (${clampText(c.rationale, INSIGHT_CASE_TEXT_MAX)})`,
-    )
+    .map((c) => describeCaseForInsight(c))
     .join("\n");
   return `Skill "${name}" triggering eval ${passed ? "passed" : "found issues"}.\n\nCases:\n${lines}`;
+}
+
+function describeCaseForInsight(c: CaseResult): string {
+  if (c.grader === "selection") {
+    return `- "${clampText(c.prompt, INSIGHT_CASE_TEXT_MAX)}" — expected ${c.expected}, got ${c.observed.actual} (${clampText(c.observed.rationale, INSIGHT_CASE_TEXT_MAX)})`;
+  }
+  const detail = c.pass
+    ? "output matched the expected JSON schema"
+    : c.observed.validationIssues.join("; ");
+  return `- "${clampText(c.prompt, INSIGHT_CASE_TEXT_MAX)}" — ${clampText(detail, INSIGHT_CASE_TEXT_MAX)}`;
 }
 
 function clampText(text: string, max: number): string {

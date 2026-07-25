@@ -1,10 +1,8 @@
 import { createHash } from "node:crypto";
 import { serializeSkillMd, type SkillCategory } from "@/modules/skill";
+import type { SelectionPromptCase } from "@/modules/triggering-eval";
 
-export type BaselinePromptCase = {
-  readonly prompt: string;
-  readonly expected: "fire" | "silent";
-};
+export type BaselinePromptCase = SelectionPromptCase;
 
 export type BaselineSkillProvenance = {
   readonly authoringTool: string;
@@ -759,8 +757,8 @@ function skill(input: {
       body,
     }),
     promptBattery: [
-      ...input.positives.map((prompt) => ({ prompt, expected: "fire" as const })),
-      ...input.negatives.map((prompt) => ({ prompt, expected: "silent" as const })),
+      ...input.positives.map((prompt) => ({ grader: "selection" as const, prompt, expected: "fire" as const })),
+      ...input.negatives.map((prompt) => ({ grader: "selection" as const, prompt, expected: "silent" as const })),
     ],
     provenance: {
       authoringTool: AUTHORING_TOOL,

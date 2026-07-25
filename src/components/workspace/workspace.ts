@@ -1643,9 +1643,29 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
           capability: appendProgressMessage(snapshot.capability, action, event.data.message),
         });
       } else if (event.event === "eval-case") {
+        const result = event.data.result;
+        const item: TriggeringCaseProgressPanel = result.grader === "selection"
+          ? {
+              index: event.data.index,
+              total: event.data.total,
+              prompt: result.prompt,
+              expected: result.expected,
+              actual: result.observed.actual,
+              pass: result.pass,
+              rationale: result.observed.rationale,
+            }
+          : {
+              index: event.data.index,
+              total: event.data.total,
+              prompt: result.prompt,
+              expected: "valid JSON",
+              actual: result.pass ? "valid JSON" : "invalid JSON",
+              pass: result.pass,
+              rationale: result.observed.validationIssues.join("; ") || "Output matched the expected schema.",
+            };
         patch({
           status: `Case ${event.data.index}/${event.data.total} checked.`,
-          capability: appendProgressCase(snapshot.capability, action, event.data),
+          capability: appendProgressCase(snapshot.capability, action, item),
         });
       } else if (event.event === "artifact") {
         patch({

@@ -16,10 +16,10 @@ import type { PromptCase } from "./triggering-eval.types";
 export function buildPromptBattery(skill: Skill): readonly PromptCase[] {
   const keyword = firstKeyword(skill.source.frontmatter.description) ?? skillName(skill);
   return [
-    { prompt: `Can you help me ${keyword}?`, expected: "fire" },
-    { prompt: `I need to ${keyword} right now.`, expected: "fire" },
-    { prompt: "What's the weather like today?", expected: "silent" },
-    { prompt: "Translate this paragraph into French.", expected: "silent" },
+    { grader: "selection", prompt: `Can you help me ${keyword}?`, expected: "fire" },
+    { grader: "selection", prompt: `I need to ${keyword} right now.`, expected: "fire" },
+    { grader: "selection", prompt: "What's the weather like today?", expected: "silent" },
+    { grader: "selection", prompt: "Translate this paragraph into French.", expected: "silent" },
     ...adversarialNegativeCases(),
   ];
 }
@@ -107,8 +107,8 @@ Return 3 positive prompts and 3 negative prompts. Keep each prompt under 160 cha
 
 function normalizePromptBattery(generated: GeneratedPromptBattery): readonly PromptCase[] {
   return [
-    ...uniquePrompts(generated.positive).map((prompt) => ({ prompt, expected: "fire" as const })),
-    ...uniquePrompts(generated.negative).map((prompt) => ({ prompt, expected: "silent" as const })),
+    ...uniquePrompts(generated.positive).map((prompt) => ({ grader: "selection" as const, prompt, expected: "fire" as const })),
+    ...uniquePrompts(generated.negative).map((prompt) => ({ grader: "selection" as const, prompt, expected: "silent" as const })),
     ...adversarialNegativeCases(),
   ];
 }
@@ -139,6 +139,7 @@ function promptBatteryCacheKey(skill: Skill, target: ModelSelection | undefined)
 
 function adversarialNegativeCases(): readonly PromptCase[] {
   return adversarialTriggeringNegativePrompts.map((prompt) => ({
+    grader: "selection" as const,
     prompt,
     expected: "silent" as const,
     risk: "trigger-hijack" as const,

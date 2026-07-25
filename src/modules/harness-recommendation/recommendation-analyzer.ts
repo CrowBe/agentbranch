@@ -46,6 +46,7 @@ function cohortStats(cohort: CorpusCohort): CohortStats {
   let falseSilents = 0;
   for (const run of cohort.evalRuns) {
     for (const c of run.cases) {
+      if (c.grader !== "selection") continue;
       if (c.pass) continue;
       if (c.expected === "silent") falseFires += 1;
       else falseSilents += 1;
@@ -178,7 +179,7 @@ function lintBlindSpot(runs: readonly EvalRunAnalysisRecord[]): HarnessRecommend
  */
 function hijackProbeFindings(runs: readonly EvalRunAnalysisRecord[]): HarnessRecommendation[] {
   const hit = runs.filter((run) =>
-    run.cases.some((c) => c.risk === "trigger-hijack" && !c.pass),
+    run.cases.some((c) => c.grader === "selection" && c.risk === "trigger-hijack" && !c.pass),
   );
   if (hit.length === 0) return [];
   return [

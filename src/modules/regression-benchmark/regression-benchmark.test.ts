@@ -12,6 +12,7 @@ import {
   safetyBenchmarkSetHash,
   toolContractBenchmarkSet,
   toolContractBenchmarkSetHash,
+  canonicalBenchmarkCase,
   runRegressionBenchmark,
 } from "./index";
 import { ok } from "@/shared";
@@ -53,13 +54,52 @@ function perfectGateway(observed: {
 
 describe("regression benchmark", () => {
   it("freezes the baseline corpus as the set, with a stable content-derived hash", () => {
+    expect({
+      regressionBenchmarkSetHash,
+      responseSchemaBenchmarkSetHash,
+      toolContractBenchmarkSetHash,
+      safetyBenchmarkSetHash,
+    }).toEqual({
+      regressionBenchmarkSetHash: "bdf6cdc99a346f5811232f2b33b4cc84beae647875b419e057488bfd46517cbb",
+      responseSchemaBenchmarkSetHash: "c835434bbf0a7fd5c042070c460563fa244ef502e946d67c8bd2d6ad00d4fbbc",
+      toolContractBenchmarkSetHash: "3731c7e923ff738503bbfafdb2dcc679d3bb1fb740ea66d456447119b5ee9312",
+      safetyBenchmarkSetHash: "f342701b2fd1b9ba830159299556feb9a8d9f89a0fadec442d30008ba05e412e",
+    });
     expect(regressionBenchmarkSet).toHaveLength(baselineSkillCorpus.length);
     expect(regressionBenchmarkSetHash).toMatch(/^[0-9a-f]{64}$/);
     for (const entry of regressionBenchmarkSet) {
       expect(entry.battery.length).toBeGreaterThan(0);
-      expect(entry.battery.some((c) => c.expected === "fire")).toBe(true);
-      expect(entry.battery.some((c) => c.expected === "silent")).toBe(true);
+      expect(entry.battery.some((c) => c.grader === "selection" && c.expected === "fire")).toBe(true);
+      expect(entry.battery.some((c) => c.grader === "selection" && c.expected === "silent")).toBe(true);
     }
+  });
+
+  it("keeps selection bytes legacy-exact and canonicalizes versioned JSON graders", () => {
+    expect(canonicalBenchmarkCase({
+      grader: "selection",
+      prompt: "schedule it",
+      expected: "fire",
+    })).toBe("fire|schedule it");
+    const left = canonicalBenchmarkCase({
+      grader: "json-output",
+      graderVersion: 1,
+      prompt: "return a count",
+      expectedSchema: { required: ["count"], properties: { count: { type: "number" } }, type: "object" },
+    });
+    const right = canonicalBenchmarkCase({
+      grader: "json-output",
+      graderVersion: 1,
+      prompt: "return a count",
+      expectedSchema: { type: "object", properties: { count: { type: "number" } }, required: ["count"] },
+    });
+    expect(left).toBe(right);
+    expect(left).toContain('"benchmark-case",1,"json-output",1');
+    expect(canonicalBenchmarkCase({
+      grader: "json-output",
+      graderVersion: 1,
+      prompt: "unicode keys",
+      expectedSchema: { ä: 4, z: 2, Å: 3, a: 1 },
+    })).toContain('{"a":1,"z":2,"Å":3,"ä":4}');
   });
 
   it("scores every corpus battery through classify, platform-tagged, candidate excluded from the field", async () => {

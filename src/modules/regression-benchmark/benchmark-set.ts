@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { canonicalJson } from "@/shared";
 import { baselineSkillCorpus } from "@/modules/baseline-corpus";
 import { adversarialSafetyBattery } from "@/modules/adversarial-safety-battery";
 import { responseSchemaCorpus } from "@/modules/response-schema-corpus";
@@ -27,6 +28,7 @@ export const regressionBenchmarkSet: readonly BenchmarkEntry[] =
     description: entry.description,
     contentHash: entry.contentHash,
     battery: entry.promptBattery.map((c) => ({
+      grader: "selection",
       prompt: c.prompt,
       expected: c.expected,
     })),
@@ -39,12 +41,33 @@ export const regressionBenchmarkSetHash: string = createHash("sha256")
       .map(
         (entry) =>
           `${entry.corpusEntryId}:${entry.contentHash}:${entry.battery
-            .map((c) => `${c.expected}|${c.prompt}`)
+            .map(canonicalBenchmarkCase)
             .join("\n")}`,
       )
       .join("\n\n"),
   )
   .digest("hex");
+
+/**
+ * Selection retains the original byte-for-byte `expected|prompt` identity.
+ * New graders use an explicitly versioned canonical JSON tuple.
+ */
+export function canonicalBenchmarkCase(c: PromptCase): string {
+  switch (c.grader) {
+    case "selection":
+      return `${c.expected}|${c.prompt}`;
+    case "json-output":
+      return JSON.stringify([
+        "benchmark-case",
+        1,
+        "json-output",
+        c.graderVersion,
+        c.prompt,
+        canonicalJson(c.expectedSchema),
+      ]);
+  }
+}
+
 
 export const responseSchemaBenchmarkSet = responseSchemaCorpus;
 export const toolContractBenchmarkSet = toolContractCorpus;

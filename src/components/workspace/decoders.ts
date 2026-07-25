@@ -434,7 +434,7 @@ function toEvaluationBreakdown(
     };
   }
   if (action === "triggering-eval" && isTriggeringBreakdown(body)) {
-    return { kind: "triggering-eval", passed: body.passed, cases: body.cases };
+    return { kind: "triggering-eval", passed: body.passed, cases: body.cases.map(toTriggeringCasePanel) };
   }
   return null;
 }
@@ -658,12 +658,51 @@ function isTriggeringResult(value: unknown): value is TriggeringResult {
 }
 
 function isTriggeringCase(value: unknown): boolean {
+  if (!isRecord(value) || typeof value.prompt !== "string" || typeof value.pass !== "boolean") {
+    return false;
+  }
+  if (value.grader === "selection") {
+    return (
+      (value.expected === "fire" || value.expected === "silent") &&
+      isRecord(value.observed) &&
+      value.observed.grader === "selection" &&
+      (value.observed.actual === "fire" || value.observed.actual === "silent") &&
+      typeof value.observed.rationale === "string"
+    );
+  }
   return (
-    isRecord(value) &&
-    typeof value.prompt === "string" &&
-    (value.expected === "fire" || value.expected === "silent") &&
-    (value.actual === "fire" || value.actual === "silent") &&
-    typeof value.pass === "boolean" &&
-    typeof value.rationale === "string"
+    value.grader === "json-output" &&
+    value.graderVersion === 1 &&
+    isRecord(value.expectedSchema) &&
+    isRecord(value.observed) &&
+    value.observed.grader === "json-output" &&
+    Array.isArray(value.observed.validationIssues)
   );
+}
+
+function toTriggeringCasePanel(
+  value: unknown,
+): Extract<EvaluationBreakdown, { kind: "triggering-eval" }>["cases"][number] {
+  if (!isRecord(value) || !isRecord(value.observed)) {
+    throw new Error("Triggering eval returned an unexpected case.");
+  }
+  if (value.grader === "selection") {
+    return {
+      prompt: String(value.prompt),
+      expected: String(value.expected),
+      actual: String(value.observed.actual),
+      pass: Boolean(value.pass),
+      rationale: String(value.observed.rationale),
+    };
+  }
+  const issues = Array.isArray(value.observed.validationIssues)
+    ? value.observed.validationIssues.filter((issue): issue is string => typeof issue === "string")
+    : [];
+  return {
+    prompt: String(value.prompt),
+    expected: "valid JSON",
+    actual: value.pass ? "valid JSON" : "invalid JSON",
+    pass: Boolean(value.pass),
+    rationale: issues.join("; ") || "Output matched the expected schema.",
+  };
 }

@@ -28,15 +28,15 @@ function evalRunFor(
       kind: "triggering-eval",
       cases: [
         {
+          grader: "selection",
           caseId: "case-1",
           prompt: "the secret user prompt",
           expected: "fire",
-          actual: passed ? "fire" : "silent",
           pass: passed,
+          observed: { grader: "selection", actual: passed ? "fire" : "silent", rationale: "matched the calendar keyword" },
           attempts: 1,
           passedAttempts: passed ? 1 : 0,
           passRate: passed ? 1 : 0,
-          rationale: "matched the calendar keyword",
         },
       ],
       passed,
@@ -77,21 +77,63 @@ describe("aggregate analysis reads (memory adapters)", () => {
     for (const record of records) {
       expect(record).not.toHaveProperty("userId");
       expect(record).not.toHaveProperty("result");
-      expect(record).toMatchObject({
-        attempts: 1,
-        totalAttempts: 1,
-      });
       for (const c of record.cases) {
         expect(c).not.toHaveProperty("prompt");
-        expect(c).toMatchObject({
-          caseId: "case-1",
-          attempts: 1,
-          passRate: c.pass ? 1 : 0,
-        });
-        expect(c.rationale).toBe("matched the calendar keyword");
+        expect(c.grader === "selection" ? c.observed.rationale : null).toBe("matched the calendar keyword");
       }
     }
     expect(records.map((r) => r.passed).sort()).toEqual([false, true]);
+  });
+
+  it("reduces JSON-output cases to bounded non-content analysis fields", async () => {
+    const repo = createMemoryEvalRunRepository();
+    await repo.record({
+      userId: UserId("u1"),
+      skillId: SkillId("s1"),
+      skillVersionId: null,
+      harnessVersionId: HarnessVersionId("h1"),
+      status: "failed",
+      result: {
+        kind: "triggering-eval",
+        passed: false,
+        attempts: 1,
+        totalAttempts: 1,
+        passedAttempts: 0,
+        cases: [{
+          grader: "json-output",
+          graderVersion: 1,
+          caseId: "json-case",
+          prompt: "private customer prompt",
+          expectedSchema: { properties: { privateCustomerId: { type: "string" } } },
+          observed: {
+            grader: "json-output",
+            output: { privateCustomerId: "secret-123" },
+            validationIssues: Array.from({ length: 101 }, (_, index) => `private path ${index}`),
+          },
+          pass: false,
+          attempts: 1,
+          passedAttempts: 0,
+          passRate: 0,
+        }],
+        insight: { verdict: "failing", summary: "failed", findings: [], watch: [] },
+      },
+    });
+
+    const outcome = unwrap(await repo.listForAnalysis())[0]!.cases[0]!;
+    expect(outcome).toEqual({
+      grader: "json-output",
+      caseId: "json-case",
+      pass: false,
+      attempts: 1,
+      passedAttempts: 0,
+      passRate: 0,
+      validationSummary: { issueCount: 100, truncated: true },
+    });
+    expect(outcome).not.toHaveProperty("prompt");
+    expect(outcome).not.toHaveProperty("expectedSchema");
+    expect(outcome).not.toHaveProperty("observed");
+    expect(JSON.stringify(outcome)).not.toContain("secret-123");
+    expect(JSON.stringify(outcome)).not.toContain("privateCustomerId");
   });
 
   it("joins the skill version's lint summary when a resolver is wired", async () => {

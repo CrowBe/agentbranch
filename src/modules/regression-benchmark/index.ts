@@ -17,6 +17,7 @@ export {
   toolContractBenchmarkSetHash,
   safetyBenchmarkSet,
   safetyBenchmarkSetHash,
+  canonicalBenchmarkCase,
 } from "./benchmark-set";
 export type {
   BenchmarkDimensionEntryScore,

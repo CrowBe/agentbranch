@@ -25,7 +25,12 @@ export type {
   AnalysisReadFilter,
   Distractor,
   PromptCase,
+  SelectionPromptCase,
+  JsonOutputPromptCase,
+  JsonOutputSchema,
   CaseResult,
+  SelectionCaseResult,
+  JsonOutputCaseResult,
   EvalCaseOutcome,
   EvalRunAnalysisRecord,
   TriggeringResult,
@@ -40,6 +45,7 @@ export {
   runTriggeringEval,
   runBatteryCases,
   triggeringCaseId,
+  triggeringEvaluationSetHash,
   validateTriggeringAttempts,
 } from "./run-eval";
 export { analysisReadLimit, toEvalRunAnalysisRecord } from "./analysis-read";

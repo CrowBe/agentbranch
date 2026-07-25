@@ -8,26 +8,54 @@ export type Distractor = {
   readonly description: string;
 };
 
-/** One prompt in the battery, with the outcome we expect. */
-export type PromptCase = {
+export type SelectionPromptCase = {
+  readonly grader: "selection";
   readonly prompt: string;
   readonly expected: "fire" | "silent";
-  /** Flags fixed moderation probes without changing the existing case scoring shape. */
   readonly risk?: "trigger-hijack";
 };
 
-/** Result of a single case after running selection. */
-export type CaseResult = PromptCase & {
-  /** Stable identity of the versioned graded case definition. */
+export type JsonOutputSchema = Readonly<Record<string, unknown>>;
+
+export type JsonOutputPromptCase = {
+  readonly grader: "json-output";
+  /** Canonical grader contract version; changes require a deliberate re-pin. */
+  readonly graderVersion: 1;
+  readonly prompt: string;
+  readonly expectedSchema: JsonOutputSchema;
+};
+
+/** Closed grader-bearing battery case union. */
+export type PromptCase = SelectionPromptCase | JsonOutputPromptCase;
+
+export type SelectionCaseResult = SelectionPromptCase & {
   readonly caseId: string;
-  readonly actual: "fire" | "silent";
+  readonly observed: {
+    readonly grader: "selection";
+    readonly actual: "fire" | "silent";
+    readonly rationale: string;
+  };
   readonly pass: boolean;
   readonly attempts: number;
   readonly passedAttempts: number;
   readonly passRate: number;
-  /** The model's stated reason for this selection (from `classify`). */
-  readonly rationale: string;
 };
+
+export type JsonOutputCaseResult = JsonOutputPromptCase & {
+  readonly caseId: string;
+  readonly observed: {
+    readonly grader: "json-output";
+    readonly output: unknown;
+    readonly validationIssues: readonly string[];
+  };
+  readonly pass: boolean;
+  readonly attempts: number;
+  readonly passedAttempts: number;
+  readonly passRate: number;
+};
+
+/** Result union stays closed with its grader-specific observed outcome. */
+export type CaseResult = SelectionCaseResult | JsonOutputCaseResult;
 
 export type EvalStatus = "queued" | "running" | "passed" | "failed";
 
@@ -50,7 +78,7 @@ export type TriggeringResult = Artifact<"triggering-eval"> & {
   readonly attempts: number;
   readonly totalAttempts: number;
   readonly passedAttempts: number;
-  /** Absent only on legacy persisted runs, which are incomparable by design. */
+  /** Absent on legacy runs and non-selection graders, which are incomparable. */
   readonly comparisonMetadata?: EvaluationComparisonMetadata;
   /** The model-written interpretation (CONTEXT.md → Insight); renders to Insights. */
   readonly insight: Insight;
@@ -82,17 +110,21 @@ export type AnalysisReadFilter = {
 
 /** A case outcome with the prompt text stripped: expectation, result, and the
  * classifier's rationale — the features the loop mines, not the content. */
-export type EvalCaseOutcome = {
-  readonly caseId: string;
-  readonly expected: "fire" | "silent";
-  readonly actual: "fire" | "silent";
-  readonly pass: boolean;
-  readonly attempts: number;
-  readonly passedAttempts: number;
-  readonly passRate: number;
-  readonly rationale: string;
-  readonly risk?: "trigger-hijack";
-};
+export type EvalCaseOutcome =
+  | Omit<SelectionCaseResult, "prompt">
+  | {
+      readonly grader: "json-output";
+      readonly caseId: string;
+      readonly pass: boolean;
+      readonly attempts: number;
+      readonly passedAttempts: number;
+      readonly passRate: number;
+      /** Counts only; schemas, generated output, paths, and messages stay private. */
+      readonly validationSummary: {
+        readonly issueCount: number;
+        readonly truncated: boolean;
+      };
+    };
 
 /**
  * The cross-user read model for the harness improvement loop. Outcomes and
