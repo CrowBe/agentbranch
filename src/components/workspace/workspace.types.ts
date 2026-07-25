@@ -203,8 +203,8 @@ export type TranscriptStepPanel =
 
 type TriggeringCasePanel = {
   readonly prompt: string;
-  readonly expected: "fire" | "silent";
-  readonly actual: "fire" | "silent";
+  readonly expected: string;
+  readonly actual: string;
   readonly pass: boolean;
   readonly rationale: string;
 };

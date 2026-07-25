@@ -27,6 +27,7 @@ export const regressionBenchmarkSet: readonly BenchmarkEntry[] =
     description: entry.description,
     contentHash: entry.contentHash,
     battery: entry.promptBattery.map((c) => ({
+      grader: "selection",
       prompt: c.prompt,
       expected: c.expected,
     })),
@@ -39,12 +40,44 @@ export const regressionBenchmarkSetHash: string = createHash("sha256")
       .map(
         (entry) =>
           `${entry.corpusEntryId}:${entry.contentHash}:${entry.battery
-            .map((c) => `${c.expected}|${c.prompt}`)
+            .map(canonicalBenchmarkCase)
             .join("\n")}`,
       )
       .join("\n\n"),
   )
   .digest("hex");
+
+/**
+ * Selection retains the original byte-for-byte `expected|prompt` identity.
+ * New graders use an explicitly versioned canonical JSON tuple.
+ */
+export function canonicalBenchmarkCase(c: PromptCase): string {
+  switch (c.grader) {
+    case "selection":
+      return `${c.expected}|${c.prompt}`;
+    case "json-output":
+      return JSON.stringify([
+        "benchmark-case",
+        1,
+        "json-output",
+        c.graderVersion,
+        c.prompt,
+        canonicalJson(c.expectedSchema),
+      ]);
+  }
+}
+
+function canonicalJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalJson);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, child]) => [key, canonicalJson(child)]),
+    );
+  }
+  return value;
+}
 
 export const responseSchemaBenchmarkSet = responseSchemaCorpus;
 export const toolContractBenchmarkSet = toolContractCorpus;

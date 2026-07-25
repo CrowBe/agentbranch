@@ -466,11 +466,13 @@ describe("AppShell capability chips", () => {
                   data: {
                     index: 1,
                     total: 1,
-                    prompt: "Schedule a planning meeting.",
-                    expected: "fire",
-                    actual: "fire",
-                    pass: true,
-                    rationale: "Matched the calendar skill.",
+                    result: {
+                      grader: "selection",
+                      prompt: "Schedule a planning meeting.",
+                      expected: "fire",
+                      observed: { grader: "selection", actual: "fire", rationale: "Matched the calendar skill." },
+                      pass: true,
+                    },
                   },
                 }),
               ),
@@ -540,11 +542,11 @@ describe("AppShell capability chips", () => {
                 },
                 cases: [
                   {
+                    grader: "selection",
                     prompt: "Draft a customer follow-up email.",
                     expected: "silent",
-                    actual: "fire",
                     pass: false,
-                    rationale: "The description is too broad.",
+                    observed: { grader: "selection", actual: "fire", rationale: "The description is too broad." },
                   },
                 ],
               },

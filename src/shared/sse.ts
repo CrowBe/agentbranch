@@ -15,11 +15,31 @@ export type EvaluationEvent =
       {
         readonly index: number;
         readonly total: number;
-        readonly prompt: string;
-        readonly expected: "fire" | "silent";
-        readonly actual: "fire" | "silent";
-        readonly pass: boolean;
-        readonly rationale: string;
+        readonly result:
+          | {
+              readonly grader: "selection";
+              readonly prompt: string;
+              readonly expected: "fire" | "silent";
+              readonly risk?: "trigger-hijack";
+              readonly observed: {
+                readonly grader: "selection";
+                readonly actual: "fire" | "silent";
+                readonly rationale: string;
+              };
+              readonly pass: boolean;
+            }
+          | {
+              readonly grader: "json-output";
+              readonly graderVersion: 1;
+              readonly prompt: string;
+              readonly expectedSchema: Readonly<Record<string, unknown>>;
+              readonly observed: {
+                readonly grader: "json-output";
+                readonly output: unknown;
+                readonly validationIssues: readonly string[];
+              };
+              readonly pass: boolean;
+            };
       }
     >
   | SseEvent<

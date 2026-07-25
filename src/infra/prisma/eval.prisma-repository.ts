@@ -48,38 +48,84 @@ function toEvalRun(row: EvalRunRow): EvalRun {
   };
 }
 
-function normalizeTriggeringResult(value: unknown): TriggeringResult {
+/**
+ * Persisted v1 cases predate grader discriminants and observed-outcome
+ * wrappers. Normalize them at the repository boundary so all domain consumers
+ * see the closed current union.
+ */
+export function normalizeTriggeringResult(value: unknown): TriggeringResult {
+  type StoredCase = Partial<
+    Pick<CaseResult, "caseId" | "attempts" | "passedAttempts" | "passRate">
+  > & {
+    readonly grader?: CaseResult["grader"];
+    readonly prompt: string;
+    readonly expected?: "fire" | "silent";
+    readonly actual?: "fire" | "silent";
+    readonly pass: boolean;
+    readonly rationale?: string;
+    readonly risk?: "trigger-hijack";
+    readonly observed?: CaseResult["observed"];
+    readonly graderVersion?: 1;
+    readonly expectedSchema?: Readonly<Record<string, unknown>>;
+  };
   const legacy = value as Omit<
     TriggeringResult,
     "cases" | "attempts" | "totalAttempts" | "passedAttempts"
   > & Partial<Pick<TriggeringResult, "attempts" | "totalAttempts" | "passedAttempts">> & {
-    readonly cases: readonly (Omit<
-      CaseResult,
-      "caseId" | "attempts" | "passedAttempts" | "passRate"
-    > & Partial<
-      Pick<CaseResult, "caseId" | "attempts" | "passedAttempts" | "passRate">
-    >)[];
+    readonly cases: readonly StoredCase[];
   };
-  const cases = legacy.cases.map((item) => {
+  const cases = legacy.cases.map((item): CaseResult => {
     const attempts = item.attempts ?? 1;
     const passedAttempts = item.passedAttempts ?? (item.pass ? attempts : 0);
-    return {
-      ...item,
-      caseId: item.caseId ?? triggeringCaseId(item),
+    const common = {
+      caseId: item.caseId,
       attempts,
       passedAttempts,
       passRate: item.passRate ?? passedAttempts / attempts,
+      pass: item.pass,
+    };
+    if (item.grader === "json-output") {
+      const promptCase = {
+        grader: "json-output" as const,
+        graderVersion: item.graderVersion ?? 1,
+        prompt: item.prompt,
+        expectedSchema: item.expectedSchema ?? {},
+      };
+      return {
+        ...promptCase,
+        ...common,
+        caseId: common.caseId ?? triggeringCaseId(promptCase),
+        observed: item.observed?.grader === "json-output"
+          ? item.observed
+          : { grader: "json-output", output: null, validationIssues: [] },
+      };
+    }
+    const promptCase = {
+      grader: "selection" as const,
+      prompt: item.prompt,
+      expected: item.expected ?? "silent",
+      ...(item.risk === undefined ? {} : { risk: item.risk }),
+    };
+    return {
+      ...promptCase,
+      ...common,
+      caseId: common.caseId ?? triggeringCaseId(promptCase),
+      observed: item.observed?.grader === "selection"
+        ? item.observed
+        : {
+            grader: "selection",
+            actual: item.actual ?? "silent",
+            rationale: item.rationale ?? "",
+          },
     };
   });
   return {
     ...legacy,
     cases,
     attempts: legacy.attempts ?? cases[0]?.attempts ?? 1,
-    totalAttempts:
-      legacy.totalAttempts ?? cases.reduce((sum, item) => sum + item.attempts, 0),
+    totalAttempts: legacy.totalAttempts ?? cases.reduce((sum, item) => sum + item.attempts, 0),
     passedAttempts:
-      legacy.passedAttempts ??
-      cases.reduce((sum, item) => sum + item.passedAttempts, 0),
+      legacy.passedAttempts ?? cases.reduce((sum, item) => sum + item.passedAttempts, 0),
   };
 }
 

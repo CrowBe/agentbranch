@@ -171,9 +171,15 @@ function formatLintSection(
 }
 
 function formatFailedCase(caseResult: CaseResult): string[] {
+  if (caseResult.grader === "json-output") {
+    return [
+      `- "${caseResult.prompt}" -> JSON output did not match the expected schema`,
+      `  Reason: ${caseResult.observed.validationIssues.join("; ") || "No validation issue provided."}`,
+    ];
+  }
   return [
-    `- "${caseResult.prompt}" -> ${caseResult.actual} (expected: ${caseResult.expected})`,
-    `  Reason: ${caseResult.rationale || "No rationale provided."}`,
+    `- "${caseResult.prompt}" -> ${caseResult.observed.actual} (expected: ${caseResult.expected})`,
+    `  Reason: ${caseResult.observed.rationale || "No rationale provided."}`,
   ];
 }
 

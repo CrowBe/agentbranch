@@ -1,4 +1,5 @@
 import type { AccountingTag, ModelGateway } from "@/modules/model-gateway";
+import type { CaseResult } from "@/modules/triggering-eval/triggering-eval.types";
 import type { Result, DomainError } from "@/shared";
 
 /**
@@ -93,14 +94,7 @@ export type EvaluationRunEvent =
       readonly kind: "case";
       readonly index: number;
       readonly total: number;
-      readonly prompt: string;
-      readonly expected: "fire" | "silent";
-      readonly actual: "fire" | "silent";
-      readonly pass: boolean;
-      readonly attempts: number;
-      readonly passedAttempts: number;
-      readonly passRate: number;
-      readonly rationale: string;
+      readonly result: CaseResult;
     };
 
 /** Receives run events as an evaluation unfolds. Optional everywhere — an

@@ -29,17 +29,7 @@ export function toEvalRunAnalysisRecord(
     attempts: run.result.attempts,
     totalAttempts: run.result.totalAttempts,
     passedAttempts: run.result.passedAttempts,
-    cases: run.result.cases.map((c) => ({
-      caseId: c.caseId,
-      expected: c.expected,
-      actual: c.actual,
-      pass: c.pass,
-      attempts: c.attempts,
-      passedAttempts: c.passedAttempts,
-      passRate: c.passRate,
-      rationale: c.rationale,
-      ...(c.risk === undefined ? {} : { risk: c.risk }),
-    })),
+    cases: run.result.cases.map(({ prompt: _prompt, ...outcome }) => outcome),
     skillLintSummary,
     createdAt: run.createdAt,
   };
