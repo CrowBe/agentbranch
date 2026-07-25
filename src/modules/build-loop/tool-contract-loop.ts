@@ -5,6 +5,7 @@ import { withLatestMessageCacheControl } from "./gateway-messages";
 import { TOOL_CONTRACT_AUTHORING_PROMPT } from "./tool-contract-prompt";
 import { toolContractTools } from "./tool-contract-tools";
 import type { BuildMessage } from "./build-loop.types";
+import { latestMessageIsConceptContext } from "./concept-context";
 
 export type ToolContractLoopInput = {
   readonly messages: readonly BuildMessage[];
@@ -40,7 +41,7 @@ export async function* runToolContractLoop(
   const opened = await gateway.streamAgent({
     system: TOOL_CONTRACT_AUTHORING_PROMPT,
     messages: withLatestMessageCacheControl(input.messages),
-    tools: toolContractTools,
+    tools: latestMessageIsConceptContext(input.messages) ? [] : toolContractTools,
     tag: { kind: "account", userId, capability: "build" },
   });
   if (isErr(opened)) {

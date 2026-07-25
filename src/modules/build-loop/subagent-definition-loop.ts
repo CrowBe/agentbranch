@@ -5,12 +5,13 @@ import { withLatestMessageCacheControl } from "./gateway-messages";
 import type { BuildMessage } from "./build-loop.types";
 import { createSubagentDefinitionTools } from "./subagent-definition-tools";
 import { SUBAGENT_DEFINITION_AUTHORING_PROMPT } from "./subagent-definition-prompt";
+import { latestMessageIsConceptContext } from "./concept-context";
 
 export type SubagentDefinitionLoopInput = { readonly messages: readonly BuildMessage[]; readonly current?: SubagentDefinitionSource };
 export type SubagentDefinitionLoopEvent = SseEvent<"text", { readonly delta: string }> | SseEvent<"subagent-definition", { readonly source: SubagentDefinitionSource }> | SseEvent<"subagent-definition-edit", { readonly oldStr: string; readonly newStr: string }> | SseEvent<"lint-feedback", { readonly feedback: string }> | SseEvent<"tool", { readonly name: string; readonly phase: "call" | "result" }> | SseEvent<"done", { readonly finishReason: string }> | SseEvent<"error", { readonly message: string }>;
 
 export async function* runSubagentDefinitionLoop(input: SubagentDefinitionLoopInput, gateway: ModelGateway, userId: UserId): AsyncGenerator<SubagentDefinitionLoopEvent> {
-  const opened = await gateway.streamAgent({ system: SUBAGENT_DEFINITION_AUTHORING_PROMPT, messages: withLatestMessageCacheControl(input.messages), tools: createSubagentDefinitionTools(input.current), tag: { kind: "account", userId, capability: "build" } });
+  const opened = await gateway.streamAgent({ system: SUBAGENT_DEFINITION_AUTHORING_PROMPT, messages: withLatestMessageCacheControl(input.messages), tools: latestMessageIsConceptContext(input.messages) ? [] : createSubagentDefinitionTools(input.current), tag: { kind: "account", userId, capability: "build" } });
   if (isErr(opened)) { yield { event: "error", data: { message: opened.error.message } }; return; }
   let hasDraft = Boolean(input.current);
   let attemptedMutation = false;

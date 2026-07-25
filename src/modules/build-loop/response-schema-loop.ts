@@ -5,6 +5,7 @@ import { responseSchemaTools } from "./response-schema-tools";
 import { RESPONSE_SCHEMA_AUTHORING_PROMPT } from "./response-schema-prompt";
 import { withLatestMessageCacheControl } from "./gateway-messages";
 import type { BuildMessage } from "./build-loop.types";
+import { latestMessageIsConceptContext } from "./concept-context";
 
 export type ResponseSchemaLoopInput = {
   readonly messages: readonly BuildMessage[];
@@ -45,7 +46,7 @@ export async function* runResponseSchemaLoop(
   const opened = await gateway.streamAgent({
     system: RESPONSE_SCHEMA_AUTHORING_PROMPT,
     messages: withLatestMessageCacheControl(input.messages),
-    tools: responseSchemaTools,
+    tools: latestMessageIsConceptContext(input.messages) ? [] : responseSchemaTools,
     tag: { kind: "account", userId, capability: "build" },
   });
   if (isErr(opened)) {

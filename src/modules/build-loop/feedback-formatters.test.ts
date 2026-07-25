@@ -306,4 +306,17 @@ describe("concept context formatter", () => {
       }),
     ).toThrow('A glossary definition is required for "Skill".');
   });
+
+  it("does not mutate the concept, question, or glossary input", () => {
+    const input = {
+      concept: structuredClone(conceptLibrary[0]!),
+      question: "What is a skill?",
+      glossary: { Skill: "Reusable instructions for a kind of work." },
+    };
+    const before = structuredClone(input);
+
+    formatConceptContext(input);
+
+    expect(input).toEqual(before);
+  });
 });

@@ -26,6 +26,7 @@ export {
   formatTriggeringEvalFeedback,
 } from "./feedback-formatters";
 export type { ConceptGlossary } from "./feedback-formatters";
+export { isConceptContextMessage } from "./concept-context";
 export { runBuildLoop } from "./build-loop";
 export { BUILD_LOOP_SYSTEM_PROMPT } from "./system-prompt";
 export {

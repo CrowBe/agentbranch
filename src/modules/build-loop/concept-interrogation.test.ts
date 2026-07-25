@@ -7,6 +7,7 @@ import type {
 import { conceptLibrary } from "@/modules/concept-library";
 import { domainError, err, ok, UserId } from "@/shared";
 import { runBuildLoop } from "./build-loop";
+import { isConceptContextMessage } from "./concept-context";
 import { formatConceptContext } from "./feedback-formatters";
 import { runResponseSchemaLoop } from "./response-schema-loop";
 import { RESPONSE_SCHEMA_AUTHORING_PROMPT } from "./response-schema-prompt";
@@ -114,6 +115,52 @@ describe("concept interrogation through authoring loops", () => {
         role: "user",
         content: message,
       });
+      expect(input.tools).toEqual([]);
     }
+  });
+
+  it("retains each loop's normal authoring tools for non-concept turns", async () => {
+    const seen: StreamAgentInput[] = [];
+    const gateway = capturingGateway(seen);
+    const normal = "Draft this artifact.";
+    const streams = [
+      runBuildLoop({ messages: [{ role: "user", content: normal }] }, gateway, userId),
+      runResponseSchemaLoop(
+        { messages: [{ role: "user", content: normal }] },
+        gateway,
+        userId,
+      ),
+      runToolContractLoop(
+        { messages: [{ role: "user", content: normal }] },
+        gateway,
+        userId,
+      ),
+      runSubagentDefinitionLoop(
+        { messages: [{ role: "user", content: normal }] },
+        gateway,
+        userId,
+      ),
+    ];
+
+    for (const stream of streams) await eventNames(stream);
+
+    expect(seen.map((input) => input.tools.map((tool) => tool.name))).toEqual([
+      ["write_skill", "edit_skill"],
+      ["write_response_schema", "edit_response_schema"],
+      ["write_tool_contract", "edit_tool_contract"],
+      ["write_subagent_definition", "edit_subagent_definition"],
+    ]);
+  });
+
+  it("does not withhold tools for a casual marker mention or malformed envelope", () => {
+    expect(isConceptContextMessage("What does [BEGIN AGENTBRANCH CONCEPT CONTEXT v1] mean?")).toBe(
+      false,
+    );
+    expect(
+      isConceptContextMessage(
+        "[BEGIN AGENTBRANCH CONCEPT CONTEXT v1]\nnot the formatter preamble\n{}\n[END AGENTBRANCH CONCEPT CONTEXT v1]",
+      ),
+    ).toBe(false);
+    expect(isConceptContextMessage(message)).toBe(true);
   });
 });
