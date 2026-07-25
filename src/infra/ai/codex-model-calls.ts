@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams, type SpawnOptionsWithoutStdio } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
@@ -95,10 +95,18 @@ function createCodexRunner(options: CodexModelCallsOptions) {
     let runRoot: string | undefined;
     try {
       runRoot = await mkdtemp(join(tmpdir(), "agentbranch-codex-"));
+      const home = join(runRoot, "home");
+      const codexHome = join(runRoot, "codex-home");
       const scratch = join(runRoot, "scratch");
       const schemaPath = join(runRoot, "schema.json");
       const outputPath = join(runRoot, "last-message.json");
-      await Promise.all([mkdir(scratch), writeFile(schemaPath, JSON.stringify(outputSchema))]);
+      await Promise.all([
+        mkdir(home, { mode: 0o700 }),
+        mkdir(codexHome, { mode: 0o700 }),
+        mkdir(scratch, { mode: 0o700 }),
+        writeFile(schemaPath, JSON.stringify(outputSchema), { mode: 0o600 }),
+      ]);
+      await copyCodexAuth(codexHome);
 
       const args = [
         "exec",
@@ -138,7 +146,7 @@ function createCodexRunner(options: CodexModelCallsOptions) {
 
       const child = spawnProcess(options.binary ?? "codex", args, {
         cwd: scratch,
-        env: codexEnvironment(),
+        env: codexEnvironment(home, codexHome),
         detached: process.platform !== "win32",
         shell: false,
         stdio: "pipe",
@@ -247,13 +255,19 @@ function watchChild(
   return { completed, terminate };
 }
 
-function codexEnvironment(): NodeJS.ProcessEnv {
-  if (!process.env.CODEX_HOME) {
+async function copyCodexAuth(codexHome: string): Promise<void> {
+  const sourceHome = process.env.CODEX_HOME;
+  if (!sourceHome) {
     throw new Error("CODEX_HOME is required for the subscription-authenticated Codex rung.");
   }
+  const destination = join(codexHome, "auth.json");
+  await copyFile(join(sourceHome, "auth.json"), destination);
+  await chmod(destination, 0o600);
+}
+
+function codexEnvironment(home: string, codexHome: string): NodeJS.ProcessEnv {
   const allowed = [
     "PATH",
-    "CODEX_HOME",
     "TMPDIR",
     "LANG",
     "LC_ALL",
@@ -264,9 +278,12 @@ function codexEnvironment(): NodeJS.ProcessEnv {
     "NO_PROXY",
     "ALL_PROXY",
   ] as const;
-  return Object.fromEntries(
+  const environment = Object.fromEntries(
     allowed.flatMap((name) => process.env[name] === undefined ? [] : [[name, process.env[name]]]),
   ) as NodeJS.ProcessEnv;
+  environment.HOME = home;
+  environment.CODEX_HOME = codexHome;
+  return environment;
 }
 
 function classifyPrompt(input: RawClassifyInput): string {

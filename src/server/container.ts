@@ -49,7 +49,7 @@ import { createModelRouter } from "@/infra/ai/model-router";
 import { createSdkModelCalls } from "@/infra/ai/sdk-model-calls";
 import { createDispatchingModelCalls } from "@/infra/ai/dispatching-model-calls";
 import { createClaudeCodeModelCalls } from "@/infra/ai/claude-code-model-calls";
-import { createCodexModelCalls } from "@/infra/ai/codex-model-calls";
+import { createLazyCodexModelCalls } from "@/infra/ai/lazy-codex-model-calls";
 import { execFileSync } from "node:child_process";
 import { createClerkAuth } from "@/infra/clerk/clerk-auth";
 import { createStubAuth } from "@/infra/clerk/stub-auth";
@@ -131,7 +131,7 @@ export function getContainer(): AppContainer {
       sdk: createSdkModelCalls(),
       cli: {
         "claude-code-cli": createClaudeCodeModelCalls(),
-        "codex-cli": createCodexModelCalls(),
+        "codex-cli": createLazyCodexModelCalls(),
       },
     }),
     usage,

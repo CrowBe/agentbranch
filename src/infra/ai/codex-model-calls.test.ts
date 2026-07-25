@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
-import { access, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { access, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { PassThrough } from "node:stream";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,18 +18,39 @@ const model: ResolvedModel = {
   viaOverride: false,
 };
 
-beforeEach(() => vi.stubEnv("CODEX_HOME", "/test/codex-home"));
-afterEach(() => vi.unstubAllEnvs());
+let authFixtureRoot = "";
+let sourceCodexHome = "";
+
+beforeEach(async () => {
+  authFixtureRoot = await mkdtemp(join(tmpdir(), "agentbranch-codex-auth-test-"));
+  sourceCodexHome = join(authFixtureRoot, "codex-home");
+  await Promise.all([
+    mkdir(join(sourceCodexHome, "skills"), { recursive: true }),
+    mkdir(join(sourceCodexHome, "cache"), { recursive: true }),
+  ]);
+  await Promise.all([
+    writeFile(join(sourceCodexHome, "auth.json"), '{"tokens":{"access_token":"test-secret"}}', { mode: 0o600 }),
+    writeFile(join(sourceCodexHome, "config.toml"), "model = \"must-not-copy\""),
+    writeFile(join(sourceCodexHome, "skills", "global.md"), "must-not-copy"),
+    writeFile(join(sourceCodexHome, "cache", "models.json"), "must-not-copy"),
+  ]);
+  vi.stubEnv("CODEX_HOME", sourceCodexHome);
+});
+afterEach(async () => {
+  vi.unstubAllEnvs();
+  await rm(authFixtureRoot, { recursive: true, force: true });
+});
 
 describe("Codex model calls", () => {
-  it("spawns classify with native schema, stdin, inherited Codex auth, and cleans every artifact", async () => {
-    vi.stubEnv("CODEX_HOME", "/real/logged-in/codex-home");
+  it("spawns classify with native schema, stdin, isolated auth-only homes, and cleans every artifact", async () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "must-not-leak");
     let observedRoot = "";
     const fake = fakeSpawn(async ({ args, options, stdin }) => {
       const schemaPath = valueAfter(args, "--output-schema");
       const outputPath = valueAfter(args, "--output-last-message");
       observedRoot = join(schemaPath, "..");
+      const isolatedHome = options.env?.HOME;
+      const isolatedCodexHome = options.env?.CODEX_HOME;
 
       expect(args).toEqual(expect.arrayContaining([
         "exec",
@@ -46,10 +68,19 @@ describe("Codex model calls", () => {
       expect(args).not.toContain("-m");
       expect(options.shell).toBe(false);
       expect(options.cwd).toBe(valueAfter(args, "-C"));
-      expect(options.env?.CODEX_HOME).toBe("/real/logged-in/codex-home");
+      expect(isolatedHome).toBe(join(observedRoot, "home"));
+      expect(isolatedCodexHome).toBe(join(observedRoot, "codex-home"));
+      expect(isolatedCodexHome).not.toBe(sourceCodexHome);
       expect(options.env?.ANTHROPIC_API_KEY).toBeUndefined();
-      expect(options.env?.HOME).toBeUndefined();
       expect(options.detached).toBe(process.platform !== "win32");
+      expect(await readFile(join(isolatedCodexHome!, "auth.json"), "utf8"))
+        .toBe('{"tokens":{"access_token":"test-secret"}}');
+      expect((await stat(join(isolatedCodexHome!, "auth.json"))).mode & 0o777).toBe(0o600);
+      expect((await stat(isolatedHome!)).mode & 0o777).toBe(0o700);
+      expect((await stat(isolatedCodexHome!)).mode & 0o777).toBe(0o700);
+      await expect(access(join(isolatedCodexHome!, "config.toml"))).rejects.toThrow();
+      await expect(access(join(isolatedCodexHome!, "skills"))).rejects.toThrow();
+      await expect(access(join(isolatedCodexHome!, "cache"))).rejects.toThrow();
       expect(stdin).toContain("charged twice");
       expect(JSON.parse(await readFile(schemaPath, "utf8"))).toMatchObject({
         properties: { choice: { anyOf: expect.any(Array) } },
@@ -72,6 +103,20 @@ describe("Codex model calls", () => {
       expect(result.value.usage).toMatchObject({ inputTokens: 12, outputTokens: 3 });
     }
     await expect(access(observedRoot)).rejects.toThrow();
+  });
+
+  it("fails closed before spawn when auth.json is unavailable and cleans the isolated run", async () => {
+    const missingHome = join(authFixtureRoot, "missing-codex-home");
+    await mkdir(missingHome);
+    vi.stubEnv("CODEX_HOME", missingHome);
+    const spawn = vi.fn();
+    const calls = createCodexModelCalls({ spawn });
+
+    const result = await calls.classify(model, { choices: ["yes"], prompt: "yes" });
+
+    expect(isErr(result) && result.error.tag).toBe("model_unavailable");
+    expect(isErr(result) && result.error.message).toContain("could not be started");
+    expect(spawn).not.toHaveBeenCalled();
   });
 
   it("passes an explicit non-sentinel model with -m and validates generated output", async () => {
@@ -249,7 +294,6 @@ function valueAfter(args: readonly string[], flag: string): string {
 }
 
 async function expectArtifactsCleaned(args: readonly string[]): Promise<void> {
-  await expect(access(valueAfter(args, "--output-schema"))).rejects.toThrow();
-  await expect(access(valueAfter(args, "--output-last-message"))).rejects.toThrow();
-  await expect(access(valueAfter(args, "-C"))).rejects.toThrow();
+  const root = dirname(valueAfter(args, "--output-schema"));
+  await expect(access(root)).rejects.toThrow();
 }
