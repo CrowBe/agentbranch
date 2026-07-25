@@ -456,12 +456,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       question,
       glossary: CONCEPT_GLOSSARY,
     });
-    await sendEquipmentAuthoring(
-      selectEquipmentAuthoringKind(question),
-      message,
-      false,
-      { displayMessage: question, answerOnly: true },
-    );
+    await sendConceptInterrogation(selectEquipmentAuthoringKind(question), message, question);
   }
 
   async function showHistory(): Promise<void> {
@@ -830,13 +825,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     kind: EquipmentKind,
     message: string,
     allowLintAutoFeedback: boolean,
-    options: {
-      readonly displayMessage?: string;
-      readonly answerOnly?: boolean;
-    } = {},
   ): Promise<void> {
-    const displayMessage = options.displayMessage ?? message;
-    const answerOnly = options.answerOnly ?? false;
     const nextMessages: readonly BuildMessage[] = [
       ...equipmentMessages,
       { role: "user", content: message },
@@ -845,7 +834,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     const isContract = kind === "tool-contract";
     const isDefinition = kind === "subagent-definition";
     patch({
-      entries: [...snapshot.entries, entry(displayMessage)],
+      entries: [...snapshot.entries, entry(message)],
       status: isContract ? "Building tool contract…" : isDefinition ? "Building subagent definition…" : "Building response schema…",
       equipmentBusy: true,
       capability: null,
@@ -953,7 +942,6 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
           appendEntry(entry(friendlyError(event.data.message), "error"));
         } else if (event.event === "done") {
           completed = true;
-          if (answerOnly) patch({ status: "Question answered." });
         }
       }
 
@@ -985,7 +973,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       : responseSchemaDraft
         ? serializeResponseSchema(responseSchemaDraft)
         : null;
-    if (completed && finishedRaw && !answerOnly) {
+    if (completed && finishedRaw) {
       const name = isContract
         ? toolContractDraft?.name || "untitled contract"
         : isDefinition
@@ -1013,6 +1001,72 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       } finally {
         patch({ equipmentBusy: false });
       }
+    }
+  }
+
+  /**
+   * Concept interrogation deliberately does not share the Equipment authoring
+   * transcript or any working draft. Its gateway turn receives one canonical
+   * user message and its event consumer accepts prose only: mutation, lint,
+   * and tool events are ignored even if a provider emits them unexpectedly.
+   */
+  async function sendConceptInterrogation(
+    kind: EquipmentKind,
+    message: string,
+    question: string,
+  ): Promise<void> {
+    const isContract = kind === "tool-contract";
+    const isDefinition = kind === "subagent-definition";
+    patch({
+      entries: [...snapshot.entries, entry(question)],
+      status: "Answering question…",
+      equipmentBusy: true,
+      capability: null,
+    });
+    let assistantText = "";
+    let failed = false;
+    const assistantEntryId = entry("").id;
+    try {
+      const res = await fetchImpl(
+        isContract
+          ? "/api/tool-contract/build"
+          : isDefinition
+            ? "/api/subagent-definition/build"
+            : "/api/response-schema/build",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: [{ role: "user", content: message }],
+          }),
+        },
+      );
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        fail(friendlyError(body?.error ?? `Request failed (${res.status}).`));
+        return;
+      }
+      if (!res.body) {
+        fail("Answer stream did not open.");
+        return;
+      }
+      for await (const event of readSseEvents<
+        ResponseSchemaLoopEvent | ToolContractLoopEvent | SubagentDefinitionLoopEvent
+      >(res.body)) {
+        if (event.event === "text") {
+          assistantText += event.data.delta;
+          patch({ entries: upsertAssistant(snapshot.entries, assistantEntryId, assistantText) });
+        } else if (event.event === "error") {
+          failed = true;
+          fail(friendlyError(event.data.message));
+        } else if (event.event === "done") {
+          if (!failed) patch({ status: "Question answered." });
+        }
+      }
+    } catch (cause) {
+      fail(friendlyError(String(cause)));
+    } finally {
+      patch({ equipmentBusy: false });
     }
   }
 
@@ -1753,7 +1807,20 @@ function appendProgressCase(
  * that parses as a JSON object is treated as a response schema (a JSON Schema
  * document). The server re-parses through the real source models either way.
  */
-function selectEquipmentAuthoringKind(message: string): EquipmentKind {
+export function selectEquipmentAuthoringKind(message: string): EquipmentKind {
+  const explicit: readonly { readonly phrase: RegExp; readonly kind: EquipmentKind }[] = [
+    { phrase: /\bresponse schema\b/i, kind: "response-schema" },
+    { phrase: /\btool contract\b/i, kind: "tool-contract" },
+    { phrase: /\bsubagent definition\b|\bsub-agent definition\b/i, kind: "subagent-definition" },
+  ];
+  const named = explicit
+    .map(({ phrase, kind }) => ({ index: message.search(phrase), kind }))
+    .filter(({ index }) => index >= 0)
+    .sort((left, right) => left.index - right.index)[0];
+  // Comparative questions can name several primitives. The first explicit
+  // mention is the deterministic routing anchor; the canonical envelope makes
+  // every authoring prompt answer-only, so this choice cannot mutate a draft.
+  if (named) return named.kind;
   if (/\b(subagent|sub-agent|helper|specialist|delegate|delegat(?:e|ion|ing))\b/i.test(message)) return "subagent-definition";
   return /\b(tool|contract|input|output|failure mode|confirmation boundary|confirm before)\b/i.test(
     message,
