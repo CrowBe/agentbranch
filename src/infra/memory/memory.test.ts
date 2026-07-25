@@ -8,7 +8,7 @@ import {
 import { createMemoryTestRunRepository } from "./test-run.memory-repository";
 import { createMemoryUsageRepository } from "./usage.memory-repository";
 import { parseSkillMd } from "@/modules/skill";
-import { OPEN_DRAFTS_MAX, SKILL_VERSION_MAX, unwrap, UserId } from "@/shared";
+import { OPEN_DRAFTS_MAX, SKILL_VERSION_MAX, SkillBranchId, unwrap, UserId } from "@/shared";
 
 describe("in-memory adapters", () => {
   it("skill repository creates, revises and lists by user", async () => {
@@ -77,7 +77,9 @@ describe("in-memory adapters", () => {
   it("keeps run records pinned to the evaluated skill version after later edits", async () => {
     const skills = createMemorySkillRepository();
     const testRuns = createMemoryTestRunRepository();
-    const evalRuns = createMemoryEvalRunRepository();
+    const evalRuns = createMemoryEvalRunRepository({
+      resolveBranchId: () => SkillBranchId("persisted-branch"),
+    });
     const v1 = unwrap(parseSkillMd(`---\nname: t\ndescription: d\n---\nbody`));
     const created = unwrap(await skills.create({ userId: UserId("u1"), source: v1 }));
 
@@ -113,6 +115,10 @@ describe("in-memory adapters", () => {
 
     expect(unwrap(await testRuns.findById(testRun.id, UserId("u2")))).toBeNull();
     expect(unwrap(await evalRuns.findById(evalRun.id, UserId("u2")))).toBeNull();
+    expect(unwrap(await evalRuns.findComparableById(evalRun.id, UserId("u2")))).toBeNull();
+    expect(
+      unwrap(await evalRuns.findComparableById(evalRun.id, UserId("u1")))?.branchId,
+    ).toBe("persisted-branch");
 
     const v2 = unwrap(parseSkillMd(`---\nname: t\ndescription: d2\n---\nbody2`));
     const saved = unwrap(await skills.save({ id: created.id, userId: created.userId, source: v2 }));

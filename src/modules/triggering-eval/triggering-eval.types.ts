@@ -1,6 +1,6 @@
 import type { Skill, SkillVersionLintSummary } from "@/modules/skill";
 import type { Artifact, Insight } from "@/modules/skill-analysis";
-import type { EvalRunId, HarnessVersionId, SkillId, SkillVersionId, UserId } from "@/shared";
+import type { EvalRunId, HarnessVersionId, SkillBranchId, SkillId, SkillVersionId, UserId } from "@/shared";
 
 /** A skill the user's skill competes against for selection (ARCHITECTURE §4). */
 export type Distractor = {
@@ -31,6 +31,14 @@ export type CaseResult = PromptCase & {
 
 export type EvalStatus = "queued" | "running" | "passed" | "failed";
 
+export type EvaluationComparisonMetadata = {
+  readonly evaluationSetHash: string;
+  readonly grader: "selection";
+  readonly graderVersion: 1;
+  readonly method: "competitive-selection";
+  readonly methodVersion: 1;
+};
+
 /**
  * The triggering eval's **evaluation result** — the run-record Artifact on the
  * seam (CONTEXT.md → Evaluation result). Ephemeral; renders to Insights (step
@@ -42,6 +50,8 @@ export type TriggeringResult = Artifact<"triggering-eval"> & {
   readonly attempts: number;
   readonly totalAttempts: number;
   readonly passedAttempts: number;
+  /** Absent only on legacy persisted runs, which are incomparable by design. */
+  readonly comparisonMetadata?: EvaluationComparisonMetadata;
   /** The model-written interpretation (CONTEXT.md → Insight); renders to Insights. */
   readonly insight: Insight;
 };
@@ -55,6 +65,11 @@ export type EvalRun = {
   readonly status: EvalStatus;
   readonly result: TriggeringResult;
   readonly createdAt: Date;
+};
+
+export type ComparableEvalRun = EvalRun & {
+  /** Resolved from the persisted skill version, never request-time state. */
+  readonly branchId: SkillBranchId | null;
 };
 
 // --- Admin aggregate read (harness improvement loop, ARCHITECTURE §9) -------

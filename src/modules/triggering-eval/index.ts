@@ -30,6 +30,8 @@ export type {
   EvalRunAnalysisRecord,
   TriggeringResult,
   EvalRun,
+  ComparableEvalRun,
+  EvaluationComparisonMetadata,
   EvalStatus,
 } from "./triggering-eval.types";
 export { distractorLibrary } from "./distractor-library";

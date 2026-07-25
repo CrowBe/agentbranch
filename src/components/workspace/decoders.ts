@@ -204,7 +204,7 @@ export function latestLintSummary(detail: SkillDetail): SkillVersionLintSummary 
 
 export type RunHistory = {
   readonly testRuns: readonly { readonly status: string; readonly prompt: string }[];
-  readonly evalRuns: readonly { readonly status: string; readonly summary: string }[];
+  readonly evalRuns: readonly { readonly id: string; readonly status: string; readonly summary: string }[];
 };
 
 export function decodeRunHistory(body: unknown): RunHistory {
@@ -222,7 +222,12 @@ export function decodeRunHistory(body: unknown): RunHistory {
       };
     }),
     evalRuns: body.evalRuns.map((run) => {
-      if (!isRecord(run) || typeof run.status !== "string" || !isRecord(run.result)) {
+      if (
+        !isRecord(run) ||
+        typeof run.id !== "string" ||
+        typeof run.status !== "string" ||
+        !isRecord(run.result)
+      ) {
         throw new Error("History returned an unexpected response.");
       }
       const result = run.result;
@@ -230,7 +235,7 @@ export function decodeRunHistory(body: unknown): RunHistory {
         isRecord(result.insight) && typeof result.insight.summary === "string"
           ? result.insight.summary
           : "No summary stored.";
-      return { status: run.status, summary };
+      return { id: run.id, status: run.status, summary };
     }),
   };
 }
