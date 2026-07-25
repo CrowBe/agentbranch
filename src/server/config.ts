@@ -75,6 +75,8 @@ export const DEFAULT_ANTHROPIC_CLASSIFY_MODEL = "claude-haiku-4-5";
 export const DEFAULT_ANTHROPIC_GENERATE_MODEL = "claude-sonnet-4-6";
 export const DEFAULT_NOUS_MODEL = "deepseek/deepseek-v4-flash";
 export const DEFAULT_NOUS_BASE_URL = "https://inference-api.nousresearch.com/v1";
+export const CLAUDE_CODE_CLI_MODEL = "cli:claude-code";
+export const CODEX_CLI_MODEL = "cli:codex";
 
 export function readConfig(): AppConfig {
   const databaseUrl = nonEmpty(process.env.DATABASE_URL);
@@ -127,6 +129,28 @@ export function readConfig(): AppConfig {
     runAgent: modelProvider === "nous" ? modelIds.runAgent : nousModel,
     streamAgent: modelProvider === "nous" ? modelIds.streamAgent : nousModel,
   };
+  const cliProfiles: ProviderProfile[] = [];
+  if (process.env.NODE_ENV !== "production") {
+    for (const provider of parseList(process.env.AGENTBRANCH_DEV_CLI_PROVIDERS)) {
+      if (provider === "claude-code") {
+        cliProfiles.push({
+              id: "claude-code-cli",
+              label: "Claude Code CLI",
+              kind: "claude-code-cli",
+              structuredOutputs: "json-schema",
+              modelIds: allModelIds(CLAUDE_CODE_CLI_MODEL),
+        });
+      } else if (provider === "codex") {
+        cliProfiles.push({
+              id: "codex-cli",
+              label: "Codex CLI",
+              kind: "codex-cli",
+              structuredOutputs: "json-schema",
+              modelIds: allModelIds(CODEX_CLI_MODEL),
+        });
+      }
+    }
+  }
   const providerRegistry: readonly ProviderProfile[] = [
     {
       id: "anthropic",
@@ -142,6 +166,7 @@ export function readConfig(): AppConfig {
       structuredOutputs: nousStructuredOutputs,
       modelIds: nousModelIds,
     },
+    ...cliProfiles,
   ];
   const serverKeys = {
     anthropic: { apiKey: anthropicApiKey },
@@ -175,6 +200,16 @@ export function readConfig(): AppConfig {
       hasAuth: clerkConfigured,
       hasTapSync: tapSyncToken !== undefined,
     },
+  };
+}
+
+function allModelIds(modelId: string): PrimitiveModelIds {
+  return {
+    default: modelId,
+    classify: modelId,
+    generate: modelId,
+    runAgent: modelId,
+    streamAgent: modelId,
   };
 }
 

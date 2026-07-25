@@ -15,7 +15,11 @@ import type { Result, DomainError } from "@/shared";
  */
 
 /** How a provider's `LanguageModel` is constructed by infra (AI-SDK provider seam). */
-export type ProviderKind = "anthropic" | "openai-compatible";
+export type ProviderKind =
+  | "anthropic"
+  | "openai-compatible"
+  | "claude-code-cli"
+  | "codex-cli";
 
 /** The structured-output mode a provider reliably supports. */
 export type StructuredOutputSupport = "json-schema" | "json" | "none";
@@ -74,6 +78,8 @@ export type ProviderStatus = {
   readonly hasServerKey: boolean;
   /** A bring-your-own key has been supplied at runtime for this provider. */
   readonly hasByoKey: boolean;
+  /** Honest readiness copy for key-less CLI providers. */
+  readonly readiness: "server-key" | "byo-key" | "cli-detected" | "unavailable";
   /** Resolvable right now — a server or bring-your-own key is present. */
   readonly ready: boolean;
 };
@@ -86,7 +92,8 @@ export type RouterSnapshot = {
 
 /** The model resolved for one gateway call, plus the facts the gateway needs. */
 export type ResolvedModel = {
-  readonly model: LanguageModel;
+  /** Present only for AI-SDK providers; CLI adapters must not use it. */
+  readonly model?: LanguageModel;
   readonly providerId: ProviderId;
   readonly kind: ProviderKind;
   readonly structuredOutputs: StructuredOutputSupport;

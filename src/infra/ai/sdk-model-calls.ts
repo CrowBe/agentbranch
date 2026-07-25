@@ -100,7 +100,7 @@ export function createSdkModelCalls(): RawModelCalls {
     ): Promise<Result<RawCallResult<AgentTurn>, DomainError>> {
       try {
         const result = await generateText({
-          model: resolved.model,
+          model: resolved.model!,
           maxOutputTokens: outputLimitFor(resolved, "runAgent"),
           ...effortFor(resolved)?.medium,
           system: toSdkSystem(input.system),
@@ -124,7 +124,7 @@ export function createSdkModelCalls(): RawModelCalls {
       async function* parts(): AsyncGenerator<RawAgentStreamPart> {
         try {
           result = streamText({
-            model: resolved.model,
+            model: resolved.model!,
             maxOutputTokens: outputLimitFor(resolved, "streamAgent"),
             system: toSdkSystem(input.system),
             messages: input.messages.map(toSdkMessage),
@@ -219,7 +219,7 @@ async function generateStructured<T>(
   if (resolved.structuredOutputs === "json-schema") {
     try {
       const { object, usage } = await generateObject({
-        model: resolved.model,
+        model: resolved.model!,
         maxOutputTokens: input.maxOutputTokens,
         ...(input.system === undefined ? {} : effortFor(resolved)?.low),
         schema: input.schema,
@@ -237,7 +237,7 @@ async function generateStructured<T>(
 
   try {
     const result = await generateText({
-      model: resolved.model,
+      model: resolved.model!,
       maxOutputTokens: input.maxOutputTokens,
       ...(input.system === undefined ? {} : effortFor(resolved)?.low),
       system: input.system,

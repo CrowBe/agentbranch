@@ -47,6 +47,8 @@ import { createPrismaEquipmentRepository } from "@/infra/prisma/equipment.prisma
 import { createUserProvisioningAuth } from "@/infra/prisma/user-provisioning-auth";
 import { createModelRouter } from "@/infra/ai/model-router";
 import { createSdkModelCalls } from "@/infra/ai/sdk-model-calls";
+import { createDispatchingModelCalls } from "@/infra/ai/dispatching-model-calls";
+import { execFileSync } from "node:child_process";
 import { createClerkAuth } from "@/infra/clerk/clerk-auth";
 import { createStubAuth } from "@/infra/clerk/stub-auth";
 import { createGithubSkillImportFetcher } from "@/infra/github/skill-import-fetcher";
@@ -109,6 +111,7 @@ export function getContainer(): AppContainer {
     profiles: config.providerRegistry,
     serverKeys: config.serverKeys,
     defaultSelection: config.defaultSelection,
+    cliAvailable: cachedCliProbe(),
   });
   const usage = prisma ? createPrismaUsageRepository(prisma) : createMemoryUsageRepository();
   const requestRateLimiter = prisma
@@ -122,7 +125,7 @@ export function getContainer(): AppContainer {
   // (CONTEXT.md → Model gateway) — no separate offline stub needed.
   const modelGateway: ModelGateway = createModelGateway({
     router: modelRouter,
-    calls: createSdkModelCalls(),
+    calls: createDispatchingModelCalls({ sdk: createSdkModelCalls() }),
     usage,
     requestRateLimiter,
   });
@@ -190,4 +193,21 @@ export function getContainer(): AppContainer {
     skillImportFetcher: createGithubSkillImportFetcher(),
   };
   return cached;
+}
+
+function cachedCliProbe(): (kind: "claude-code-cli" | "codex-cli") => boolean {
+  const results = new Map<string, boolean>();
+  return (kind) => {
+    const binary = kind === "claude-code-cli" ? "claude" : "codex";
+    const cachedResult = results.get(binary);
+    if (cachedResult !== undefined) return cachedResult;
+    try {
+      execFileSync("which", [binary], { stdio: "ignore" });
+      results.set(binary, true);
+      return true;
+    } catch {
+      results.set(binary, false);
+      return false;
+    }
+  };
 }

@@ -185,8 +185,8 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **skill-import** | `SkillImportFetcher`, `SkillImportFetchError` | `SkillImportFetcher` | port |
 | **portability** | `portabilityCapability`, `runCrossRuntimeValidation`, runtime-target/result types | — | real cross-runtime validation engine |
 | **build-loop** | `runBuildLoop`, `buildTools`, `BuildToolName`, `BuildLoopEvent`, `formatTestRunFeedback`, `formatTriggeringEvalFeedback`, `runResponseSchemaLoop`, `responseSchemaTools`, `RESPONSE_SCHEMA_AUTHORING_PROMPT`, `formatResponseSchemaLintFeedback` | — (consumes `ModelGateway`) | real |
-| **model-gateway** | `ModelGateway` (`classify`/`runAgent`/`streamAgent`/`generate`), `createModelGateway` (the accounting shell: atomic quota reserve/reconcile, request rate, byte budget, resolved-model pricing), `AccountingTag`, `GatewayTool`, `ModelProvider` | `RawModelCalls` (unmetered per-primitive model calls), `ModelProvider` | real |
-| **model-router** | `ModelRouter` (`resolve`/`snapshot`/`setActive`/`setCredential`/`clearCredential`), `ProviderProfile`, `ModelSelection`, `RouterSnapshot`, selection helpers | `ModelRouter` | real |
+| **model-gateway** | `ModelGateway` (`classify`/`runAgent`/`streamAgent`/`generate`), `createModelGateway` (the accounting shell: atomic quota reserve/reconcile, request rate, byte budget, resolved-model pricing), `AccountingTag`, `GatewayTool`, `ModelProvider` | `RawModelCalls` (unmetered per-primitive model calls, dispatched by resolved provider kind), `ModelProvider` | real |
+| **model-router** | `ModelRouter` (`resolve`/`snapshot`/`setActive`/`setCredential`/`clearCredential`), `ProviderProfile` (API and dev-gated CLI kinds), `ModelSelection`, `RouterSnapshot`, selection helpers | `ModelRouter` | real |
 | **usage** | `checkQuota`, `maximumTurnCost`, `pricesForModel`, `costOfTurn`, `quotaRemainingMicros`, `formatQuotaMicros`, quota/price types | `UsageRepository` (`reserve`/`release`/`reconcile`) | real; Prisma reconciliation also writes an append-only price-keyed charge |
 | **harness-version** | `currentHarnessManifest`, `hashHarnessManifest`, manifest/version types | `HarnessVersionRepository` | real |
 | **auth** | `AuthPort`, `AuthIdentity` | `AuthPort` | port |
@@ -254,6 +254,7 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
 | `prisma/user-provisioning-auth.ts` | `AuthPort` | wraps Clerk auth, provisions the `users` row on first sight |
 | `ai/sdk-model-calls.ts` | `RawModelCalls` | SDK translation only: message/tool mapping, stream-part mapping, token-usage shape reading, provider cap-error detection. Admission + recording live above it, in the model-gateway module's accounting shell (`createModelGateway`), so policy holds for every adapter by construction |
 | `ai/model-router.ts` | `ModelRouter` | the provider/model selection authority: builds providers from the registry + server-pool keys, holds the runtime active selection + bring-your-own overrides (process-local), and resolves per primitive. Secret-free snapshot |
+| `ai/dispatching-model-calls.ts` | `RawModelCalls` | kind-aware raw-call dispatcher: SDK providers use the AI-SDK adapter; dev CLI kinds use their registered CLI adapter slot |
 | `ai/anthropic-provider.ts` | `ModelProvider` | Claude via `@ai-sdk/anthropic`; `model: null` when no key |
 | `ai/nous-provider.ts` | `ModelProvider` | Nous Portal via `@ai-sdk/openai-compatible`; `model: null` when no key |
 | `ai/stub-provider.ts` | `ModelProvider` | always `model: null` |

@@ -153,6 +153,8 @@ function ProviderCard({
     setLastActiveModel(activeModel);
     setModel(activeModel);
   }
+  const isCliProvider =
+    provider.kind === "claude-code-cli" || provider.kind === "codex-cli";
 
   return (
     <section
@@ -173,63 +175,77 @@ function ProviderCard({
           <span className="text-body-md font-medium">{provider.label}</span>
         </label>
         <div className="flex items-center gap-1.5">
-          {provider.ready ? <Pill tone="success">ready</Pill> : <Pill tone="neutral">no key</Pill>}
+          {provider.readiness === "cli-detected" ? (
+            <Pill tone="success">CLI detected</Pill>
+          ) : provider.ready ? (
+            <Pill tone="success">ready</Pill>
+          ) : (
+            <Pill tone="neutral">
+              {isCliProvider ? "CLI not detected" : "no key"}
+            </Pill>
+          )}
           {provider.hasServerKey && <Pill tone="neutral">server key</Pill>}
           {provider.hasByoKey && <Pill tone="warn">your key</Pill>}
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-end gap-2">
-        <label className="flex flex-1 flex-col gap-1">
-          <span className="text-label text-on-surface-variant">Default model</span>
-          <input
-            type="text"
-            value={model}
-            disabled={busy}
-            onChange={(event) => setModel(event.target.value)}
-            className="rounded-[var(--radius-sm)] border border-outline-variant bg-surface px-2.5 py-1.5 font-mono text-label"
-          />
-        </label>
-        <Button
-          variant="secondary"
-          disabled={busy || model.trim().length === 0 || (active && model === activeModel)}
-          onClick={() => onSelect({ default: model.trim() })}
-        >
-          {active ? "Apply model" : "Use this"}
-        </Button>
-      </div>
+      {!isCliProvider && (
+        <>
+          <div className="mt-3 flex flex-wrap items-end gap-2">
+            <label className="flex flex-1 flex-col gap-1">
+              <span className="text-label text-on-surface-variant">Default model</span>
+              <input
+                type="text"
+                value={model}
+                disabled={busy}
+                onChange={(event) => setModel(event.target.value)}
+                className="rounded-[var(--radius-sm)] border border-outline-variant bg-surface px-2.5 py-1.5 font-mono text-label"
+              />
+            </label>
+            <Button
+              variant="secondary"
+              disabled={busy || model.trim().length === 0 || (active && model === activeModel)}
+              onClick={() => onSelect({ default: model.trim() })}
+            >
+              {active ? "Apply model" : "Use this"}
+            </Button>
+          </div>
 
-      <div className="mt-3 flex flex-wrap items-end gap-2">
-        <label className="flex flex-1 flex-col gap-1">
-          <span className="text-label text-on-surface-variant">
-            Your API key {provider.hasByoKey && "(stored — replace or clear)"}
-          </span>
-          <input
-            type="password"
-            value={apiKey}
-            autoComplete="off"
-            placeholder={provider.hasServerKey ? "Override the server key" : "Connect your own key"}
-            disabled={busy}
-            onChange={(event) => setApiKey(event.target.value)}
-            className="rounded-[var(--radius-sm)] border border-outline-variant bg-surface px-2.5 py-1.5 font-mono text-label"
-          />
-        </label>
-        <Button
-          variant="secondary"
-          disabled={busy || apiKey.trim().length === 0}
-          onClick={() => {
-            onSaveKey(apiKey.trim());
-            setApiKey("");
-          }}
-        >
-          Save key
-        </Button>
-        {provider.hasByoKey && (
-          <Button variant="secondary" disabled={busy} onClick={onClearKey}>
-            Clear
-          </Button>
-        )}
-      </div>
+          <div className="mt-3 flex flex-wrap items-end gap-2">
+            <label className="flex flex-1 flex-col gap-1">
+              <span className="text-label text-on-surface-variant">
+                Your API key {provider.hasByoKey && "(stored — replace or clear)"}
+              </span>
+              <input
+                type="password"
+                value={apiKey}
+                autoComplete="off"
+                placeholder={
+                  provider.hasServerKey ? "Override the server key" : "Connect your own key"
+                }
+                disabled={busy}
+                onChange={(event) => setApiKey(event.target.value)}
+                className="rounded-[var(--radius-sm)] border border-outline-variant bg-surface px-2.5 py-1.5 font-mono text-label"
+              />
+            </label>
+            <Button
+              variant="secondary"
+              disabled={busy || apiKey.trim().length === 0}
+              onClick={() => {
+                onSaveKey(apiKey.trim());
+                setApiKey("");
+              }}
+            >
+              Save key
+            </Button>
+            {provider.hasByoKey && (
+              <Button variant="secondary" disabled={busy} onClick={onClearKey}>
+                Clear
+              </Button>
+            )}
+          </div>
+        </>
+      )}
     </section>
   );
 }

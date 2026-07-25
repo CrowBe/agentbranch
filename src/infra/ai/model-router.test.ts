@@ -40,6 +40,35 @@ function router(serverKeys: Partial<Record<ProviderId, ServerKey>> = {}) {
 }
 
 describe("createModelRouter — resolution", () => {
+  it("resolves a detected CLI provider without an API key", () => {
+    const cliProfile: ProviderProfile = {
+      id: "codex-cli",
+      label: "Codex CLI",
+      kind: "codex-cli",
+      structuredOutputs: "json-schema",
+      modelIds: {
+        default: "cli:codex",
+        classify: "cli:codex",
+        generate: "cli:codex",
+        runAgent: "cli:codex",
+        streamAgent: "cli:codex",
+      },
+    };
+    const r = createModelRouter({
+      profiles: [cliProfile],
+      serverKeys: {},
+      cliAvailable: () => true,
+    });
+
+    expect(r.snapshot().providers[0]?.readiness).toBe("cli-detected");
+    const resolved = r.resolve("classify");
+    expect(isOk(resolved)).toBe(true);
+    if (isOk(resolved)) {
+      expect(resolved.value.kind).toBe("codex-cli");
+      expect(resolved.value.model).toBeUndefined();
+    }
+  });
+
   it("fails model_unavailable when the active provider has no key", () => {
     const r = router();
     expect(r.hasModel()).toBe(false);

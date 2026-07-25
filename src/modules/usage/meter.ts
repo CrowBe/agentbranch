@@ -31,6 +31,8 @@ export const TOKEN_PRICES_MICROS: ModelTokenPrices = {
 } as const;
 
 const MODEL_PRICE_TABLE: readonly { readonly matches: RegExp; readonly prices: ModelTokenPrices }[] = [
+  { matches: /^cli:claude-code$/i, prices: { key: "cli:claude-code", inputPerToken: 0, outputPerToken: 0, cacheReadPerToken: 0, cacheCreationPerToken: 0 } },
+  { matches: /^cli:codex$/i, prices: { key: "cli:codex", inputPerToken: 0, outputPerToken: 0, cacheReadPerToken: 0, cacheCreationPerToken: 0 } },
   { matches: /claude-haiku/i, prices: { key: "anthropic:haiku", inputPerToken: 1, outputPerToken: 5, cacheReadPerToken: 0.1, cacheCreationPerToken: 1.25 } },
   { matches: /claude-sonnet/i, prices: TOKEN_PRICES_MICROS },
   { matches: /claude-opus/i, prices: { key: "anthropic:opus", inputPerToken: 5, outputPerToken: 25, cacheReadPerToken: 0.5, cacheCreationPerToken: 6.25 } },
