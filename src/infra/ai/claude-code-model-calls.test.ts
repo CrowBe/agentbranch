@@ -79,6 +79,8 @@ describe("Claude Code model calls", () => {
     });
     expect(captured?.options?.model).toBeUndefined();
     expect(captured?.options?.tools).toEqual([]);
+    expect(captured?.options?.settingSources).toEqual([]);
+    expect(captured?.options?.cwd).toBe("/tmp");
     expect(captured?.options?.outputFormat).toMatchObject({ type: "json_schema" });
   });
 
@@ -155,17 +157,88 @@ describe("Claude Code model calls", () => {
 
     expect(captured?.options?.tools).toEqual([]);
     expect(captured?.options?.strictMcpConfig).toBe(true);
+    expect(captured?.options?.settingSources).toEqual([]);
+    expect(captured?.options?.cwd).toBe("/tmp");
     expect(captured?.options?.allowedTools).toEqual(["mcp__gateway__echo"]);
     const server = captured?.options?.mcpServers?.gateway as unknown as {
-      instance: { _registeredTools: Record<string, { handler(args: unknown): Promise<unknown> }> };
+      instance: {
+        _registeredTools: Record<string, {
+          inputSchema: { safeParse(input: unknown): { success: boolean; data?: unknown } };
+          handler(args: unknown): Promise<unknown>;
+        }>;
+      };
     };
     const tool = server.instance._registeredTools.echo!;
+    const invalidInput = tool.inputSchema.safeParse({});
+    expect(invalidInput.success).toBe(false);
     const invalid = await tool.handler({});
     expect(invalid).toMatchObject({ isError: true });
     expect(handler).not.toHaveBeenCalled();
-    const valid = await tool.handler({ value: "hello" });
+    const normalized = tool.inputSchema.safeParse({ value: "hello" });
+    expect(normalized).toMatchObject({ success: true, data: { value: "hello" } });
+    const valid = await tool.handler(normalized.data);
     expect(valid).toMatchObject({ content: [{ text: "{\"echoed\":\"hello\"}" }] });
     expect(handler).toHaveBeenCalledWith({ value: "hello" });
+  });
+
+  it("preserves nested unknown fields through MCP normalization for domain validation", async () => {
+    const handler = vi.fn();
+    let captured: Parameters<ClaudeCodeQuery>[0] | undefined;
+    const calls = createClaudeCodeModelCalls({
+      query: fakeQuery([successResult()], (params) => { captured = params; }),
+    });
+    await calls.runAgent(resolved, {
+      system: "Use submit.",
+      messages: [{ role: "user", content: "Submit." }],
+      tools: [{
+        name: "submit",
+        description: "Submits a nested payload.",
+        parameters: {
+          type: "object",
+          properties: {
+            payload: {
+              type: "object",
+              properties: { value: { type: "string" } },
+              required: ["value"],
+              additionalProperties: false,
+            },
+          },
+          required: ["payload"],
+          additionalProperties: false,
+        },
+        handler,
+      }],
+    });
+    const server = captured?.options?.mcpServers?.gateway as unknown as {
+      instance: {
+        _registeredTools: Record<string, {
+          inputSchema: {
+            safeParse(input: unknown): { success: boolean; data?: Record<string, unknown> };
+          };
+          handler(args: unknown): Promise<unknown>;
+        }>;
+      };
+    };
+    const tool = server.instance._registeredTools.submit!;
+    const raw = {
+      payload: { value: "ok", nestedExtra: "must survive" },
+      topExtra: "must survive",
+    };
+    const normalized = tool.inputSchema.safeParse(raw);
+    expect(normalized).toMatchObject({ success: true, data: raw });
+    const result = await tool.handler(normalized.data);
+    expect(result).toMatchObject({
+      isError: true,
+      content: [{
+        text: expect.stringContaining("unexpected property `topExtra`"),
+      }],
+    });
+    expect(result).toMatchObject({
+      content: [{
+        text: expect.stringContaining("unexpected property `nestedExtra`"),
+      }],
+    });
+    expect(handler).not.toHaveBeenCalled();
   });
 
   it("maps partial text, tool events, finish, and usage for streams", async () => {

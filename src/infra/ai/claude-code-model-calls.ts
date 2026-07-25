@@ -1,11 +1,11 @@
-import {
+import type {
   createSdkMcpServer,
-  query as sdkQuery,
-  tool as sdkTool,
-  type Options as ClaudeOptions,
-  type Query,
-  type SDKMessage,
+  query,
+  tool,
+  Options as ClaudeOptions,
+  SDKMessage,
 } from "@anthropic-ai/claude-agent-sdk";
+import { tmpdir } from "node:os";
 import { z } from "zod";
 import {
   type AgentStep,
@@ -34,13 +34,20 @@ export type ClaudeCodeQuery = (params: {
   options?: ClaudeOptions;
 }) => AsyncIterable<SDKMessage> & { close(): void };
 
+type ClaudeCodeSdk = {
+  query: typeof query;
+  createSdkMcpServer: typeof createSdkMcpServer;
+  tool: typeof tool;
+};
+
 /** Claude Code subscription-backed RawModelCalls adapter. */
 export function createClaudeCodeModelCalls(deps: {
   query?: ClaudeCodeQuery;
+  loadSdk?: () => Promise<ClaudeCodeSdk>;
   timeoutMs?: number;
   concurrency?: number;
 } = {}): RawModelCalls {
-  const runQuery = deps.query ?? (sdkQuery as ClaudeCodeQuery);
+  const loadSdk = deps.loadSdk ?? defaultSdkLoader;
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const semaphore = createSemaphore(deps.concurrency ?? DEFAULT_CONCURRENCY);
 
@@ -53,6 +60,7 @@ export function createClaudeCodeModelCalls(deps: {
       try {
         const jsonSchema = z.toJSONSchema(schema) as Record<string, unknown>;
         delete jsonSchema.$schema;
+        const runQuery = deps.query ?? ((await loadSdk()).query as ClaudeCodeQuery);
         const collected = await collectQuery(runQuery, timeoutMs, {
           prompt,
           options: baseOptions(system, {
@@ -111,7 +119,13 @@ export function createClaudeCodeModelCalls(deps: {
     ): Promise<Result<RawCallResult<{ transcript: readonly AgentStep[] }>, DomainError>> {
       return semaphore(async () => {
         try {
-          const collected = await collectQuery(runQuery, timeoutMs, agentQuery(input, false));
+          const sdk = await loadSdk();
+          const runQuery = deps.query ?? (sdk.query as ClaudeCodeQuery);
+          const collected = await collectQuery(
+            runQuery,
+            timeoutMs,
+            agentQuery(input, false, undefined, sdk),
+          );
           if (collected.error) return err(modelUnavailable(collected.error));
           return ok({ value: { transcript: collected.transcript }, usage: collected.usage });
         } catch (cause) {
@@ -127,7 +141,9 @@ export function createClaudeCodeModelCalls(deps: {
         const toolNames = new Map<string, string>();
         try {
           const controller = new AbortController();
-          const query = runQuery(agentQuery(input, true, controller));
+          const sdk = await loadSdk();
+          const runQuery = deps.query ?? (sdk.query as ClaudeCodeQuery);
+          const query = runQuery(agentQuery(input, true, controller, sdk));
           const timer = setTimeout(() => controller.abort(), timeoutMs);
           try {
             for await (const message of query) {
@@ -167,6 +183,8 @@ function baseOptions(system: string, overrides: Partial<ClaudeOptions> = {}): Cl
     maxTurns: 8,
     permissionMode: "dontAsk",
     persistSession: false,
+    settingSources: [],
+    cwd: tmpdir(),
     strictMcpConfig: true,
     ...overrides,
   };
@@ -176,11 +194,13 @@ function agentQuery(
   input: RawAgentInput,
   streaming: boolean,
   abortController?: AbortController,
+  sdk?: ClaudeCodeSdk,
 ): { prompt: string; options: ClaudeOptions } {
-  const gateway = createSdkMcpServer({
+  if (!sdk) throw new Error("Claude Code SDK is unavailable.");
+  const gateway = sdk.createSdkMcpServer({
     name: "gateway",
     version: "1.0.0",
-    tools: input.tools.map(toSdkTool),
+    tools: input.tools.map((gatewayTool) => toSdkTool(gatewayTool, sdk)),
   });
   return {
     prompt: conversationPrompt(input.messages),
@@ -193,9 +213,9 @@ function agentQuery(
   };
 }
 
-function toSdkTool(gatewayTool: GatewayTool) {
+function toSdkTool(gatewayTool: GatewayTool, sdk: ClaudeCodeSdk) {
   const shape = jsonSchemaShape(gatewayTool.parameters);
-  return sdkTool(gatewayTool.name, gatewayTool.description, shape, async (args) => {
+  const definition = sdk.tool(gatewayTool.name, gatewayTool.description, shape, async (args) => {
     const issues = validateAgainstSchema(args, gatewayTool.parameters);
     if (issues.length > 0) {
       return {
@@ -208,6 +228,13 @@ function toSdkTool(gatewayTool: GatewayTool) {
       content: [{ type: "text" as const, text: JSON.stringify(output ?? null) }],
     };
   });
+  // The SDK helper normally wraps a raw shape in a stripping Zod object before
+  // invoking the handler. Preserve unknown fields so the domain validator,
+  // rather than SDK normalization, enforces additionalProperties recursively.
+  return {
+    ...definition,
+    inputSchema: z.looseObject(shape),
+  } as unknown as typeof definition;
 }
 
 function jsonSchemaShape(schema: Readonly<Record<string, unknown>>): Record<string, z.ZodType> {
@@ -246,7 +273,7 @@ function zodFromJsonSchema(schema: Readonly<Record<string, unknown>>): z.ZodType
     case "array":
       return z.array(isRecord(schema.items) ? zodFromJsonSchema(schema.items) : z.unknown());
     case "object":
-      return z.object(jsonSchemaShape(schema));
+      return z.looseObject(jsonSchemaShape(schema));
     default:
       return z.unknown();
   }
@@ -444,4 +471,8 @@ function createSemaphore(limit: number) {
     }
   };
   return Object.assign(run, { acquire });
+}
+
+async function defaultSdkLoader(): Promise<ClaudeCodeSdk> {
+  return import("@anthropic-ai/claude-agent-sdk");
 }
