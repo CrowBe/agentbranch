@@ -198,6 +198,14 @@ describe("Prisma eval run repository", () => {
       ...value,
       cases: [{ ...value.cases[0], passedAttempts: 2 }],
     })],
+    ["case risk", (value: ReturnType<typeof legacyResult>) => ({
+      ...value,
+      cases: [{ ...value.cases[0], risk: "other-risk" }],
+    })],
+    ["case outcome", (value: ReturnType<typeof legacyResult>) => ({
+      ...value,
+      cases: [{ ...value.cases[0], actual: "silent" as const }],
+    })],
   ])("rejects corrupt supplied legacy %s", async (_, corrupt) => {
     const result = await repositoryResult(corrupt(legacyResult()));
     expect(isErr(result) && result.error.tag).toBe("persistence_failed");

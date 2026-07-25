@@ -286,8 +286,10 @@ function normalizeLegacySelection(value: Readonly<Record<string, unknown>>): Cas
     typeof value.prompt !== "string" ||
     (value.expected !== "fire" && value.expected !== "silent") ||
     (value.actual !== "fire" && value.actual !== "silent") ||
+    (value.risk !== undefined && value.risk !== "trigger-hijack") ||
     typeof value.pass !== "boolean" ||
-    typeof value.rationale !== "string"
+    typeof value.rationale !== "string" ||
+    value.pass !== (value.actual === value.expected)
   ) {
     throw new TypeError("Persisted legacy selection case is malformed.");
   }
