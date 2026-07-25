@@ -144,6 +144,10 @@ _Avoid_: tool definition (the runtime artifact, not the reviewed contract), API 
 The third equipment primitive — a markdown file with YAML frontmatter (`name`, `description`, optional `tools` and `model`) plus a system-prompt body. Its description controls when a specialist should receive delegated work; its body defines the role, workflow, and boundaries. Analysis only: it does not run or route subagents.
 _Avoid_: agent profile, persona, bot, agent file
 
+**Concept**:
+A small, repo-tracked explanation of one product idea. It states the deciding distinction and cites each claim; it is analysis content, so reading it is offline and spends no tokens.
+_Avoid_: article, guide, lesson, generated explanation
+
 **Bundle**:
 The test run's composed input — the Skill plus selected Tool contracts and the Response schemas they reference. The smallest useful composition (§9.2): does the Skill call the Tool correctly and produce valid output?
 _Avoid_: package, kit, workspace (all name other things), input set
