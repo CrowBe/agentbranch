@@ -136,7 +136,12 @@ function insightPrompt(
           : `tool-result: ${s.tool} → ${clampInsightJson(s.output, INSIGHT_TRANSCRIPT_TEXT_MAX)}`,
     )
     .join("\n");
-  const base = `Skill "${name}" was test-run on: "${clampText(prompt, INSIGHT_TRANSCRIPT_TEXT_MAX)}".\n\nWhat happened:\n${steps}`;
+  const repeatedMocks = repeatedStaticMockResults(transcript);
+  const harnessNote =
+    repeatedMocks.length > 0
+      ? `\n\nHarness note: ${repeatedMocks.join(", ")} returned the same deterministic mock result on repeated calls. This is a limitation of the static test world, not skill behaviour; do not count duplicate mock identifiers or values against the skill.`
+      : "";
+  const base = `Skill "${name}" was test-run on: "${clampText(prompt, INSIGHT_TRANSCRIPT_TEXT_MAX)}".\n\nWhat happened:\n${steps}${harnessNote}`;
   if (contractChecks.length === 0) return base;
 
   const issues = contractCheckIssues(contractChecks);
@@ -274,6 +279,19 @@ function clampInsightText(text: string, max: number): string {
   const head = Math.ceil(available / 2);
   const tail = Math.floor(available / 2);
   return `${text.slice(0, head)}${marker}${text.slice(-tail)}`;
+}
+
+function repeatedStaticMockResults(transcript: readonly TranscriptStep[]): string[] {
+  const results = new Map<string, string[]>();
+  for (const step of transcript) {
+    if (step.kind !== "tool-result") continue;
+    const values = results.get(step.tool) ?? [];
+    values.push(JSON.stringify(step.output) ?? "undefined");
+    results.set(step.tool, values);
+  }
+  return [...results.entries()]
+    .filter(([, values]) => values.length > 1 && new Set(values).size === 1)
+    .map(([tool]) => `\`${tool}\``);
 }
 
 function clampText(text: string, max: number): string {
