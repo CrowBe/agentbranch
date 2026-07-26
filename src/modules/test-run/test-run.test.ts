@@ -172,6 +172,40 @@ describe("test run", () => {
     const insightPrompt = calls.generate.at(-1)?.prompt ?? "";
     expect(insightPrompt).not.toContain(longText);
     expect(insightPrompt).toContain(longText.slice(0, 120));
+    expect(insightPrompt).toContain(longText.slice(-120));
+    expect(insightPrompt).toContain("[… middle omitted for evaluator prompt …]");
+  });
+
+  it("keeps a required summary at the end of a long model step visible to the evaluator", async () => {
+    const calls: { generate: GenerateInput<unknown>[] } = { generate: [] };
+    const summary = "FINAL SUMMARY: escalate msg-1007 and draft replies for msg-1001 and msg-1005.";
+    const gateway: ModelGateway = {
+      ...fakeGateway(calls),
+      async runAgent() {
+        return ok({
+          transcript: [
+            {
+              kind: "model",
+              text: `${"Detailed message-by-message triage. ".repeat(80)}\\n\\n${summary}`,
+            },
+          ],
+        });
+      },
+    };
+
+    unwrap(
+      await executeSkill({
+        skill: fixtureSkill("s4"),
+        gateway,
+        tag: TAG,
+        scenario: { prompt: "Triage every unread message and finish with a summary.", seedData: {} },
+        registry: defaultMockToolRegistry(),
+      }),
+    );
+
+    const insightPrompt = calls.generate.at(-1)?.prompt ?? "";
+    expect(insightPrompt).toContain(summary);
+    expect(insightPrompt).toContain("[… middle omitted for evaluator prompt …]");
   });
 });
 

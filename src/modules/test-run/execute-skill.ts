@@ -130,10 +130,10 @@ function insightPrompt(
   const steps = transcript
     .map((s) =>
       s.kind === "model"
-        ? `model: ${clampText(s.text, INSIGHT_TRANSCRIPT_TEXT_MAX)}`
+        ? `model: ${clampInsightText(s.text, INSIGHT_TRANSCRIPT_TEXT_MAX)}`
         : s.kind === "tool-call"
-          ? `tool-call: ${s.tool}(${clampJson(s.input, INSIGHT_TRANSCRIPT_TEXT_MAX)})`
-          : `tool-result: ${s.tool} → ${clampJson(s.output, INSIGHT_TRANSCRIPT_TEXT_MAX)}`,
+          ? `tool-call: ${s.tool}(${clampInsightJson(s.input, INSIGHT_TRANSCRIPT_TEXT_MAX)})`
+          : `tool-result: ${s.tool} → ${clampInsightJson(s.output, INSIGHT_TRANSCRIPT_TEXT_MAX)}`,
     )
     .join("\n");
   const base = `Skill "${name}" was test-run on: "${clampText(prompt, INSIGHT_TRANSCRIPT_TEXT_MAX)}".\n\nWhat happened:\n${steps}`;
@@ -263,8 +263,17 @@ function fallbackGeneratedWorld(): GeneratedWorld {
   };
 }
 
-function clampJson(value: unknown, max: number): string {
-  return clampText(JSON.stringify(value) ?? "undefined", max);
+function clampInsightJson(value: unknown, max: number): string {
+  return clampInsightText(JSON.stringify(value) ?? "undefined", max);
+}
+
+function clampInsightText(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const marker = "\n[… middle omitted for evaluator prompt …]\n";
+  const available = max - marker.length;
+  const head = Math.ceil(available / 2);
+  const tail = Math.floor(available / 2);
+  return `${text.slice(0, head)}${marker}${text.slice(-tail)}`;
 }
 
 function clampText(text: string, max: number): string {
