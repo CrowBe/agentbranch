@@ -10,6 +10,8 @@ export type UserId = Brand<string, "UserId">;
 export type SkillId = Brand<string, "SkillId">;
 export type SkillBranchId = Brand<string, "SkillBranchId">;
 export type SkillVersionId = Brand<string, "SkillVersionId">;
+export type AgentConfigurationId = Brand<string, "AgentConfigurationId">;
+export type AgentConfigurationVersionId = Brand<string, "AgentConfigurationVersionId">;
 export type PublicationId = Brand<string, "PublicationId">;
 export type HarnessVersionId = Brand<string, "HarnessVersionId">;
 export type TestRunId = Brand<string, "TestRunId">;
@@ -23,6 +25,10 @@ export const SkillBranchId = (value: string): SkillBranchId =>
   value as SkillBranchId;
 export const SkillVersionId = (value: string): SkillVersionId =>
   value as SkillVersionId;
+export const AgentConfigurationId = (value: string): AgentConfigurationId =>
+  value as AgentConfigurationId;
+export const AgentConfigurationVersionId = (value: string): AgentConfigurationVersionId =>
+  value as AgentConfigurationVersionId;
 export const PublicationId = (value: string): PublicationId =>
   value as PublicationId;
 export const HarnessVersionId = (value: string): HarnessVersionId =>
