@@ -260,6 +260,41 @@ describe("model gateway — accounting guard", () => {
     expect(calls.classify).not.toHaveBeenCalled();
   });
 
+  it("admits and accounts a configured priced Nous model", async () => {
+    const calls = fakeCalls({
+      classify: vi.fn(async () => ok(rawResult(classification, usageOf(100, 10)))),
+    });
+    const usage = createMemoryUsageRepository();
+    const router = stubRouter({
+      resolve: () =>
+        ok({
+          ...resolved(),
+          providerId: "nous",
+          kind: "openai-compatible",
+          modelId: "openai/gpt-5.6-luna",
+          structuredOutputs: "json",
+        }),
+    });
+
+    const result = await gatewayWith({ calls, router, usage }).classify({
+      prompt: "x",
+      choices: ["a"],
+      tag: account("priced-nous"),
+    });
+
+    expect(isErr(result)).toBe(false);
+    expect(calls.classify).toHaveBeenCalledOnce();
+    const snapshot = await usage.get(UserId("priced-nous"));
+    expect(isErr(snapshot)).toBe(false);
+    if (!isErr(snapshot)) {
+      expect(snapshot.value).toMatchObject({
+        tokensUsed: 110,
+        turnsUsed: 1,
+        costMicrosUsed: 128,
+      });
+    }
+  });
+
   it("does not quota-gate platform calls (the platform owns that cost)", async () => {
     const usage = createMemoryUsageRepository();
     const userId = "capped";

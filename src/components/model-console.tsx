@@ -175,7 +175,9 @@ function ProviderCard({
           <span className="text-body-md font-medium">{provider.label}</span>
         </label>
         <div className="flex items-center gap-1.5">
-          {provider.readiness === "cli-detected" ? (
+          {provider.readiness === "unpriced" ? (
+            <Pill tone="warn">model unpriced</Pill>
+          ) : provider.readiness === "cli-detected" ? (
             <Pill tone="success">CLI detected</Pill>
           ) : provider.ready ? (
             <Pill tone="success">ready</Pill>
