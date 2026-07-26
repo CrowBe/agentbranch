@@ -12,5 +12,12 @@ describe.skipIf(!databaseUrl)("AgentConfigurationRepository Prisma contract", ()
     prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl! }) });
   });
   afterAll(async () => prisma.$disconnect());
-  agentConfigurationRepositoryContract(() => createPrismaAgentConfigurationRepository(prisma));
+  agentConfigurationRepositoryContract(
+    () => createPrismaAgentConfigurationRepository(prisma),
+    async (userId) => {
+      await prisma.user.create({
+        data: { id: userId, email: `${userId}@example.test` },
+      });
+    },
+  );
 });

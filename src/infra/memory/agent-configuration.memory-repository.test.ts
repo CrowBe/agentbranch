@@ -8,10 +8,12 @@ import { createMemoryAgentConfigurationRepository } from "./agent-configuration.
 
 export function agentConfigurationRepositoryContract(
   createRepository: () => Promise<AgentConfigurationRepository> | AgentConfigurationRepository,
+  prepareOwner: (userId: UserId) => Promise<void> | void = () => {},
 ) {
   it("preserves unknown files and promotes configuration-wide drafts", async () => {
     const repository = await createRepository();
     const userId = UserId(`config-owner-${crypto.randomUUID()}`);
+    await prepareOwner(userId);
     const source = makeAgentConfigurationSnapshot({
       files: [
         { path: "AGENTS.md", content: "Use the local skills." },

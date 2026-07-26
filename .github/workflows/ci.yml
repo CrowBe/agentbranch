@@ -9,8 +9,21 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     env:
-      # prisma generate / typecheck want the datasource URL present (no DB connection is made).
       DATABASE_URL: postgresql://user:pass@localhost:5432/agent_branch
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: pass
+          POSTGRES_DB: agent_branch
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U user -d agent_branch"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,6 +36,7 @@ jobs:
         # dependency graph that ships with the application.
         run: npm audit --omit=dev --audit-level=high
       - run: npm run db:generate
+      - run: npm run db:push
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
