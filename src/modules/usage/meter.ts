@@ -36,6 +36,10 @@ const MODEL_PRICE_TABLE: readonly { readonly matches: RegExp; readonly prices: M
   { matches: /claude-haiku/i, prices: { key: "anthropic:haiku", inputPerToken: 1, outputPerToken: 5, cacheReadPerToken: 0.1, cacheCreationPerToken: 1.25 } },
   { matches: /claude-sonnet/i, prices: TOKEN_PRICES_MICROS },
   { matches: /claude-opus/i, prices: { key: "anthropic:opus", inputPerToken: 5, outputPerToken: 25, cacheReadPerToken: 0.5, cacheCreationPerToken: 6.25 } },
+  // Nous Portal price observed 2026-07-26: $0.80/M input,
+  // $4.80/M output. Portal does not publish a separate cache rate for this
+  // OpenAI-compatible model, so cache buckets conservatively use input price.
+  { matches: /^openai\/gpt-5\.6-luna$/i, prices: { key: "nous:gpt-5.6-luna:2026-07-26", inputPerToken: 0.8, outputPerToken: 4.8, cacheReadPerToken: 0.8, cacheCreationPerToken: 0.8 } },
   { matches: /^deepseek\/deepseek-v4-flash$/i, prices: { key: "nous:deepseek-v4-flash:2026-07-19", inputPerToken: 0.098, outputPerToken: 0.196, cacheReadPerToken: 0.0196, cacheCreationPerToken: 0.098 } },
 ];
 

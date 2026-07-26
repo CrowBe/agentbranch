@@ -78,9 +78,9 @@ export type ProviderStatus = {
   readonly hasServerKey: boolean;
   /** A bring-your-own key has been supplied at runtime for this provider. */
   readonly hasByoKey: boolean;
-  /** Honest readiness copy for key-less CLI providers. */
-  readonly readiness: "server-key" | "byo-key" | "cli-detected" | "unavailable";
-  /** Resolvable right now — a server or bring-your-own key is present. */
+  /** Honest readiness copy, including accounting support for every routed model. */
+  readonly readiness: "server-key" | "byo-key" | "cli-detected" | "unpriced" | "unavailable";
+  /** Resolvable right now — credentials/runtime and quota prices are present. */
   readonly ready: boolean;
 };
 

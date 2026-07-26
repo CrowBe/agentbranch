@@ -22,11 +22,11 @@ const profiles: ProviderProfile[] = [
     kind: "openai-compatible",
     baseUrl: "https://example.test/v1",
     modelIds: {
-      default: "Hermes-4.3-36B",
-      classify: "Hermes-4.3-36B",
-      generate: "Hermes-4.3-36B",
-      runAgent: "Hermes-4.3-36B",
-      streamAgent: "Hermes-4.3-36B",
+      default: "deepseek/deepseek-v4-flash",
+      classify: "deepseek/deepseek-v4-flash",
+      generate: "deepseek/deepseek-v4-flash",
+      runAgent: "deepseek/deepseek-v4-flash",
+      streamAgent: "deepseek/deepseek-v4-flash",
     },
   },
 ];
@@ -77,6 +77,28 @@ describe("createModelRouter — resolution", () => {
     if (isErr(resolved)) expect(resolved.error.tag).toBe("model_unavailable");
   });
 
+  it("surfaces a configured unpriced model before a gateway call", () => {
+    const r = createModelRouter({
+      profiles,
+      serverKeys: { nous: { apiKey: "sk-n" } },
+      defaultSelection: {
+        providerId: "nous",
+        modelIds: { default: "custom/unpriced", generate: "custom/unpriced" },
+      },
+    });
+
+    expect(r.hasModel()).toBe(false);
+    expect(r.snapshot().providers.find(({ id }) => id === "nous")).toMatchObject({
+      readiness: "unpriced",
+      ready: false,
+    });
+    const resolved = r.resolve("generate");
+    expect(isErr(resolved)).toBe(true);
+    if (isErr(resolved)) {
+      expect(resolved.error.message).toContain('No quota price is configured for model "custom/unpriced".');
+    }
+  });
+
   it("resolves the active provider's per-primitive model from the server pool", () => {
     const r = router({ anthropic: { apiKey: "sk-server" } });
     expect(r.hasModel()).toBe(true);
@@ -106,7 +128,7 @@ describe("createModelRouter — selection", () => {
     expect(isOk(resolved)).toBe(true);
     if (isOk(resolved)) {
       expect(resolved.value.providerId).toBe("nous");
-      expect(resolved.value.modelId).toBe("Hermes-4.3-36B");
+      expect(resolved.value.modelId).toBe("deepseek/deepseek-v4-flash");
     }
   });
 

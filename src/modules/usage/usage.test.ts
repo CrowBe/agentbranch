@@ -40,6 +40,11 @@ describe("usage meter", () => {
     expect(pricesForModel("claude-haiku-4-5")?.inputPerToken).toBe(1);
     expect(pricesForModel("claude-sonnet-4-6")?.inputPerToken).toBe(3);
     expect(pricesForModel("claude-opus-4-8")?.outputPerToken).toBe(25);
+    expect(pricesForModel("openai/gpt-5.6-luna")).toMatchObject({
+      key: "nous:gpt-5.6-luna:2026-07-26",
+      inputPerToken: 0.8,
+      outputPerToken: 4.8,
+    });
     expect(pricesForModel("deepseek/deepseek-v4-flash")?.inputPerToken).toBe(0.098);
     expect(pricesForModel("cli:claude-code")).toMatchObject({ key: "cli:claude-code", inputPerToken: 0 });
     expect(pricesForModel("cli:codex")).toMatchObject({ key: "cli:codex", outputPerToken: 0 });

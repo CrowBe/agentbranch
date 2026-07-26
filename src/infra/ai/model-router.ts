@@ -15,6 +15,7 @@ import {
   type RouterSnapshot,
 } from "@/modules/model-router";
 import type { ModelProvider, ModelGatewayPrimitive } from "@/modules/model-gateway";
+import { pricesForModel } from "@/modules/usage";
 import { ok, err, domainError, isErr, type Result, type DomainError } from "@/shared";
 import { createAnthropicProvider } from "./anthropic-provider";
 import { createNousProvider } from "./nous-provider";
@@ -39,6 +40,7 @@ export function createModelRouter(deps: {
   serverKeys: Readonly<Partial<Record<ProviderId, ServerKey>>>;
   defaultSelection?: ModelSelection;
   cliAvailable?: (kind: "claude-code-cli" | "codex-cli") => boolean;
+  modelPriced?: (modelId: string) => boolean;
 }): ModelRouter {
   const { profiles, serverKeys } = deps;
   let active: ModelSelection = deps.defaultSelection ?? defaultSelection(profiles);
@@ -46,16 +48,25 @@ export function createModelRouter(deps: {
   // Cache built providers; keyed by provider + key-source + model ids so a
   // credential or model change rebuilds rather than serves a stale model.
   const cache = new Map<string, ModelProvider>();
+  const modelPriced = deps.modelPriced ?? ((modelId: string) => pricesForModel(modelId) !== null);
 
   function serverKeyFor(id: ProviderId): ServerKey {
     return serverKeys[id] ?? {};
   }
 
-  function isReady(profile: ProviderProfile): boolean {
+  function hasRuntime(profile: ProviderProfile): boolean {
     if (profile.kind === "claude-code-cli" || profile.kind === "codex-cli") {
       return deps.cliAvailable?.(profile.kind) ?? false;
     }
     return Boolean(overrides.get(profile.id)?.apiKey ?? serverKeyFor(profile.id).apiKey);
+  }
+
+  function hasPricedModels(profile: ProviderProfile, selection = active): boolean {
+    return Object.values(effectiveModelIds(profile, selection)).every(modelPriced);
+  }
+
+  function isReady(profile: ProviderProfile): boolean {
+    return hasRuntime(profile) && hasPricedModels(profile);
   }
 
   function buildProvider(
@@ -111,7 +122,9 @@ export function createModelRouter(deps: {
     const hasServerKey = Boolean(serverKeyFor(profile.id).apiKey);
     const hasByoKey = overrides.has(profile.id);
     const cliReady =
-      (profile.kind === "claude-code-cli" || profile.kind === "codex-cli") && isReady(profile);
+      (profile.kind === "claude-code-cli" || profile.kind === "codex-cli") && hasRuntime(profile);
+    const hasPricing = hasPricedModels(profile);
+    const runtimeReady = cliReady || hasServerKey || hasByoKey;
     return {
       id: profile.id,
       label: profile.label,
@@ -120,14 +133,16 @@ export function createModelRouter(deps: {
       modelIds: effectiveModelIds(profile, active),
       hasServerKey,
       hasByoKey,
-      readiness: cliReady
-        ? "cli-detected"
-        : hasByoKey
-          ? "byo-key"
-          : hasServerKey
-            ? "server-key"
-            : "unavailable",
-      ready: cliReady || hasServerKey || hasByoKey,
+      readiness: runtimeReady && !hasPricing
+        ? "unpriced"
+        : cliReady
+          ? "cli-detected"
+          : hasByoKey
+            ? "byo-key"
+            : hasServerKey
+              ? "server-key"
+              : "unavailable",
+      ready: runtimeReady && hasPricing,
     };
   }
 
@@ -182,10 +197,13 @@ export function createModelRouter(deps: {
       }
       const override = overrides.get(profile.id);
       if (profile.kind === "claude-code-cli" || profile.kind === "codex-cli") {
-        if (!isReady(profile)) {
+        if (!hasRuntime(profile)) {
           return err(domainError("model_unavailable", `${profile.label} CLI was not detected.`));
         }
         const modelIds = effectiveModelIds(profile, requested.value);
+        if (!modelPriced(modelIds[primitive])) {
+          return err(domainError("model_unavailable", `No quota price is configured for model "${modelIds[primitive]}".`));
+        }
         return ok({
           providerId: profile.id,
           kind: profile.kind,
@@ -204,6 +222,9 @@ export function createModelRouter(deps: {
         );
       }
       const modelIds = effectiveModelIds(profile, requested.value, override);
+      if (!modelPriced(modelIds[primitive])) {
+        return err(domainError("model_unavailable", `No quota price is configured for model "${modelIds[primitive]}".`));
+      }
       const provider = providerFor(profile, override, modelIds);
       const model = provider.models?.[primitive] ?? provider.model;
       if (!model) {
