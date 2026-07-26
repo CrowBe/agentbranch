@@ -207,6 +207,34 @@ describe("test run", () => {
     expect(insightPrompt).toContain(summary);
     expect(insightPrompt).toContain("[… middle omitted for evaluator prompt …]");
   });
+
+  it("marks repeated static create results as a test-world artifact", async () => {
+    const calls: { generate: GenerateInput<unknown>[] } = { generate: [] };
+    const gateway: ModelGateway = {
+      ...fakeGateway(calls),
+      async runAgent({ tools }) {
+        const createDraft = tools[0];
+        if (!createDraft) throw new Error("expected a generated mock tool");
+        const first = await createDraft.handler({ messageId: "msg-1001" });
+        const second = await createDraft.handler({ messageId: "msg-1004" });
+        return ok({
+          transcript: [
+            { kind: "tool-call", tool: createDraft.name, input: { messageId: "msg-1001" } },
+            { kind: "tool-result", tool: createDraft.name, output: first },
+            { kind: "tool-call", tool: createDraft.name, input: { messageId: "msg-1004" } },
+            { kind: "tool-result", tool: createDraft.name, output: second },
+          ],
+        });
+      },
+    };
+
+    unwrap(await executeSkill({ skill: fixtureSkill("s5"), gateway, tag: TAG }));
+
+    const insightPrompt = calls.generate.at(-1)?.prompt ?? "";
+    expect(insightPrompt).toContain("returned the same deterministic mock result");
+    expect(insightPrompt).toContain("not skill behaviour");
+    expect(insightPrompt).toContain("do not count duplicate mock identifiers");
+  });
 });
 
 const INVOICE_SCHEMA_RAW = JSON.stringify({
