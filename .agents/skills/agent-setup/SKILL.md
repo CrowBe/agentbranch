@@ -50,6 +50,31 @@ Poll until healthy (first compile takes ~10s):
 curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/   # expect 200
 ```
 
+Choose and record one model posture before boot:
+
+- **CLI dev rung (preferred for live development checks):** if an authenticated
+  local CLI is available, set `AGENTBRANCH_DEV_CLI_PROVIDERS` to
+  `claude-code`, `codex`, or both. Claude Code covers all model primitives;
+  Codex covers classify/generate only. CLI calls are zero-priced and do not
+  move the quota chip.
+- **Keyed:** when no suitable CLI is available, use the explicitly configured
+  API provider. Model calls are live and spend quota.
+- **Offline:** when neither is available, leave model keys and the CLI opt-in
+  unset and assert the clean unavailable behavior below.
+
+CLI rungs are development-only and never register in production. Verify an
+enabled rung before E2E:
+
+```bash
+claude --version                            # or: codex --version
+CONFORMANCE_PROVIDER=claude-code-cli npm run test:conformance
+CONFORMANCE_PROVIDER=codex-cli npm run test:conformance
+```
+
+If conformance fails, check in order: the binary is on `PATH`, its login is
+current (`claude /login` or `codex login`), the matching opt-in value is set,
+and the dev server was restarted after the posture changed.
+
 Offline posture to expect once booted:
 
 - Persistence = in-memory (skills reset on every server restart).
@@ -69,6 +94,7 @@ adapter (flags in `src/server/config.ts`):
 |---|---|---|
 | `DATABASE_URL` | memory → Prisma/Postgres | `npm run db:push` (dev) or `db:migrate` |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` + `CLERK_SECRET_KEY` | stub → Clerk auth | sign-in becomes real; admin routes need the allowlist below |
+| `AGENTBRANCH_DEV_CLI_PROVIDERS` (`claude-code`, `codex`, or comma-separated) | enables detected local CLI providers in development | binary must be on `PATH` and logged in; live zero-priced inference with Claude full coverage and Codex classify/generate coverage |
 | `ANTHROPIC_API_KEY` (or `NOUS_API_KEY` + `AGENTBRANCH_MODEL_PROVIDER="nous"`) | no model → model router configured | build loop + evaluations go live and spend tokens |
 | `AGENTBRANCH_ADMIN_USER_IDS` / `AGENTBRANCH_ADMIN_EMAILS` | locks/unlocks the model console + admin routes when auth is on | empty list with auth on = locked (fail-safe) |
 | `CRON_SECRET` | unlocks `/api/cron/retention` | unset = route locked (fail-safe) |
