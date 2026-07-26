@@ -60,10 +60,25 @@ await page.goto("http://localhost:3000/");
    `precondition` says it is independent. Accounts cap at five skills —
    repeated full passes against one server session eventually hit
    `You're at your skill limit…`; restart the dev server for a clean session.
-5. **Offline expectations are assertions, not failures.** With no model key,
-   evaluation chips must fail with `No model is configured.` and re-enable,
+5. **Offline expectations are assertions, not failures.** With no model key
+   and no CLI rung enabled, evaluation chips must fail with
+   `No model is configured.` and re-enable,
    and the chat authoring loops fail with `No API key for "<provider>"…`.
    That friendly degradation is part of the spec (WALK-08, WALK-10).
+
+## Model posture matrix
+
+Run full validation against separately booted, recorded postures:
+
+1. **Plain offline:** no model keys and no CLI opt-in. Assert the friendly
+   `model_unavailable` paths.
+2. **Live development:** prefer an authenticated CLI when available; otherwise
+   use the explicitly configured API provider. Run provider conformance first.
+   Claude Code covers full agent flows; Codex covers classify/generate only.
+   CLI runs must leave quota unchanged.
+
+Restart the server between postures. A missing binary, stale login, or missing
+opt-in is a failed precondition, not a product failure.
 
 ## Pass / fail and reporting
 

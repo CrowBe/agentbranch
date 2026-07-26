@@ -72,7 +72,7 @@ Skill-carrying POSTs take a structured source, not raw `SKILL.md` text:
 `{ "skill": { "frontmatter": { "name", "description" }, "body" } }`.
 Equipment quality routes take `{ "document": "<source string>", "surface": "insights" | "breakdown" }`.
 
-| Route | Method | Auth | Offline (no model / memory adapters) |
+| Route | Method | Auth | Plain offline (no model key, no CLI rung / memory adapters) |
 |---|---|---|---|
 | `/api/build` | POST (SSE) | signed-in | stream opens; model error surfaces as streamed error event |
 | `/api/import` | POST | signed-in | works (GitHub URL fetch needs a token; paste always works) |
@@ -204,7 +204,7 @@ precondition: WALK-06 · dialog policy from §1 required
 | 5 | click (accept confirm) | button `Discard draft` | `Discarding draft…` → `Draft discarded. Back to your main version.` |
 | 6 | assert | draft controls | back to `Viewing the main version` |
 
-### WALK-08 · Offline evaluation probes (only when no model key is configured)
+### WALK-08 · Offline evaluation probes (only when no model key or CLI rung is configured)
 
 precondition: WALK-01 · asserts the graceful degradation, one chip at a time
 
@@ -214,9 +214,9 @@ precondition: WALK-01 · asserts the graceful degradation, one chip at a time
 | 2 | click | button `Triggers` | `No model is configured.`; chip re-enables |
 | 3 | click | button `Safety` | `No model is configured.`; chip re-enables |
 
-With a model key configured, replace with: `Run` → `Test run ready.`,
+With a capable CLI rung or model key configured, replace with: `Run` → `Test run ready.`,
 `Triggers` → `Triggering eval ready.`, `Safety` → `Safety rating ready.` —
-these spend tokens.
+API calls spend tokens; CLI calls are zero-priced and must leave quota unchanged.
 
 ### WALK-09 · History
 
@@ -235,7 +235,7 @@ independent · offline-safe for the paste path
 | # | action | selector | expect |
 |---|---|---|---|
 | 1 | click | nav button `Equipment` | `Loading equipment…` → `No saved equipment yet.` (or `Equipment loaded.`); panel title `Equipment` |
-| 2 | fill plain language (e.g. `a schema for invoice summaries`), click | `textarea`, then button `Send` | routes to the chat authoring loop; **offline** it fails with `No API key for "<provider>". Add one in the model console or .env.local.` |
+| 2 | fill plain language (e.g. `a schema for invoice summaries`), click | `textarea`, then button `Send` | routes to the chat authoring loop; **plain offline** it fails with `No API key for "<provider>". Add one in the model console or .env.local.`; with a capable configured rung it succeeds and that error never appears |
 | 3 | fill a JSON Schema (`{"title":"Invoice summary","type":"object",…}`), click | `textarea`, then button `Send` | `Checking response schema…` → `Response schema "Invoice summary" checked and kept for tool contracts to reference.` |
 | 4 | fill a tool contract (`{"name":"fetch_unread_email","description":…,"input":…,"output":…}`), click | `textarea`, then button `Send` | `Checking tool contract…` → `Tool contract "fetch_unread_email" checked — it runs with your next test run.` |
 | 5 | fill frontmatter markdown (`name: invoice-reviewer`, `description: …`, body instructions), click | `textarea`, then button `Send` | `Checking subagent definition…` → `Subagent definition "invoice-reviewer" checked and kept.` |
@@ -266,6 +266,8 @@ independent · open when auth is off (dev); admin-gated when auth is on
 |---|---|---|---|
 | 1 | click | nav button `Models` | console overlay opens with provider/model selection |
 | 2 | assert | overlay | secret-free snapshot — no key material anywhere in the DOM |
+| 3 | when a CLI rung is opted in, assert | Claude Code / Codex provider card | detected binary shows `CLI detected`; missing binary shows `CLI not detected` rather than API-key readiness copy |
+| 4 | assert | Codex provider card | `Covers classification and structured generation. Agent turns require the Claude Code CLI.` |
 
 ### WALK-13 · Public profile page
 
@@ -283,7 +285,7 @@ independent · request shapes in §1
 | # | probe | expect |
 |---|---|---|
 | 1 | `POST /api/lint` with a structured skill source | 200 JSON insights |
-| 2 | `POST /api/test-run` offline | 503, `model_unavailable` |
+| 2 | `POST /api/test-run` plain offline | 503, `model_unavailable` |
 | 3 | `GET /api/skill-library?surface=templates` | 200 JSON feed |
 | 4 | `GET /api/tap-repository` | 200 file set (`.claude-plugin/marketplace.json` + `skills/**`) |
 | 5 | `GET /api/cron/retention` without bearer secret | 401 — locked |
@@ -383,6 +385,9 @@ Screenshot each nav mode's panel plus the hero in both views, and judge:
   that nothing is there.
 - **Degradation copy** — offline/error states read as friendly assertions
   (`No model is configured.`), never stack traces or raw error tags.
+- **CLI coverage honesty** — the model console presents Claude Code as the
+  full agent-capable rung and Codex as classify/generate only; readiness says
+  `CLI detected` / `CLI not detected`, never API-key copy.
 
 Report drifted copy verbatim (old → judged problem).
 

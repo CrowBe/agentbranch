@@ -39,8 +39,25 @@ Flows that exercise most of the client workspace offline:
    and the chip re-enables (busy cleared).
 7. **Equipment probe**: non-JSON input → `Equipment must be a JSON document.`
 
+## Live model verification
+
+Prefer an authenticated local CLI in development when a model-bearing change
+needs live verification without API spend:
+
+```bash
+AGENTBRANCH_DEV_CLI_PROVIDERS=claude-code npm run dev
+CONFORMANCE_PROVIDER=claude-code-cli npm run test:conformance
+```
+
+Claude Code covers full agent flows. Codex (`AGENTBRANCH_DEV_CLI_PROVIDERS=codex`
+and `CONFORMANCE_PROVIDER=codex-cli`) covers classify/generate flows only.
+Confirm the quota chip remains unchanged. If no suitable CLI is available, use
+the explicitly configured API provider; if neither is available, use the
+offline assertions above.
+
 ## Gotchas
 
-- Build loop / test run / triggering eval need a model key — offline they must
-  fail with the friendly message above, which is itself worth asserting.
+- Build loop / test run / triggering eval need a configured API provider or an
+  enabled capable CLI rung. Offline they must fail with the friendly message
+  above, which is itself worth asserting.
 - Memory adapters reset on server restart; import a skill first in each session.
