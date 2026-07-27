@@ -25,8 +25,60 @@ model User {
   publications  Publication[]
   usageCharges  UsageCharge[]
   equipment     Equipment[]
+  agentConfigurations AgentConfiguration[]
 
   @@map("users")
+}
+
+/// A runtime-neutral, user-owned agent setup. Source material lives in immutable
+/// versions; `mainVersionId` is the explicitly promoted configuration.
+model AgentConfiguration {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  name          String
+  mainVersionId String?  @unique @map("main_version_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user        User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mainVersion AgentConfigurationVersion? @relation("AgentConfigurationMainVersion", fields: [mainVersionId], references: [id], onDelete: SetNull)
+  versions    AgentConfigurationVersion[]
+  draft       AgentConfigurationDraft?
+
+  @@index([userId])
+  @@map("agent_configurations")
+}
+
+/// Append-only, lossless source snapshot plus typed, source-backed components.
+model AgentConfigurationVersion {
+  id              String   @id @default(cuid())
+  configurationId String   @map("configuration_id")
+  revision        Int
+  snapshotJson    Json     @map("snapshot_json")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  configuration AgentConfiguration @relation(fields: [configurationId], references: [id], onDelete: Cascade)
+  mainOf        AgentConfiguration? @relation("AgentConfigurationMainVersion")
+  basedDrafts   AgentConfigurationDraft[] @relation("AgentConfigurationDraftBase")
+
+  @@unique([configurationId, revision])
+  @@index([configurationId])
+  @@map("agent_configuration_versions")
+}
+
+/// One replaceable configuration-wide candidate. Promotion appends a version;
+/// it never mutates an existing snapshot.
+model AgentConfigurationDraft {
+  configurationId String   @id @map("configuration_id")
+  baseVersionId   String   @map("base_version_id")
+  snapshotJson    Json     @map("snapshot_json")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  configuration AgentConfiguration        @relation(fields: [configurationId], references: [id], onDelete: Cascade)
+  baseVersion   AgentConfigurationVersion @relation("AgentConfigurationDraftBase", fields: [baseVersionId], references: [id], onDelete: Restrict)
+
+  @@index([baseVersionId])
+  @@map("agent_configuration_drafts")
 }
 
 model Equipment {

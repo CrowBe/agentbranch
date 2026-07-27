@@ -168,6 +168,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 
 | Module | Public surface (`index.ts`) | Port(s) it declares | Status |
 |---|---|---|---|
+| **agent-configuration** | `makeAgentConfigurationSnapshot`, `makeAgentConfiguration`, configuration/version/draft, source-file/component/span/secret-requirement types | `AgentConfigurationRepository` | real domain + persistence foundation (runtime-neutral immutable versions, replaceable configuration-wide draft, source hashes/provenance, unknown-file preservation, path validation, and secret-value redaction; runtime parsing and UI land in later phases) |
 | **skill** | `parseSkillMd`, `serializeSkillMd`, `makeSkill`, `reviseSkill`, `skillName/Description`, `SKILL_CATEGORIES`, `skillMetadata`, `withSkillMetadata`, `SkillBranch`/`RetentionReport` + types | `SkillRepository`, `SkillRetentionRepository` | real (discovery metadata — `category` + `tags` — lives in frontmatter extra keys, so it travels with the standard-native artifact and is pinned by the same content hash) |
 | **skill-analysis** | `defineCapability`, `runCapability`, `Analyzer/Renderer/Capability/SourceSpan/Artifact` | — | real |
 | **hero** | `heroCapability`, `HeroView`, doc types | — | real |
@@ -257,9 +258,11 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
 
 | Adapter | Implements | Notes |
 |---|---|---|
+| `memory/agent-configuration.memory-repository.ts` | `AgentConfigurationRepository` | offline adapter; preserves immutable main versions and one replaceable configuration-wide draft |
 | `memory/{skill,usage,test-run,eval,safety-rating,harness-version,benchmark}.memory-repository.ts` | the seven repos + `SkillRetentionRepository` | **offline default**, tested; skill repo + retention share one store; the eval/test-run adapters take an optional lint-summary resolver over that store for the analysis reads |
 | `memory/publication.memory-repository.ts` | `PublicationRepository` | offline default; shares the skill store to enforce publisher ownership of the pinned version and to read pinned Skill version sources for tap repository rendering |
 | `prisma/client.ts` | — | PrismaClient + `@prisma/adapter-pg` (Prisma 7 driver adapter) |
+| `prisma/agent-configuration.prisma-repository.ts` | `AgentConfigurationRepository` | real; append-only snapshots with an explicit main pointer and transactional draft promotion |
 | `prisma/{skill,usage,test-run,eval,safety-rating,harness-version,benchmark}.prisma-repository.ts` | `SkillRepository` (+ `SkillRetentionRepository`), `UsageRepository`, `TestRunRepository`, `EvalRunRepository`, `SafetyRatingRepository`, `HarnessVersionRepository`, `BenchmarkRunRepository` | real; the eval/test-run analysis reads join `skill_versions.lint_summary_json` |
 | `prisma/publication.prisma-repository.ts` | `PublicationRepository` | real; writes only when the version belongs to the publisher and the slug is unused; joins the pinned Skill version source for tap repository rendering |
 | `prisma/user-provisioning-auth.ts` | `AuthPort` | wraps Clerk auth, provisions the `users` row on first sight |
