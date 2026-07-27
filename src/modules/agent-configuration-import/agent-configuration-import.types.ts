@@ -83,6 +83,7 @@ export type ImportPreviewSourceFile = {
   readonly path: string;
   readonly encoding: "utf8" | "base64";
   readonly byteLength: number;
+  readonly sourceContentHash: string;
   readonly contentHash: string;
   readonly componentIds: readonly string[];
   readonly classification: "classified" | "unclassified";

@@ -25,18 +25,26 @@ import type {
 } from "./agent-configuration-import.types";
 
 const UTF8 = new TextDecoder("utf-8", { fatal: true });
+const SENSITIVE_SETTING_NAME =
+  "(?:(?:[A-Za-z][A-Za-z0-9_-]*)?(?:key|token|secret|password|credential|authorization|dsn|connection[_-]?string|(?:database|db|postgres(?:ql)?|redis|mongo(?:db)?|mysql|mariadb|amqp|broker)[_-]?(?:url|uri))[A-Za-z0-9_-]*)";
 const QUOTED_SECRET_ASSIGNMENT =
-  /(^|[\s{,])(["']?)((?:[A-Za-z][A-Za-z0-9_-]*)?(?:key|token|secret|password|credential)[A-Za-z0-9_-]*)\2(\s*[:=]\s*)(["'])((?:\\.|[^\\\r\n])*?)\5/gim;
+  new RegExp(`(^|[\\s{,])(["']?)(${SENSITIVE_SETTING_NAME})\\2(\\s*[:=]\\s*)(["'])((?:\\\\.|[^\\\\\\r\\n])*?)\\5`, "gim");
 const BARE_SECRET_ASSIGNMENT =
-  /(^|[\s{,])(["']?)((?:[A-Za-z][A-Za-z0-9_-]*)?(?:key|token|secret|password|credential)[A-Za-z0-9_-]*)\2(\s*[:=]\s*)(?!["'])([^\s,}\]]+)/gim;
+  new RegExp(`(^|[\\s{,])(["']?)(${SENSITIVE_SETTING_NAME})\\2(\\s*[:=]\\s*)(?!["'])([^\\s,}\\]]+)`, "gim");
 const SECRET_REFERENCE =
   /\$\{((?:[A-Z][A-Z0-9_]*)?(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)[A-Z0-9_]*)\}/g;
+const PEM_PRIVATE_KEY =
+  /-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9]+ )?PRIVATE KEY-----/g;
+const URL_WITH_USERINFO =
+  /\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@]+:[^\s/@]+@[^\s"'<>]+/gi;
 
 type SanitizedFile = {
   path: string;
   content: string;
   encoding: "utf8" | "base64";
   byteLength: number;
+  sourceContentHash: string;
+  opaque: boolean;
   redactions: ImportRedaction[];
   requirements: SecretRequirement[];
 };
@@ -80,15 +88,18 @@ function requirementName(name: string): string {
 }
 
 function sanitize(file: SourceSnapshot["files"][number]): SanitizedFile {
+  const sourceContentHash = createHash("sha256").update(file.bytes).digest("hex");
   let text: string;
   try {
     text = UTF8.decode(file.bytes);
   } catch {
     return {
       path: file.path,
-      content: Buffer.from(file.bytes).toString("base64"),
+      content: "",
       encoding: "base64",
       byteLength: file.bytes.byteLength,
+      sourceContentHash,
+      opaque: true,
       redactions: [],
       requirements: [],
     };
@@ -140,6 +151,14 @@ function sanitize(file: SourceSnapshot["files"][number]): SanitizedFile {
     `${item.valueStart}:${item.valueEnd}`,
     item,
   ])).values()].sort((a, b) => a.valueStart - b.valueStart);
+  const pemBlocks = [...text.matchAll(PEM_PRIVATE_KEY)].map((match) => ({
+    start: match.index,
+    end: match.index + match[0].length,
+  }));
+  const credentialUrls = [...text.matchAll(URL_WITH_USERINFO)].map((match) => ({
+    start: match.index,
+    end: match.index + match[0].length,
+  }));
 
   for (const assignment of uniqueAssignments) {
     const { rawName, value, start, end } = assignment;
@@ -155,13 +174,54 @@ function sanitize(file: SourceSnapshot["files"][number]): SanitizedFile {
       });
       requirements.push({ name, purpose: `Imported ${rawName} setting` });
   }
+  for (const block of pemBlocks) {
+    if (uniqueAssignments.some((assignment) =>
+      assignment.valueStart <= block.start && assignment.valueEnd >= block.end
+    )) continue;
+    redactions.push({
+      name: "PRIVATE_KEY",
+      purpose: "Imported private key material",
+      evidence: {
+        path: file.path,
+        span: spanAt(text, block.start, block.end),
+      },
+    });
+    requirements.push({ name: "PRIVATE_KEY", purpose: "Imported private key material" });
+  }
+  for (const url of credentialUrls) {
+    if (uniqueAssignments.some((assignment) =>
+      assignment.valueStart <= url.start && assignment.valueEnd >= url.end
+    )) continue;
+    redactions.push({
+      name: "CONNECTION_CREDENTIAL",
+      purpose: "Imported connection credential",
+      evidence: {
+        path: file.path,
+        span: spanAt(text, url.start, url.end),
+      },
+    });
+    requirements.push({
+      name: "CONNECTION_CREDENTIAL",
+      purpose: "Imported connection credential",
+    });
+  }
   let content = text;
-  for (const assignment of [...uniqueAssignments].reverse()) {
-    if (
-      assignment.value === "<redacted>"
-      || /^\$\{[A-Z][A-Z0-9_]*\}$/.test(assignment.value)
-    ) continue;
-    content = `${content.slice(0, assignment.valueStart)}<redacted>${content.slice(assignment.valueEnd)}`;
+  const replacements = [
+    ...uniqueAssignments
+      .filter((assignment) =>
+        assignment.value !== "<redacted>"
+        && !/^\$\{[A-Z][A-Z0-9_]*\}$/.test(assignment.value)
+      )
+      .map((assignment) => ({ start: assignment.valueStart, end: assignment.valueEnd })),
+    ...pemBlocks.filter((block) => !uniqueAssignments.some((assignment) =>
+      assignment.valueStart <= block.start && assignment.valueEnd >= block.end
+    )),
+    ...credentialUrls.filter((url) => !uniqueAssignments.some((assignment) =>
+      assignment.valueStart <= url.start && assignment.valueEnd >= url.end
+    )),
+  ].sort((a, b) => b.start - a.start);
+  for (const replacement of replacements) {
+    content = `${content.slice(0, replacement.start)}<redacted>${content.slice(replacement.end)}`;
   }
 
   return {
@@ -169,6 +229,8 @@ function sanitize(file: SourceSnapshot["files"][number]): SanitizedFile {
     content,
     encoding: "utf8",
     byteLength: file.bytes.byteLength,
+    sourceContentHash,
+    opaque: false,
     redactions,
     requirements,
   };
@@ -277,12 +339,25 @@ export function createAgentConfigurationImportPreviewAnalyzer(
           path: file.path,
           encoding: file.encoding,
           byteLength: sanitized.find((candidate) => candidate.path === file.path)!.byteLength,
+          sourceContentHash: sanitized.find((candidate) => candidate.path === file.path)!.sourceContentHash,
           contentHash: file.contentHash,
           componentIds: (componentsByPath.get(file.path) ?? []).sort(),
           classification: componentsByPath.has(file.path) ? "classified" : "unclassified",
         })),
         redactions: sanitized.flatMap((file) => file.redactions).sort(compareRedaction),
-        warnings: warnings.sort((a, b) => compareEvidence(a.evidence, b.evidence) || a.code.localeCompare(b.code)),
+        warnings: [
+          ...warnings,
+          ...sanitized.filter((file) => file.opaque).map((file): AdapterWarning => ({
+            code: "opaque-content-withheld",
+            message: "Opaque binary content is withheld from the import preview; path, size, and source hash remain visible.",
+            evidence: {
+              path: file.path,
+              span: sourceSpanForWholeFile(
+                snapshot.files.find((candidate) => candidate.path === file.path)!.bytes,
+              ),
+            },
+          })),
+        ].sort((a, b) => compareEvidence(a.evidence, b.evidence) || a.code.localeCompare(b.code)),
         collisions: collisionsFor(imported),
       });
     },

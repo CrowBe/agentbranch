@@ -8,10 +8,16 @@ import type {
   SourceFile,
 } from "./agent-configuration.types";
 
+const SENSITIVE_SETTING_NAME =
+  "(?:(?:[A-Za-z][A-Za-z0-9_-]*)?(?:key|token|secret|password|credential|authorization|dsn|connection[_-]?string|(?:database|db|postgres(?:ql)?|redis|mongo(?:db)?|mysql|mariadb|amqp|broker)[_-]?(?:url|uri))[A-Za-z0-9_-]*)";
 const QUOTED_SECRET_ASSIGNMENT =
-  /(^|[\s{,])(["']?)((?:[A-Z][A-Z0-9_-]*)?(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)[A-Z0-9_-]*)\2(\s*[:=]\s*)(["'])((?:\\.|[^\\\r\n])*?)\5/gim;
+  new RegExp(`(^|[\\s{,])(["']?)(${SENSITIVE_SETTING_NAME})\\2(\\s*[:=]\\s*)(["'])((?:\\\\.|[^\\\\\\r\\n])*?)\\5`, "gim");
 const BARE_SECRET_ASSIGNMENT =
-  /(^|[\s{,])(["']?)((?:[A-Z][A-Z0-9_-]*)?(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)[A-Z0-9_-]*)\2(\s*[:=]\s*)(?!["'])([^\s,}\]]+)/gim;
+  new RegExp(`(^|[\\s{,])(["']?)(${SENSITIVE_SETTING_NAME})\\2(\\s*[:=]\\s*)(?!["'])([^\\s,}\\]]+)`, "gim");
+const PEM_PRIVATE_KEY =
+  /-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9]+ )?PRIVATE KEY-----/g;
+const URL_WITH_USERINFO =
+  /\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@]+:[^\s/@]+@[^\s"'<>]+/gi;
 
 export class InvalidAgentConfiguration extends Error {
   constructor(message: string) {
@@ -37,7 +43,10 @@ function safeRelativePath(path: string): string {
 }
 
 function redactSecrets(content: string): string {
-  const quoted = content.replace(
+  const privateKeys = content
+    .replace(PEM_PRIVATE_KEY, "<redacted>")
+    .replace(URL_WITH_USERINFO, "<redacted>");
+  const quoted = privateKeys.replace(
     QUOTED_SECRET_ASSIGNMENT,
     (
       _match,

@@ -73,7 +73,7 @@ describe("agent configuration runtime adapters", () => {
     expect(result.collisions[0]?.evidence.every((item) => item.path === "AGENTS.md")).toBe(true);
   });
 
-  it("preserves unsupported text and binary bytes and produces stable repeated previews", async () => {
+  it("preserves unsupported text, withholds opaque bytes, and produces stable repeated previews", async () => {
     const snapshot = sourceSnapshotFromRepository([
       { path: "AGENTS.md", bytes: new TextEncoder().encode("Instructions.") },
       { path: "vendor/unknown.cfg", bytes: new TextEncoder().encode("opaque=true\n") },
@@ -87,7 +87,13 @@ describe("agent configuration runtime adapters", () => {
     expect(first.snapshot.files.find((file) => file.path === "vendor/unknown.cfg")?.content)
       .toBe("opaque=true\n");
     expect(first.snapshot.files.find((file) => file.path === "vendor/blob.bin"))
-      .toMatchObject({ encoding: "base64", content: "/wAB" });
+      .toMatchObject({ encoding: "base64", content: "" });
+    expect(first.sourceFiles.find((file) => file.path === "vendor/blob.bin"))
+      .toMatchObject({ byteLength: 3, sourceContentHash: expect.stringMatching(/^[a-f0-9]{64}$/) });
+    expect(first.warnings).toContainEqual(expect.objectContaining({
+      code: "opaque-content-withheld",
+      evidence: expect.objectContaining({ path: "vendor/blob.bin" }),
+    }));
   });
 
   it("redacts secret values before preview and retains named requirements with evidence", async () => {
@@ -118,6 +124,60 @@ describe("agent configuration runtime adapters", () => {
     ]);
   });
 
+  it("keeps connection credentials, authorization values, and private keys out of serialized previews", async () => {
+    const databaseUrl = "postgresql://agent:database-password@db.example.test/agentbranch";
+    const bearerToken = "header.payload.signature";
+    const basicCredential = "dXNlcjpwYXNzd29yZA==";
+    const neutralConnectionUrl = "redis://cache-user:cache-password@cache.example.test:6379";
+    const privateKey = [
+      "-----BEGIN PRIVATE KEY-----",
+      "c3VwZXItc2VjcmV0LWtleQ==",
+      "-----END PRIVATE KEY-----",
+    ].join("\n");
+    const result = unwrap(await runCapability(capability, "preview", sourceSnapshotFromRepository([
+      { path: "AGENTS.md", bytes: new TextEncoder().encode("Instructions.") },
+      {
+        path: ".agents/mcp.json",
+        bytes: new TextEncoder().encode(JSON.stringify({
+          databaseUrl,
+          headers: {
+            Authorization: `Bearer ${bearerToken}`,
+            "Proxy-Authorization": `Basic ${basicCredential}`,
+          },
+          tls: { privateKey },
+          endpoint: neutralConnectionUrl,
+        }, null, 2)),
+      },
+      {
+        path: ".agents/settings.yaml",
+        bytes: new TextEncoder().encode([
+          `DATABASE_URL: ${databaseUrl}`,
+          `authorization: "Bearer ${bearerToken}"`,
+          `signing_material: |`,
+          ...privateKey.split("\n").map((line) => `  ${line}`),
+        ].join("\n")),
+      },
+    ])));
+
+    const serialized = JSON.stringify(result);
+    for (const secret of [
+      databaseUrl,
+      "database-password",
+      bearerToken,
+      basicCredential,
+      neutralConnectionUrl,
+      "cache-password",
+      privateKey,
+      "c3VwZXItc2VjcmV0LWtleQ==",
+    ]) {
+      expect(serialized).not.toContain(secret);
+    }
+    expect(serialized).toContain("<redacted>");
+    expect(result.snapshot.secretRequirements.map((item) => item.name)).toEqual(
+      expect.arrayContaining(["AUTHORIZATION", "DATABASE_URL", "PRIVATE_KEY", "PROXY_AUTHORIZATION"]),
+    );
+  });
+
   it("links every component, warning, and runtime detection to exact path/span evidence", async () => {
     const snapshot = sourceSnapshotFromRepository([
       { path: ".claude/settings.json", bytes: Uint8Array.from([0xff]) },
@@ -129,13 +189,13 @@ describe("agent configuration runtime adapters", () => {
       && item.span.startLine >= 1
       && result.snapshot.files.some((file) => file.path === item.path),
     )).toBe(true);
-    expect(result.warnings).toEqual([expect.objectContaining({
+    expect(result.warnings).toContainEqual(expect.objectContaining({
       code: "settings-not-text",
       evidence: expect.objectContaining({
         path: ".claude/settings.json",
         span: expect.objectContaining({ startLine: 1, startColumn: 1 }),
       }),
-    })]);
+    }));
     expect(result.runtimes[0]?.evidence.length).toBeGreaterThan(0);
   });
 });

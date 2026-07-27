@@ -48,11 +48,26 @@ describe("AgentConfigurationRepository memory contract", () => {
 
 describe("AgentConfiguration snapshot", () => {
   it("redacts secret-like assignments and retains requirements without values", () => {
+    const databaseUrl = "postgresql://agent:database-password@db.example.test/agentbranch";
+    const bearerToken = "header.payload.signature";
+    const privateKey = "-----BEGIN PRIVATE KEY-----\nc2VjcmV0\n-----END PRIVATE KEY-----";
     const snapshot = makeAgentConfigurationSnapshot({
-      files: [{ path: ".agents/config.env", content: "OPENAI_API_KEY=sk-real-value\nMODEL=test\n" }],
+      files: [{
+        path: ".agents/config.env",
+        content: [
+          "OPENAI_API_KEY=sk-real-value",
+          `DATABASE_URL=${databaseUrl}`,
+          `Authorization="Bearer ${bearerToken}"`,
+          privateKey,
+          "MODEL=test",
+        ].join("\n"),
+      }],
       secretRequirements: [{ name: "OPENAI_API_KEY", purpose: "Model access" }],
     });
-    expect(JSON.stringify(snapshot)).not.toContain("sk-real-value");
+    const serialized = JSON.stringify(snapshot);
+    for (const secret of ["sk-real-value", databaseUrl, "database-password", bearerToken, "c2VjcmV0"]) {
+      expect(serialized).not.toContain(secret);
+    }
     expect(snapshot.files[0]?.content).toContain("<redacted>");
     expect(snapshot.secretRequirements).toEqual([{ name: "OPENAI_API_KEY", purpose: "Model access" }]);
   });
