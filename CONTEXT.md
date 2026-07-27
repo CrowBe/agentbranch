@@ -24,6 +24,18 @@ _Avoid_: skill row, skill entity, document
 A skill's discovery metadata — one **category** from the closed taxonomy (`SKILL_CATEGORIES`) plus up to 8 kebab-case **tags** — living in `SKILL.md` frontmatter so it travels with the artifact and is pinned by its content hash. The **metadata-suggest** surface proposes editable name, description, category, and tags through its local → gateway → deterministic ladder; written only after the author accepts (`withSkillMetadata` / frontmatter edit paths).
 _Avoid_: labels, keywords (too generic), taxonomy (that's the category list, not a skill's values), SEO fields
 
+**Agent configuration**:
+A runtime-neutral, versioned collection of source files plus source-backed instruction, skill, subagent, tool, hook, policy, model, reference, evaluation, and unknown components. Runtime-specific names and precedence stay at import-adapter boundaries.
+_Avoid_: agent profile, runtime config, converted project
+
+**Source snapshot**:
+The immutable, path-addressed bytes offered to agent-configuration import adapters. Repository and local-archive ingestion validate paths, collisions, links, and resource bounds before constructing one; nothing in it is executed.
+_Avoid_: checkout, worktree, extracted folder
+
+**Import preview**:
+The pre-save analysis artifact for a source snapshot: detected runtime layouts, redacted source files, typed components, exact source evidence, unsupported content, warnings, and ambiguity. Secret values never enter it; only named secret requirements and purposes do.
+_Avoid_: imported configuration (save has not happened), execution plan, conversion report
+
 **Draft** (branching iteration, §9.3):
 *User-facing term* for a working lineage of skill revisions that accumulates without moving the **main version** — the safe space to iterate and evaluate before committing. A skill may have several open at once. The internal/code term is `branch`.
 _Avoid_: branch (code-only — never user copy), working copy, fork, sandbox

@@ -26,6 +26,8 @@ export type SourceSpan = {
 export type SourceFile = {
   readonly path: string;
   readonly content: string;
+  /** `content` is literal UTF-8 text or base64-encoded opaque bytes. */
+  readonly encoding: "utf8" | "base64";
   readonly contentHash: string;
 };
 

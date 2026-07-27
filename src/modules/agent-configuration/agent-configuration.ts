@@ -8,8 +8,10 @@ import type {
   SourceFile,
 } from "./agent-configuration.types";
 
-const SECRET_ASSIGNMENT =
-  /(^|[\s"'`{,])([A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)[A-Z0-9_]*)(\s*[:=]\s*)(["']?)([^\s"',}\]]+)\4/gim;
+const QUOTED_SECRET_ASSIGNMENT =
+  /(^|[\s{,])(["']?)((?:[A-Z][A-Z0-9_-]*)?(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)[A-Z0-9_-]*)\2(\s*[:=]\s*)(["'])((?:\\.|[^\\\r\n])*?)\5/gim;
+const BARE_SECRET_ASSIGNMENT =
+  /(^|[\s{,])(["']?)((?:[A-Z][A-Z0-9_-]*)?(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)[A-Z0-9_-]*)\2(\s*[:=]\s*)(?!["'])([^\s,}\]]+)/gim;
 
 export class InvalidAgentConfiguration extends Error {
   constructor(message: string) {
@@ -26,6 +28,7 @@ function safeRelativePath(path: string): string {
   if (
     normalized.length === 0 ||
     normalized.startsWith("/") ||
+    /^[A-Za-z]:\//.test(normalized) ||
     normalized.split("/").some((part) => part === "" || part === "." || part === "..")
   ) {
     throw new InvalidAgentConfiguration(`Source path must be a normalized relative path: ${path}`);
@@ -34,22 +37,41 @@ function safeRelativePath(path: string): string {
 }
 
 function redactSecrets(content: string): string {
-  return content.replace(
-    SECRET_ASSIGNMENT,
+  const quoted = content.replace(
+    QUOTED_SECRET_ASSIGNMENT,
     (
       _match,
       prefix: string,
+      keyQuote: string,
       name: string,
       assignment: string,
-      quote: string,
-    ) => `${prefix}${name}${assignment}${quote}<redacted>${quote}`,
+      valueQuote: string,
+    ) => `${prefix}${keyQuote}${name}${keyQuote}${assignment}${valueQuote}<redacted>${valueQuote}`,
+  );
+  return quoted.replace(
+    BARE_SECRET_ASSIGNMENT,
+    (
+      _match,
+      prefix: string,
+      keyQuote: string,
+      name: string,
+      assignment: string,
+    ) => `${prefix}${keyQuote}${name}${keyQuote}${assignment}<redacted>`,
   );
 }
 
-function sourceFile(input: { path: string; content: string }): SourceFile {
+function sourceFile(input: {
+  path: string;
+  content: string;
+  encoding?: "utf8" | "base64";
+}): SourceFile {
   const path = safeRelativePath(input.path);
-  const content = redactSecrets(input.content);
-  return { path, content, contentHash: hashSource(content) };
+  const encoding = input.encoding ?? "utf8";
+  if (encoding === "base64" && !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(input.content)) {
+    throw new InvalidAgentConfiguration(`Source ${path} is not valid base64.`);
+  }
+  const content = encoding === "utf8" ? redactSecrets(input.content) : input.content;
+  return { path, content, encoding, contentHash: hashSource(content) };
 }
 
 function secretRequirement(input: SecretRequirement): SecretRequirement {
@@ -62,7 +84,11 @@ function secretRequirement(input: SecretRequirement): SecretRequirement {
 }
 
 export function makeAgentConfigurationSnapshot(input: {
-  files: readonly { path: string; content: string }[];
+  files: readonly {
+    path: string;
+    content: string;
+    encoding?: "utf8" | "base64";
+  }[];
   components?: readonly Omit<AgentComponent, "contentHash">[];
   secretRequirements?: readonly SecretRequirement[];
 }): AgentConfigurationSnapshot {
