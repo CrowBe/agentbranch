@@ -50,6 +50,7 @@ describe("AgentConfiguration snapshot", () => {
   it("redacts secret-like assignments and retains requirements without values", () => {
     const databaseUrl = "postgresql://agent:database-password@db.example.test/agentbranch";
     const bearerToken = "header.payload.signature";
+    const authHeaderCanary = "AUTHHDR_MEMORY_CANARY_296_Q4M8_N0TLIVE";
     const privateKey = "-----BEGIN PRIVATE KEY-----\nc2VjcmV0\n-----END PRIVATE KEY-----";
     const snapshot = makeAgentConfigurationSnapshot({
       files: [{
@@ -59,18 +60,32 @@ describe("AgentConfiguration snapshot", () => {
           `DATABASE_URL=${databaseUrl}`,
           `Authorization="Bearer ${bearerToken}"`,
           `Proxy-Authorization: Bearer ${bearerToken}`,
+          `authHeader="${authHeaderCanary}"`,
           privateKey,
           "MODEL=test",
         ].join("\n"),
       }],
-      secretRequirements: [{ name: "OPENAI_API_KEY", purpose: "Model access" }],
+      secretRequirements: [
+        { name: "AUTH_HEADER", purpose: "Imported authHeader setting" },
+        { name: "OPENAI_API_KEY", purpose: "Model access" },
+      ],
     });
     const serialized = JSON.stringify(snapshot);
-    for (const secret of ["sk-real-value", databaseUrl, "database-password", bearerToken, "c2VjcmV0"]) {
+    for (const secret of [
+      "sk-real-value",
+      databaseUrl,
+      "database-password",
+      bearerToken,
+      authHeaderCanary,
+      "c2VjcmV0",
+    ]) {
       expect(serialized).not.toContain(secret);
     }
     expect(snapshot.files[0]?.content).toContain("<redacted>");
-    expect(snapshot.secretRequirements).toEqual([{ name: "OPENAI_API_KEY", purpose: "Model access" }]);
+    expect(snapshot.secretRequirements).toEqual([
+      { name: "AUTH_HEADER", purpose: "Imported authHeader setting" },
+      { name: "OPENAI_API_KEY", purpose: "Model access" },
+    ]);
   });
 
   it("rejects traversal paths", () => {

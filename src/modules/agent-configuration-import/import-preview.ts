@@ -26,7 +26,7 @@ import type {
 
 const UTF8 = new TextDecoder("utf-8", { fatal: true });
 const SENSITIVE_SETTING_NAME =
-  "(?:(?:[A-Za-z][A-Za-z0-9_-]*)?(?:key|token|secret|password|credential|authorization|dsn|connection[_-]?string|(?:database|db|postgres(?:ql)?|redis|mongo(?:db)?|mysql|mariadb|amqp|broker)[_-]?(?:url|uri))[A-Za-z0-9_-]*)";
+  "(?:(?:[A-Za-z][A-Za-z0-9_-]*)?(?:key|token|secret|password|credential|authorization|auth[_-]?header|dsn|connection[_-]?string|(?:database|db|postgres(?:ql)?|redis|mongo(?:db)?|mysql|mariadb|amqp|broker)[_-]?(?:url|uri))[A-Za-z0-9_-]*)";
 const QUOTED_SECRET_ASSIGNMENT =
   new RegExp(`(^|[\\s{,])(["']?)(${SENSITIVE_SETTING_NAME})\\2(\\s*[:=]\\s*)(["'])((?:\\\\.|[^\\\\\\r\\n])*?)\\5`, "gim");
 const BARE_SECRET_ASSIGNMENT =

@@ -1,14 +1,15 @@
 import { readFile, readdir } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createAgentConfigurationImportPreviewAnalyzer,
   createAgentConfigurationImportPreviewCapability,
   type AgentConfigurationImportPreview,
 } from "@/modules/agent-configuration-import";
 import { runCapability } from "@/modules/skill-analysis";
-import { unwrap } from "@/shared";
+import { UserId, unwrap } from "@/shared";
+import { createMemoryAgentConfigurationRepository } from "@/infra/memory/agent-configuration.memory-repository";
 import {
   InvalidSourceSnapshot,
   SOURCE_SNAPSHOT_LIMITS,
@@ -178,6 +179,142 @@ describe("agent configuration runtime adapters", () => {
     expect(result.snapshot.secretRequirements.map((item) => item.name)).toEqual(
       expect.arrayContaining(["AUTHORIZATION", "DATABASE_URL", "PRIVATE_KEY", "PROXY_AUTHORIZATION"]),
     );
+  });
+
+  it("keeps authHeader and the adjacent credential matrix out of import and persistence", async () => {
+    const authHeaderCanary = "AUTHHDR_CANARY_296_Z9Q7_N0TLIVE";
+    const databaseUrl = "postgresql://synthetic-user:synthetic-password@db.example.test/agentbranch";
+    const bearerToken = "synthetic.bearer.token";
+    const basicCredential = "c3ludGhldGljOnBhc3N3b3Jk";
+    const connectionUrl = "redis://synthetic-user:synthetic-password@cache.example.test:6379";
+    const accessCredential = "synthetic-access-credential";
+    const clientSecretValue = "synthetic-client-secret-value";
+    const apiKeyValue = "synthetic-api-key-value";
+    const privateKey = [
+      "-----BEGIN PRIVATE KEY-----",
+      "c3ludGhldGljLXByaXZhdGUta2V5",
+      "-----END PRIVATE KEY-----",
+    ].join("\n");
+    const importedSource = JSON.stringify({
+      databaseUrl,
+      headers: {
+        Authorization: `Bearer ${bearerToken}`,
+        "Proxy-Authorization": `Basic ${basicCredential}`,
+      },
+      endpoint: connectionUrl,
+      tls: { privateKey },
+      accessCredential,
+      clientSecretValue,
+      api_key_value: apiKeyValue,
+    }, null, 2);
+    const authHeaderSource = JSON.stringify({ authHeader: authHeaderCanary }, null, 2);
+    const source = sourceSnapshotFromRepository([
+      { path: "AGENTS.md", bytes: new TextEncoder().encode("Instructions.") },
+      { path: ".agents/mcp.json", bytes: new TextEncoder().encode(importedSource) },
+      { path: ".agents/auth.json", bytes: new TextEncoder().encode(authHeaderSource) },
+    ]);
+    const diagnostics: unknown[] = [];
+    const consoleSpies = (["debug", "error", "info", "log", "warn"] as const).map((method) =>
+      vi.spyOn(console, method).mockImplementation((...args) => diagnostics.push([method, ...args]))
+    );
+    let failure: unknown;
+
+    try {
+      const analyzer = createAgentConfigurationImportPreviewAnalyzer(
+        defaultAgentConfigurationImportAdapters,
+      );
+      const artifact = unwrap(await analyzer.analyze(source));
+      const rendered = unwrap(await runCapability(capability, "preview", source));
+      const repository = createMemoryAgentConfigurationRepository();
+      const created = unwrap(await repository.create({
+        userId: UserId("synthetic-import-owner"),
+        name: "Synthetic import",
+        snapshot: artifact.snapshot,
+      }));
+      const persisted = unwrap(await repository.findById(
+        created.id,
+        UserId("synthetic-import-owner"),
+      ));
+      const serializedBoundaries = [
+        JSON.stringify(artifact),
+        JSON.stringify(rendered),
+        JSON.stringify(persisted),
+      ];
+      const secretValues = [
+        databaseUrl,
+        "synthetic-password",
+        bearerToken,
+        basicCredential,
+        connectionUrl,
+        privateKey,
+        "c3ludGhldGljLXByaXZhdGUta2V5",
+        accessCredential,
+        clientSecretValue,
+        apiKeyValue,
+      ];
+
+      expect(serializedBoundaries.map((boundary) => boundary.includes(authHeaderCanary)))
+        .toEqual([false, false, false]);
+      for (const boundary of serializedBoundaries) {
+        for (const secret of secretValues) expect(boundary).not.toContain(secret);
+      }
+      for (const snapshot of [
+        artifact.snapshot,
+        rendered.snapshot,
+        persisted?.mainVersion.snapshot,
+      ]) {
+        expect(snapshot?.secretRequirements).toContainEqual({
+          name: "AUTH_HEADER",
+          purpose: "Imported authHeader setting",
+        });
+      }
+      expect(artifact.snapshot.secretRequirements.map((item) => item.name)).toEqual(
+        expect.arrayContaining([
+          "ACCESS_CREDENTIAL",
+          "API_KEY_VALUE",
+          "AUTH_HEADER",
+          "AUTHORIZATION",
+          "CLIENT_SECRET_VALUE",
+          "CONNECTION_CREDENTIAL",
+          "DATABASE_URL",
+          "PRIVATE_KEY",
+          "PROXY_AUTHORIZATION",
+        ]),
+      );
+      const authHeaderRedaction = artifact.redactions.find((item) => item.name === "AUTH_HEADER");
+      expect(authHeaderRedaction).toMatchObject({
+        purpose: "Imported authHeader setting",
+        evidence: {
+          path: ".agents/auth.json",
+          span: {
+            startLine: expect.any(Number),
+            startColumn: expect.any(Number),
+            endLine: expect.any(Number),
+            endColumn: expect.any(Number),
+          },
+        },
+      });
+      expect(rendered.redactions).toContainEqual(authHeaderRedaction);
+      const span = authHeaderRedaction!.evidence.span;
+      expect(span.startLine).toBe(span.endLine);
+      expect(authHeaderSource.split("\n")[span.startLine - 1]?.slice(
+        span.startColumn - 1,
+        span.endColumn - 1,
+      )).toBe(`"authHeader": "${authHeaderCanary}"`);
+    } catch (error) {
+      failure = error;
+    } finally {
+      consoleSpies.forEach((spy) => spy.mockRestore());
+    }
+
+    const diagnosticEvidence = JSON.stringify({
+      diagnostics,
+      failure: failure instanceof Error
+        ? { name: failure.name, message: failure.message, stack: failure.stack }
+        : failure,
+    });
+    expect(diagnosticEvidence).not.toContain(authHeaderCanary);
+    expect(failure).toBeUndefined();
   });
 
   it("keeps opaque bytes in the import artifact but withholds them from the rendered preview", async () => {
