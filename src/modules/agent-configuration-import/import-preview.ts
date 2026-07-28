@@ -30,7 +30,7 @@ const SENSITIVE_SETTING_NAME =
 const QUOTED_SECRET_ASSIGNMENT =
   new RegExp(`(^|[\\s{,])(["']?)(${SENSITIVE_SETTING_NAME})\\2(\\s*[:=]\\s*)(["'])((?:\\\\.|[^\\\\\\r\\n])*?)\\5`, "gim");
 const BARE_SECRET_ASSIGNMENT =
-  new RegExp(`(^|[\\s{,])(["']?)(${SENSITIVE_SETTING_NAME})\\2(\\s*[:=]\\s*)(?!["'])([^\\s,}\\]]+)`, "gim");
+  new RegExp(`(^|[\\s{,])(["']?)(${SENSITIVE_SETTING_NAME})\\2(\\s*[:=]\\s*)(?!["'])([^\\r\\n,}\\]]+)`, "gim");
 const SECRET_REFERENCE =
   /\$\{((?:[A-Z][A-Z0-9_]*)?(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)[A-Z0-9_]*)\}/g;
 const PEM_PRIVATE_KEY =
@@ -95,7 +95,7 @@ function sanitize(file: SourceSnapshot["files"][number]): SanitizedFile {
   } catch {
     return {
       path: file.path,
-      content: "",
+      content: Buffer.from(file.bytes).toString("base64"),
       encoding: "base64",
       byteLength: file.bytes.byteLength,
       sourceContentHash,
@@ -369,7 +369,28 @@ const previewRenderer: Renderer<
   AgentConfigurationImportPreview
 > = {
   target: "preview",
-  render: (artifact) => artifact,
+  render: (artifact) => {
+    const snapshot = makeAgentConfigurationSnapshot({
+      files: artifact.snapshot.files.map((file) => ({
+        path: file.path,
+        content: file.encoding === "base64" ? "" : file.content,
+        encoding: file.encoding,
+      })),
+      components: artifact.snapshot.components.map(({ contentHash: _contentHash, ...component }) =>
+        component
+      ),
+      secretRequirements: artifact.snapshot.secretRequirements,
+    });
+    const contentHashByPath = new Map(snapshot.files.map((file) => [file.path, file.contentHash]));
+    return {
+      ...artifact,
+      snapshot,
+      sourceFiles: artifact.sourceFiles.map((file) => ({
+        ...file,
+        contentHash: contentHashByPath.get(file.path)!,
+      })),
+    };
+  },
 };
 
 export function createAgentConfigurationImportPreviewCapability(

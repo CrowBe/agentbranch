@@ -3,6 +3,7 @@ import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  createAgentConfigurationImportPreviewAnalyzer,
   createAgentConfigurationImportPreviewCapability,
   type AgentConfigurationImportPreview,
 } from "@/modules/agent-configuration-import";
@@ -153,6 +154,7 @@ describe("agent configuration runtime adapters", () => {
         bytes: new TextEncoder().encode([
           `DATABASE_URL: ${databaseUrl}`,
           `authorization: "Bearer ${bearerToken}"`,
+          `proxy_authorization: Bearer ${bearerToken}`,
           `signing_material: |`,
           ...privateKey.split("\n").map((line) => `  ${line}`),
         ].join("\n")),
@@ -176,6 +178,25 @@ describe("agent configuration runtime adapters", () => {
     expect(result.snapshot.secretRequirements.map((item) => item.name)).toEqual(
       expect.arrayContaining(["AUTHORIZATION", "DATABASE_URL", "PRIVATE_KEY", "PROXY_AUTHORIZATION"]),
     );
+  });
+
+  it("keeps opaque bytes in the import artifact but withholds them from the rendered preview", async () => {
+    const bytes = Uint8Array.from([0xff, 0, 1, 2]);
+    const snapshot = sourceSnapshotFromRepository([
+      { path: "AGENTS.md", bytes: new TextEncoder().encode("Instructions.") },
+      { path: "vendor/blob.bin", bytes },
+    ]);
+    const analyzer = createAgentConfigurationImportPreviewAnalyzer(
+      defaultAgentConfigurationImportAdapters,
+    );
+    const artifact = unwrap(await analyzer.analyze(snapshot));
+    const rendered = unwrap(await runCapability(capability, "preview", snapshot));
+
+    expect(artifact.snapshot.files.find((file) => file.path === "vendor/blob.bin"))
+      .toMatchObject({ encoding: "base64", content: "/wABAg==" });
+    expect(rendered.snapshot.files.find((file) => file.path === "vendor/blob.bin"))
+      .toMatchObject({ encoding: "base64", content: "" });
+    expect(JSON.stringify(rendered)).not.toContain("/wABAg==");
   });
 
   it("links every component, warning, and runtime detection to exact path/span evidence", async () => {

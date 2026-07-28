@@ -58,6 +58,7 @@ describe("AgentConfiguration snapshot", () => {
           "OPENAI_API_KEY=sk-real-value",
           `DATABASE_URL=${databaseUrl}`,
           `Authorization="Bearer ${bearerToken}"`,
+          `Proxy-Authorization: Bearer ${bearerToken}`,
           privateKey,
           "MODEL=test",
         ].join("\n"),

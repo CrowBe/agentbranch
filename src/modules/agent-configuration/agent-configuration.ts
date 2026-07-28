@@ -13,7 +13,7 @@ const SENSITIVE_SETTING_NAME =
 const QUOTED_SECRET_ASSIGNMENT =
   new RegExp(`(^|[\\s{,])(["']?)(${SENSITIVE_SETTING_NAME})\\2(\\s*[:=]\\s*)(["'])((?:\\\\.|[^\\\\\\r\\n])*?)\\5`, "gim");
 const BARE_SECRET_ASSIGNMENT =
-  new RegExp(`(^|[\\s{,])(["']?)(${SENSITIVE_SETTING_NAME})\\2(\\s*[:=]\\s*)(?!["'])([^\\s,}\\]]+)`, "gim");
+  new RegExp(`(^|[\\s{,])(["']?)(${SENSITIVE_SETTING_NAME})\\2(\\s*[:=]\\s*)(?!["'])([^\\r\\n,}\\]]+)`, "gim");
 const PEM_PRIVATE_KEY =
   /-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9]+ )?PRIVATE KEY-----/g;
 const URL_WITH_USERINFO =
