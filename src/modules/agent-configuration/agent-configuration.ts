@@ -13,11 +13,12 @@ const SENSITIVE_SETTING_NAME =
 const QUOTED_SECRET_ASSIGNMENT =
   new RegExp(`(^|[\\s{,])(["']?)(${SENSITIVE_SETTING_NAME})\\2(\\s*[:=]\\s*)(["'])((?:\\\\.|[^\\\\\\r\\n])*?)\\5`, "gim");
 const BARE_SECRET_ASSIGNMENT =
-  new RegExp(`(^|[\\s{,])(["']?)(${SENSITIVE_SETTING_NAME})\\2(\\s*[:=]\\s*)(?!["'])([^\\r\\n,}\\]]+)`, "gim");
+  new RegExp(`(^|[\\s{,])(["']?)(${SENSITIVE_SETTING_NAME})\\2(\\s*[:=]\\s*)(?!\\s*["'])([^\\r\\n,}\\]]+)`, "gim");
 const PEM_PRIVATE_KEY =
   /-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9]+ )?PRIVATE KEY-----/g;
 const URL_WITH_USERINFO =
   /\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@]+:[^\s/@]+@[^\s"'<>]+/gi;
+const ENVIRONMENT_REFERENCE = /^\$\{[A-Z][A-Z0-9_]*\}$/;
 
 export class InvalidAgentConfiguration extends Error {
   constructor(message: string) {
@@ -55,7 +56,10 @@ function redactSecrets(content: string): string {
       name: string,
       assignment: string,
       valueQuote: string,
-    ) => `${prefix}${keyQuote}${name}${keyQuote}${assignment}${valueQuote}<redacted>${valueQuote}`,
+      value: string,
+    ) => `${prefix}${keyQuote}${name}${keyQuote}${assignment}${valueQuote}${
+      ENVIRONMENT_REFERENCE.test(value) ? value : "<redacted>"
+    }${valueQuote}`,
   );
   return quoted.replace(
     BARE_SECRET_ASSIGNMENT,
@@ -65,7 +69,10 @@ function redactSecrets(content: string): string {
       keyQuote: string,
       name: string,
       assignment: string,
-    ) => `${prefix}${keyQuote}${name}${keyQuote}${assignment}<redacted>`,
+      value: string,
+    ) => `${prefix}${keyQuote}${name}${keyQuote}${assignment}${
+      ENVIRONMENT_REFERENCE.test(value.trim()) ? value : "<redacted>"
+    }`,
   );
 }
 

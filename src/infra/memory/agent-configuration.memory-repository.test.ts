@@ -47,6 +47,26 @@ describe("AgentConfigurationRepository memory contract", () => {
 });
 
 describe("AgentConfiguration snapshot", () => {
+  it("preserves sensitive environment references as named requirements", () => {
+    const snapshot = makeAgentConfigurationSnapshot({
+      files: [{
+        path: ".agents/environment.json",
+        content: JSON.stringify({
+          databaseUrl: "${DATABASE_URL}",
+          authHeader: "${AUTH_HEADER}",
+        }),
+      }],
+      secretRequirements: [
+        { name: "DATABASE_URL", purpose: "Imported databaseUrl setting" },
+        { name: "AUTH_HEADER", purpose: "Imported authHeader setting" },
+      ],
+    });
+
+    expect(snapshot.files[0]?.content).toContain("${DATABASE_URL}");
+    expect(snapshot.files[0]?.content).toContain("${AUTH_HEADER}");
+    expect(snapshot.secretRequirements.every((item) => item.purpose.length > 0)).toBe(true);
+  });
+
   it("redacts secret-like assignments and retains requirements without values", () => {
     const databaseUrl = "postgresql://agent:database-password@db.example.test/agentbranch";
     const bearerToken = "header.payload.signature";

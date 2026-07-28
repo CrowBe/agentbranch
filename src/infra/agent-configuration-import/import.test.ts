@@ -126,6 +126,77 @@ describe("agent configuration runtime adapters", () => {
     ]);
   });
 
+  it("retains sensitive environment references across import, preview, and persistence", async () => {
+    const literalCredential = "SYNTHETIC_LITERAL_CREDENTIAL_ENVREF_296";
+    const sourceText = JSON.stringify({
+      databaseUrl: "${DATABASE_URL}",
+      authHeader: "${AUTH_HEADER}",
+      apiKey: literalCredential,
+    }, null, 2);
+    const source = sourceSnapshotFromRepository([
+      { path: "AGENTS.md", bytes: new TextEncoder().encode("Instructions.") },
+      { path: ".agents/environment.json", bytes: new TextEncoder().encode(sourceText) },
+    ]);
+    const analyzer = createAgentConfigurationImportPreviewAnalyzer(
+      defaultAgentConfigurationImportAdapters,
+    );
+    const artifact = unwrap(await analyzer.analyze(source));
+    const rendered = unwrap(await runCapability(capability, "preview", source));
+    const repository = createMemoryAgentConfigurationRepository();
+    const userId = UserId("synthetic-envref-owner");
+    const created = unwrap(await repository.create({
+      userId,
+      name: "Environment references",
+      snapshot: artifact.snapshot,
+    }));
+    const persisted = unwrap(await repository.findById(created.id, userId));
+    const boundaries = [
+      JSON.stringify(artifact),
+      JSON.stringify(rendered),
+      JSON.stringify(persisted),
+    ];
+
+    for (const boundary of boundaries) {
+      expect(boundary).not.toContain(literalCredential);
+      expect(boundary).toContain("${DATABASE_URL}");
+      expect(boundary).toContain("${AUTH_HEADER}");
+    }
+    for (const snapshot of [
+      artifact.snapshot,
+      rendered.snapshot,
+      persisted?.mainVersion.snapshot,
+    ]) {
+      expect(snapshot?.secretRequirements).toEqual(expect.arrayContaining([
+        { name: "DATABASE_URL", purpose: "Imported databaseUrl setting" },
+        { name: "AUTH_HEADER", purpose: "Imported authHeader setting" },
+      ]));
+    }
+    for (const [name, sourceLine] of [
+      ["DATABASE_URL", '"databaseUrl": "${DATABASE_URL}"'],
+      ["AUTH_HEADER", '"authHeader": "${AUTH_HEADER}"'],
+    ] as const) {
+      const redaction = artifact.redactions.find((item) => item.name === name);
+      expect(redaction).toMatchObject({
+        purpose: expect.stringMatching(/\S/),
+        evidence: {
+          path: ".agents/environment.json",
+          span: {
+            startLine: expect.any(Number),
+            startColumn: expect.any(Number),
+            endLine: expect.any(Number),
+            endColumn: expect.any(Number),
+          },
+        },
+      });
+      expect(rendered.redactions).toContainEqual(redaction);
+      const span = redaction!.evidence.span;
+      expect(sourceText.split("\n")[span.startLine - 1]?.slice(
+        span.startColumn - 1,
+        span.endColumn - 1,
+      )).toBe(sourceLine);
+    }
+  });
+
   it("keeps connection credentials, authorization values, and private keys out of serialized previews", async () => {
     const databaseUrl = "postgresql://agent:database-password@db.example.test/agentbranch";
     const bearerToken = "header.payload.signature";

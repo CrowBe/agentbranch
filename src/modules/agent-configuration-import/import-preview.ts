@@ -30,7 +30,7 @@ const SENSITIVE_SETTING_NAME =
 const QUOTED_SECRET_ASSIGNMENT =
   new RegExp(`(^|[\\s{,])(["']?)(${SENSITIVE_SETTING_NAME})\\2(\\s*[:=]\\s*)(["'])((?:\\\\.|[^\\\\\\r\\n])*?)\\5`, "gim");
 const BARE_SECRET_ASSIGNMENT =
-  new RegExp(`(^|[\\s{,])(["']?)(${SENSITIVE_SETTING_NAME})\\2(\\s*[:=]\\s*)(?!["'])([^\\r\\n,}\\]]+)`, "gim");
+  new RegExp(`(^|[\\s{,])(["']?)(${SENSITIVE_SETTING_NAME})\\2(\\s*[:=]\\s*)(?!\\s*["'])([^\\r\\n,}\\]]+)`, "gim");
 const SECRET_REFERENCE =
   /\$\{((?:[A-Z][A-Z0-9_]*)?(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)[A-Z0-9_]*)\}/g;
 const PEM_PRIVATE_KEY =
@@ -107,12 +107,6 @@ function sanitize(file: SourceSnapshot["files"][number]): SanitizedFile {
 
   const redactions: ImportRedaction[] = [];
   const requirements: SecretRequirement[] = [];
-  for (const match of text.matchAll(SECRET_REFERENCE)) {
-    requirements.push({
-      name: match[1]!,
-      purpose: `Required by ${file.path}`,
-    });
-  }
 
   const assignments: {
     start: number;
@@ -121,6 +115,7 @@ function sanitize(file: SourceSnapshot["files"][number]): SanitizedFile {
     valueEnd: number;
     rawName: string;
     value: string;
+    quoted: boolean;
   }[] = [];
   for (const pattern of [QUOTED_SECRET_ASSIGNMENT, BARE_SECRET_ASSIGNMENT]) {
     for (const match of text.matchAll(pattern)) {
@@ -144,13 +139,19 @@ function sanitize(file: SourceSnapshot["files"][number]): SanitizedFile {
         valueEnd: valueStart + value.length,
         rawName,
         value,
+        quoted: pattern === QUOTED_SECRET_ASSIGNMENT,
       });
     }
   }
-  const uniqueAssignments = [...new Map(assignments.map((item) => [
-    `${item.valueStart}:${item.valueEnd}`,
-    item,
-  ])).values()].sort((a, b) => a.valueStart - b.valueStart);
+  const quotedAssignments = assignments.filter((item) => item.quoted);
+  const uniqueAssignments = assignments
+    .filter((item) => item.quoted || !quotedAssignments.some((quoted) =>
+      quoted.start < item.end && item.start < quoted.end
+    ))
+    .filter((item, index, items) => items.findIndex((candidate) =>
+      candidate.valueStart === item.valueStart && candidate.valueEnd === item.valueEnd
+    ) === index)
+    .sort((a, b) => a.valueStart - b.valueStart);
   const pemBlocks = [...text.matchAll(PEM_PRIVATE_KEY)].map((match) => ({
     start: match.index,
     end: match.index + match[0].length,
@@ -162,8 +163,10 @@ function sanitize(file: SourceSnapshot["files"][number]): SanitizedFile {
 
   for (const assignment of uniqueAssignments) {
     const { rawName, value, start, end } = assignment;
-    if (value === "<redacted>" || /^\$\{[A-Z][A-Z0-9_]*\}$/.test(value)) continue;
-      const name = requirementName(rawName);
+    if (value === "<redacted>") continue;
+    const reference = /^\$\{([A-Z][A-Z0-9_]*)\}$/.exec(value);
+    const name = reference?.[1] ?? requirementName(rawName);
+    if (reference) {
       redactions.push({
         name,
         purpose: `Imported ${rawName} setting`,
@@ -173,6 +176,24 @@ function sanitize(file: SourceSnapshot["files"][number]): SanitizedFile {
         },
       });
       requirements.push({ name, purpose: `Imported ${rawName} setting` });
+      continue;
+    }
+    redactions.push({
+      name,
+      purpose: `Imported ${rawName} setting`,
+      evidence: {
+        path: file.path,
+        span: spanAt(text, start, end),
+      },
+    });
+    requirements.push({ name, purpose: `Imported ${rawName} setting` });
+  }
+  for (const match of text.matchAll(SECRET_REFERENCE)) {
+    if (requirements.some((requirement) => requirement.name === match[1])) continue;
+    requirements.push({
+      name: match[1]!,
+      purpose: `Required by ${file.path}`,
+    });
   }
   for (const block of pemBlocks) {
     if (uniqueAssignments.some((assignment) =>
