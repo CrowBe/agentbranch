@@ -26,6 +26,8 @@ export type SourceSpan = {
 export type SourceFile = {
   readonly path: string;
   readonly content: string;
+  /** `content` is literal UTF-8 text or base64-encoded opaque bytes. */
+  readonly encoding: "utf8" | "base64";
   readonly contentHash: string;
 };
 
@@ -42,10 +44,23 @@ export type SecretRequirement = {
   readonly purpose: string;
 };
 
+export type AgentConfigurationImportProvenance = {
+  readonly runtime: string;
+  readonly adapter: {
+    readonly id: string;
+    readonly version: string;
+  };
+};
+
 export type AgentConfigurationSnapshot = {
   readonly files: readonly SourceFile[];
   readonly components: readonly AgentComponent[];
   readonly secretRequirements: readonly SecretRequirement[];
+  /**
+   * Detected source layouts and the adapters that interpreted them. This is
+   * provenance only: array order does not express runtime precedence.
+   */
+  readonly importProvenance: readonly AgentConfigurationImportProvenance[];
 };
 
 export type AgentConfigurationVersion = {

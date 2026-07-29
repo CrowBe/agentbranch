@@ -3,13 +3,23 @@ import { AgentConfigurationId, AgentConfigurationVersionId, type UserId } from "
 import type {
   AgentComponent,
   AgentConfiguration,
+  AgentConfigurationImportProvenance,
   AgentConfigurationSnapshot,
   SecretRequirement,
   SourceFile,
 } from "./agent-configuration.types";
 
-const SECRET_ASSIGNMENT =
-  /(^|[\s"'`{,])([A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)[A-Z0-9_]*)(\s*[:=]\s*)(["']?)([^\s"',}\]]+)\4/gim;
+const SENSITIVE_SETTING_NAME =
+  "(?:(?:[A-Za-z][A-Za-z0-9_-]*)?(?:key|token|secret|password|credential|authorization|auth[_-]?header|dsn|connection[_-]?string|(?:database|db|postgres(?:ql)?|redis|mongo(?:db)?|mysql|mariadb|amqp|broker)[_-]?(?:url|uri))[A-Za-z0-9_-]*)";
+const QUOTED_SECRET_ASSIGNMENT =
+  new RegExp(`(^|[\\s{,])(["']?)(${SENSITIVE_SETTING_NAME})\\2(\\s*[:=]\\s*)(["'])((?:\\\\.|[^\\\\\\r\\n])*?)\\5`, "gim");
+const BARE_SECRET_ASSIGNMENT =
+  new RegExp(`(^|[\\s{,])(["']?)(${SENSITIVE_SETTING_NAME})\\2(\\s*[:=]\\s*)(?!\\s*["'])([^\\r\\n,}\\]]+)`, "gim");
+const PEM_PRIVATE_KEY =
+  /-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9]+ )?PRIVATE KEY-----/g;
+const URL_WITH_USERINFO =
+  /\b[a-z][a-z0-9+.-]*:\/\/[^\s/:@]+:[^\s/@]+@[^\s"'<>]+/gi;
+const ENVIRONMENT_REFERENCE = /^\$\{[A-Z][A-Z0-9_]*\}$/;
 
 export class InvalidAgentConfiguration extends Error {
   constructor(message: string) {
@@ -26,6 +36,7 @@ function safeRelativePath(path: string): string {
   if (
     normalized.length === 0 ||
     normalized.startsWith("/") ||
+    /^[A-Za-z]:\//.test(normalized) ||
     normalized.split("/").some((part) => part === "" || part === "." || part === "..")
   ) {
     throw new InvalidAgentConfiguration(`Source path must be a normalized relative path: ${path}`);
@@ -34,22 +45,50 @@ function safeRelativePath(path: string): string {
 }
 
 function redactSecrets(content: string): string {
-  return content.replace(
-    SECRET_ASSIGNMENT,
+  const privateKeys = content
+    .replace(PEM_PRIVATE_KEY, "<redacted>")
+    .replace(URL_WITH_USERINFO, "<redacted>");
+  const quoted = privateKeys.replace(
+    QUOTED_SECRET_ASSIGNMENT,
     (
       _match,
       prefix: string,
+      keyQuote: string,
       name: string,
       assignment: string,
-      quote: string,
-    ) => `${prefix}${name}${assignment}${quote}<redacted>${quote}`,
+      valueQuote: string,
+      value: string,
+    ) => `${prefix}${keyQuote}${name}${keyQuote}${assignment}${valueQuote}${
+      ENVIRONMENT_REFERENCE.test(value) ? value : "<redacted>"
+    }${valueQuote}`,
+  );
+  return quoted.replace(
+    BARE_SECRET_ASSIGNMENT,
+    (
+      _match,
+      prefix: string,
+      keyQuote: string,
+      name: string,
+      assignment: string,
+      value: string,
+    ) => `${prefix}${keyQuote}${name}${keyQuote}${assignment}${
+      ENVIRONMENT_REFERENCE.test(value.trim()) ? value : "<redacted>"
+    }`,
   );
 }
 
-function sourceFile(input: { path: string; content: string }): SourceFile {
+function sourceFile(input: {
+  path: string;
+  content: string;
+  encoding?: "utf8" | "base64";
+}): SourceFile {
   const path = safeRelativePath(input.path);
-  const content = redactSecrets(input.content);
-  return { path, content, contentHash: hashSource(content) };
+  const encoding = input.encoding ?? "utf8";
+  if (encoding === "base64" && !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(input.content)) {
+    throw new InvalidAgentConfiguration(`Source ${path} is not valid base64.`);
+  }
+  const content = encoding === "utf8" ? redactSecrets(input.content) : input.content;
+  return { path, content, encoding, contentHash: hashSource(content) };
 }
 
 function secretRequirement(input: SecretRequirement): SecretRequirement {
@@ -61,10 +100,29 @@ function secretRequirement(input: SecretRequirement): SecretRequirement {
   return { name, purpose };
 }
 
+function importProvenance(
+  input: AgentConfigurationImportProvenance,
+): AgentConfigurationImportProvenance {
+  const runtime = input.runtime.trim();
+  const id = input.adapter.id.trim();
+  const version = input.adapter.version.trim();
+  if (runtime.length === 0 || id.length === 0 || version.length === 0) {
+    throw new InvalidAgentConfiguration(
+      "Import provenance needs a runtime, adapter ID, and adapter version.",
+    );
+  }
+  return { runtime, adapter: { id, version } };
+}
+
 export function makeAgentConfigurationSnapshot(input: {
-  files: readonly { path: string; content: string }[];
+  files: readonly {
+    path: string;
+    content: string;
+    encoding?: "utf8" | "base64";
+  }[];
   components?: readonly Omit<AgentComponent, "contentHash">[];
   secretRequirements?: readonly SecretRequirement[];
+  importProvenance?: readonly AgentConfigurationImportProvenance[];
 }): AgentConfigurationSnapshot {
   const files = input.files.map(sourceFile).sort((a, b) => a.path.localeCompare(b.path));
   if (new Set(files.map((file) => file.path)).size !== files.length) {
@@ -88,7 +146,14 @@ export function makeAgentConfigurationSnapshot(input: {
     throw new InvalidAgentConfiguration("Components need stable, unique IDs.");
   }
   const secretRequirements = (input.secretRequirements ?? []).map(secretRequirement);
-  return { files, components, secretRequirements };
+  const provenance = (input.importProvenance ?? [])
+    .map(importProvenance)
+    .sort((a, b) =>
+      a.runtime.localeCompare(b.runtime)
+      || a.adapter.id.localeCompare(b.adapter.id)
+      || a.adapter.version.localeCompare(b.adapter.version)
+    );
+  return { files, components, secretRequirements, importProvenance: provenance };
 }
 
 export function makeAgentConfiguration(input: {

@@ -1,0 +1,6 @@
+{
+  "model": "claude-sonnet",
+  "permissions": { "allow": ["Read"] },
+  "hooks": { "beforeTool": "printf never-executed" },
+  "apiKey": "claude secret value"
+}
