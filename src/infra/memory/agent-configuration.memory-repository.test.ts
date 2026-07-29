@@ -55,9 +55,9 @@ export function agentConfigurationRepositoryContract(
       .toBe("opaque=true\n");
     const versions = unwrap(await repository.listVersions(created.id, userId));
     expect(versions).toHaveLength(2);
-    expect(versions.every((version) =>
-      JSON.stringify(version.snapshot.importProvenance) === JSON.stringify(source.importProvenance)
-    )).toBe(true);
+    for (const version of versions) {
+      expect(version.snapshot.importProvenance).toEqual(source.importProvenance);
+    }
     expect(unwrap(await repository.findById(created.id, UserId("other")))).toBeNull();
   });
 }
