@@ -22,14 +22,16 @@ const depth = (path: string) => path.split("/").length - 1;
 const runtimePolicies: Readonly<Record<string, RuntimePolicy>> = {
   "claude-code": {
     precedence: (component) =>
-      component.path === ".claude/settings.local.json" ? 300
+      component.kind === "instruction" ? 100 + depth(component.path)
+        : component.path === ".claude/settings.local.json" ? 300
         : component.path === ".claude/settings.json" ? 200
           : 100,
     instructionOrder: (component) =>
       component.path === "CLAUDE.md" ? 0 : 100 + depth(component.path),
   },
   codex: {
-    precedence: () => 200,
+    precedence: (component) =>
+      component.kind === "instruction" ? 100 + depth(component.path) : 200,
     instructionOrder: (component) =>
       component.path === "AGENTS.md" ? 0 : 100 + depth(component.path),
   },
@@ -41,7 +43,8 @@ const runtimePolicies: Readonly<Record<string, RuntimePolicy>> = {
     instructionOrder: (component) => depth(component.path),
   },
   agents: {
-    precedence: (component) => 100 + depth(component.path),
+    precedence: (component) =>
+      100 + depth(component.path) + (component.path.endsWith("/local.md") ? 1 : 0),
     instructionOrder: (component) =>
       component.path === "AGENTS.md" ? 0 : 100 + depth(component.path),
   },
@@ -68,8 +71,8 @@ function declaration(
   component: AgentComponent,
   label: string,
 ): string | undefined {
-  if (component.kind === "instruction") return undefined;
   const runtime = component.importProvenance?.runtime ?? "unknown-runtime";
+  if (component.kind === "instruction") return `${runtime}:instruction`;
   if (
     component.importProvenance?.rule.includes(".settings.")
     || component.kind === "skill"
@@ -109,7 +112,8 @@ function explicitRelationships(file: SourceFile | undefined): EffectiveConfigura
   const relationships: EffectiveConfigurationRuleRelationship[] = [];
   for (const [index, line] of file.content.split("\n").entries()) {
     for (const match of line.matchAll(RELATIONSHIP_PATTERN)) {
-      const target = match[2]!;
+      const rawTarget = match[2]!;
+      const target = rawTarget.replace(/[.,;:!?]+$/, "");
       const targetStart = (match.index ?? 0) + match[0].lastIndexOf(target);
       relationships.push({
         kind: relationshipKind(match[1]!),

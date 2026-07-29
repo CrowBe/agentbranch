@@ -34,6 +34,24 @@ function stableId(prefix: string, value: string): string {
   return `${prefix}-${createHash("sha256").update(value).digest("hex").slice(0, 16)}`;
 }
 
+function validSourceSpan(file: SourceFile, span: SourceSpan): boolean {
+  if (
+    span.startLine < 1
+    || span.startColumn < 1
+    || span.endLine < span.startLine
+    || (span.endLine === span.startLine && span.endColumn < span.startColumn)
+  ) return false;
+  if (file.encoding === "base64") {
+    return span.startLine === 1 && span.startColumn === 1
+      && span.endLine === 1 && span.endColumn === 1;
+  }
+  const lines = file.content.split("\n");
+  return span.startLine <= lines.length
+    && span.endLine <= lines.length
+    && span.startColumn <= lines[span.startLine - 1]!.length + 1
+    && span.endColumn <= lines[span.endLine - 1]!.length + 1;
+}
+
 function evidenceFor(
   snapshot: AgentConfigurationSnapshot,
   component: AgentComponent,
@@ -208,7 +226,13 @@ export function resolveEffectiveConfiguration(
 
   for (const component of components) {
     const rule = ruleByComponent.get(component.id);
-    for (const relationship of rule?.relationships ?? []) {
+    for (const [occurrence, relationship] of (rule?.relationships ?? []).entries()) {
+      const source = input.snapshot.files.find((file) => file.path === component.path)!;
+      if (relationship.span && !validSourceSpan(source, relationship.span)) {
+        throw new Error(
+          `Component ${component.id} relationship ${occurrence + 1} has an invalid source span.`,
+        );
+      }
       const matches = targets.get(relationship.target) ?? [];
       const status = matches.length === 1
         ? "resolved"
@@ -224,7 +248,7 @@ export function resolveEffectiveConfiguration(
       const edge: EffectiveConfigurationEdge = {
         id: stableId(
           "edge",
-          `${relationship.kind}\0${component.id}\0${relationship.target}\0${status}`,
+          `${relationship.kind}\0${component.id}\0${relationship.target}\0${status}\0${occurrence}`,
         ),
         kind: relationship.kind,
         from: graphNodeId(component.id),
@@ -252,10 +276,25 @@ export function resolveEffectiveConfiguration(
     }
   }
 
-  const connected = new Set(edges.flatMap((edge) => [edge.from, ...(edge.to ? [edge.to] : [])]));
-  const roots = new Set(input.rules.filter((rule) => rule.root).map((rule) => graphNodeId(rule.componentId)));
+  const roots = new Set(input.rules
+    .filter((rule) => rule.root && effective.get(rule.componentId))
+    .map((rule) => graphNodeId(rule.componentId)));
+  const effectiveNodeIds = new Set(nodes.filter((node) => node.effective).map((node) => node.id));
+  const reachable = new Set(roots);
+  const pending = [...roots];
+  while (pending.length > 0) {
+    const current = pending.shift()!;
+    if (!effectiveNodeIds.has(current)) continue;
+    for (const edge of edges) {
+      if (edge.status !== "resolved" || edge.from !== current || !edge.to) continue;
+      if (!reachable.has(edge.to)) {
+        reachable.add(edge.to);
+        pending.push(edge.to);
+      }
+    }
+  }
   for (const node of nodes) {
-    if (!node.effective || roots.has(node.id) || connected.has(node.id)) continue;
+    if (!node.effective || reachable.has(node.id)) continue;
     findings.push({
       code: "unreachable-component",
       message: `${node.label} is not reachable from an effective root or relationship.`,

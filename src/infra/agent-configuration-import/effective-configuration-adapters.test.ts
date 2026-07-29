@@ -38,13 +38,13 @@ async function fixture(name: string) {
 
 describe("effective configuration runtime adapter goldens", () => {
   it.each([
-    ["claude", ["CLAUDE.md", "packages/app/CLAUDE.md"]],
-    ["codex", ["AGENTS.md", "packages/app/AGENTS.md"]],
-    ["openclaw", ["openclaw.json", ".openclaw/openclaw.json"]],
-    ["agents", [".agents/instructions/base.md", ".agents/instructions/local.md"]],
+    ["claude", ["packages/app/CLAUDE.md"], "CLAUDE.md"],
+    ["codex", ["packages/app/AGENTS.md"], "AGENTS.md"],
+    ["openclaw", [".openclaw/openclaw.json"], "openclaw.json"],
+    ["agents", [".agents/instructions/local.md"], ".agents/instructions/base.md"],
   ] as const)(
     "proves deterministic instruction order and override behavior for %s",
-    async (name, expectedInstructionPaths) => {
+    async (name, expectedInstructionPaths, shadowedPath) => {
       const preview = unwrap(await analyzer.analyze(await fixture(name)));
       const graph = resolveImportedEffectiveConfiguration(preview.snapshot);
       const repeated = resolveImportedEffectiveConfiguration(preview.snapshot);
@@ -53,14 +53,42 @@ describe("effective configuration runtime adapter goldens", () => {
       expect(graph).toEqual(repeated);
       expect(graph.effective.instructions.map((id) => nodes.get(id)?.evidence.path))
         .toEqual(expectedInstructionPaths);
-      expect(graph.edges.some((edge) =>
-        edge.kind === "overrides" && edge.status === "resolved"
-      )).toBe(true);
+      const instructionOverrides = graph.edges.filter((edge) =>
+        edge.kind === "overrides"
+        && edge.status === "resolved"
+        && edge.target === edge.to
+        && nodes.get(edge.from)?.kind === "instruction"
+      );
+      expect(instructionOverrides).toHaveLength(1);
+      expect(nodes.get(instructionOverrides[0]!.from)?.evidence.path)
+        .toBe(expectedInstructionPaths[0]);
+      expect(nodes.get(instructionOverrides[0]!.to!)?.evidence.path).toBe(shadowedPath);
+      expect(graph.findings.filter((finding) => finding.code === "shadowed-instruction"))
+        .toEqual([
+          expect.objectContaining({
+            evidence: expect.objectContaining({ path: shadowedPath }),
+          }),
+        ]);
       expect(graph.nodes.every((node) =>
         node.evidence.adapterRule !== "import.unattributed-component"
       )).toBe(true);
     },
   );
+
+  it("normalizes prose terminal punctuation when extracting relationships", async () => {
+    const preview = unwrap(await analyzer.analyze(await fixture("agents")));
+    const graph = resolveImportedEffectiveConfiguration(preview.snapshot);
+
+    expect(graph.edges).toContainEqual(expect.objectContaining({
+      kind: "loads",
+      target: "portable",
+      status: "resolved",
+    }));
+    expect(graph.findings).not.toContainEqual(expect.objectContaining({
+      code: "unresolved-reference",
+      message: expect.stringContaining("portable"),
+    }));
+  });
 
   it("keeps runtime names and precedence out of the core graph vocabulary", async () => {
     const preview = unwrap(await analyzer.analyze(await fixture("claude")));
@@ -78,6 +106,8 @@ describe("effective configuration runtime adapter goldens", () => {
         === ".claude/settings.local.json"
     )?.precedence).toBe(300);
     expect(Object.keys(graph)).not.toContain("runtime");
-    expect(graph.edges.filter((edge) => edge.kind === "overrides")).toHaveLength(2);
+    expect(graph.edges.filter((edge) =>
+      edge.kind === "overrides" && edge.target === edge.to,
+    )).toHaveLength(2);
   });
 });

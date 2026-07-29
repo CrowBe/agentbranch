@@ -91,6 +91,24 @@ function sourceFile(input: {
   return { path, content, encoding, contentHash: hashSource(content) };
 }
 
+function validSourceSpan(file: SourceFile, span: NonNullable<AgentComponent["span"]>): boolean {
+  if (
+    span.startLine < 1
+    || span.startColumn < 1
+    || span.endLine < span.startLine
+    || (span.endLine === span.startLine && span.endColumn < span.startColumn)
+  ) return false;
+  if (file.encoding === "base64") {
+    return span.startLine === 1 && span.startColumn === 1
+      && span.endLine === 1 && span.endColumn === 1;
+  }
+  const lines = file.content.split("\n");
+  return span.startLine <= lines.length
+    && span.endLine <= lines.length
+    && span.startColumn <= lines[span.startLine - 1]!.length + 1
+    && span.endColumn <= lines[span.endLine - 1]!.length + 1;
+}
+
 function secretRequirement(input: SecretRequirement): SecretRequirement {
   const name = input.name.trim();
   const purpose = input.purpose.trim();
@@ -133,13 +151,9 @@ export function makeAgentConfigurationSnapshot(input: {
     const path = safeRelativePath(component.path);
     const file = byPath.get(path);
     if (!file) throw new InvalidAgentConfiguration(`Component ${component.id} references missing source ${path}.`);
-    if (component.span && (
-      component.span.startLine < 1 ||
-      component.span.startColumn < 1 ||
-      component.span.endLine < component.span.startLine ||
-      (component.span.endLine === component.span.startLine &&
-        component.span.endColumn < component.span.startColumn)
-    )) throw new InvalidAgentConfiguration(`Component ${component.id} has an invalid source span.`);
+    if (component.span && !validSourceSpan(file, component.span)) {
+      throw new InvalidAgentConfiguration(`Component ${component.id} has an invalid source span.`);
+    }
     const provenance = component.importProvenance;
     if (provenance && (
       provenance.runtime.trim().length === 0

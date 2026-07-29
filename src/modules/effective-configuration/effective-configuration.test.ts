@@ -21,13 +21,13 @@ function snapshot() {
     files: [
       { path: "AGENTS.md", content: "Project rules." },
       { path: "nested/AGENTS.md", content: "Nested rules." },
-      { path: "skills/review.md", content: "Review." },
-      { path: "skills/review-copy.md", content: "Review." },
-      { path: "agents/reviewer.md", content: "Reviewer." },
-      { path: "tools/shell.json", content: "{}" },
-      { path: "model.json", content: "{}" },
-      { path: "policy.json", content: "{}" },
-      { path: "orphan.md", content: "Orphan." },
+      { path: "skills/review.md", content: "Review rules." },
+      { path: "skills/review-copy.md", content: "Review rules." },
+      { path: "agents/reviewer.md", content: "Reviewer rules." },
+      { path: "tools/shell.json", content: "{\"shell\":1}" },
+      { path: "model.json", content: "{\"model\":1}" },
+      { path: "policy.json", content: "{\"policy\":1}" },
+      { path: "orphan.md", content: "Orphan data." },
     ],
     components: [
       { id: "root", kind: "instruction", path: "AGENTS.md", span },
@@ -162,5 +162,153 @@ describe("effective configuration resolver", () => {
     ]);
     expect(outline.rows.find((row) => row.component === "Root instructions")?.status)
       .toBe("shadowed");
+  });
+
+  it("finds disconnected relationship subgraphs by traversing from effective roots", () => {
+    const isolated = makeAgentConfigurationSnapshot({
+      files: [
+        { path: "root.md", content: "Root." },
+        { path: "a.md", content: "A." },
+        { path: "b.md", content: "B." },
+      ],
+      components: [
+        { id: "root", kind: "instruction", path: "root.md", span: { ...span, endColumn: 6 } },
+        { id: "a", kind: "skill", path: "a.md", span: { ...span, endColumn: 3 } },
+        { id: "b", kind: "skill", path: "b.md", span: { ...span, endColumn: 3 } },
+      ],
+    });
+    const graph = resolveEffectiveConfiguration({
+      snapshot: isolated,
+      rules: [
+        { componentId: "root", adapterRule: "test.root", root: true },
+        {
+          componentId: "a",
+          adapterRule: "test.a",
+          relationships: [{ kind: "loads", target: "b", confidence: "certain" }],
+        },
+        { componentId: "b", adapterRule: "test.b" },
+      ],
+    });
+
+    expect(graph.findings.filter((finding) => finding.code === "unreachable-component")
+      .flatMap((finding) => finding.nodeIds).sort()).toEqual(["component:a", "component:b"]);
+  });
+
+  it("does not make components reachable through a shadowed root", () => {
+    const shadowedRoot = makeAgentConfigurationSnapshot({
+      files: [
+        { path: "root.md", content: "Root." },
+        { path: "shadowed.md", content: "Shadowed." },
+        { path: "orphan.md", content: "Orphan." },
+      ],
+      components: [
+        { id: "root", kind: "instruction", path: "root.md", span: { ...span, endColumn: 6 } },
+        {
+          id: "shadowed",
+          kind: "instruction",
+          path: "shadowed.md",
+          span: { ...span, endColumn: 10 },
+        },
+        { id: "orphan", kind: "skill", path: "orphan.md", span: { ...span, endColumn: 8 } },
+      ],
+    });
+    const graph = resolveEffectiveConfiguration({
+      snapshot: shadowedRoot,
+      rules: [
+        {
+          componentId: "root",
+          adapterRule: "test.root",
+          declaration: "instructions",
+          precedence: 2,
+          root: true,
+        },
+        {
+          componentId: "shadowed",
+          adapterRule: "test.shadowed",
+          declaration: "instructions",
+          precedence: 1,
+          root: true,
+          relationships: [{ kind: "loads", target: "orphan", confidence: "certain" }],
+        },
+        { componentId: "orphan", adapterRule: "test.orphan" },
+      ],
+    });
+
+    expect(graph.findings.filter((finding) => finding.code === "unreachable-component")
+      .flatMap((finding) => finding.nodeIds)).toContain("component:orphan");
+  });
+
+  it("uses stable, occurrence-unique IDs for duplicate relationships", () => {
+    const duplicateRules = rules().map((rule) => rule.componentId === "root"
+      ? {
+          ...rule,
+          relationships: [
+            { kind: "requires" as const, target: "policy", confidence: "certain" as const },
+            { kind: "requires" as const, target: "policy", confidence: "certain" as const },
+          ],
+        }
+      : rule);
+    const first = resolveEffectiveConfiguration({ snapshot: snapshot(), rules: duplicateRules });
+    const second = resolveEffectiveConfiguration({ snapshot: snapshot(), rules: duplicateRules });
+    const firstIds = first.edges.filter((edge) => edge.kind === "requires").map((edge) => edge.id);
+    const secondIds = second.edges.filter((edge) => edge.kind === "requires").map((edge) => edge.id);
+
+    expect(new Set(firstIds).size).toBe(2);
+    expect(firstIds).toEqual(secondIds);
+  });
+
+  it("preserves duplicate explicit overrides declarations as occurrence-unique outline relationships", async () => {
+    const duplicateRules = rules().map((rule) => rule.componentId === "root"
+      ? {
+          ...rule,
+          relationships: [
+            { kind: "overrides" as const, target: "policy", confidence: "certain" as const },
+            { kind: "overrides" as const, target: "policy", confidence: "certain" as const },
+          ],
+        }
+      : rule);
+    const first = resolveEffectiveConfiguration({ snapshot: snapshot(), rules: duplicateRules });
+    const second = resolveEffectiveConfiguration({ snapshot: snapshot(), rules: duplicateRules });
+    const firstIds = first.edges
+      .filter((edge) => edge.kind === "overrides" && edge.from === "component:root" && edge.target === "policy")
+      .map((edge) => edge.id);
+    const secondIds = second.edges
+      .filter((edge) => edge.kind === "overrides" && edge.from === "component:root" && edge.target === "policy")
+      .map((edge) => edge.id);
+    const outline = unwrap(await runCapability(
+      effectiveConfigurationCapability,
+      "outline",
+      { snapshot: snapshot(), rules: duplicateRules },
+    ));
+    const outlineIds = outline.relationships
+      .filter((relationship) =>
+        relationship.relationship === "overrides"
+        && relationship.source === "Root instructions"
+        && relationship.target === "policy",
+      )
+      .map((relationship) => relationship.id);
+
+    expect(firstIds).toHaveLength(2);
+    expect(new Set(firstIds).size).toBe(2);
+    expect(firstIds).toEqual(secondIds);
+    expect(outlineIds).toEqual(firstIds);
+    expect(new Set(outlineIds).size).toBe(2);
+  });
+
+  it("rejects an out-of-bounds relationship span", () => {
+    expect(() => resolveEffectiveConfiguration({
+      snapshot: snapshot(),
+      rules: rules().map((rule) => rule.componentId === "root"
+        ? {
+            ...rule,
+            relationships: [{
+              kind: "loads" as const,
+              target: "review",
+              confidence: "certain" as const,
+              span: { startLine: 77, startColumn: 1, endLine: 88, endColumn: 1 },
+            }],
+          }
+        : rule),
+    })).toThrow(/relationship.*invalid source span/i);
   });
 });
