@@ -140,6 +140,17 @@ export function makeAgentConfigurationSnapshot(input: {
       (component.span.endLine === component.span.startLine &&
         component.span.endColumn < component.span.startColumn)
     )) throw new InvalidAgentConfiguration(`Component ${component.id} has an invalid source span.`);
+    const provenance = component.importProvenance;
+    if (provenance && (
+      provenance.runtime.trim().length === 0
+      || provenance.adapter.id.trim().length === 0
+      || provenance.adapter.version.trim().length === 0
+      || provenance.rule.trim().length === 0
+    )) {
+      throw new InvalidAgentConfiguration(
+        `Component ${component.id} import provenance is incomplete.`,
+      );
+    }
     return { ...component, path, contentHash: file.contentHash };
   });
   if (new Set(components.map((component) => component.id)).size !== components.length) {

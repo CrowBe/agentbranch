@@ -16,3 +16,7 @@ export {
   agentsLayoutImportAdapter,
   defaultAgentConfigurationImportAdapters,
 } from "./runtime-adapters";
+export {
+  effectiveConfigurationRulesForImportedSnapshot,
+  resolveImportedEffectiveConfiguration,
+} from "./effective-configuration-adapters";

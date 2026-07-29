@@ -41,6 +41,7 @@ export type AdapterWarning = {
 export type ImportedComponent = {
   readonly kind: AgentComponentKind;
   readonly evidence: ImportEvidence;
+  readonly adapterRule: string;
 };
 
 export type AdapterProbe = {

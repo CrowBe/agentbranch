@@ -11,6 +11,7 @@ import type {
 import { sourceSpanForWholeFile } from "@/modules/agent-configuration-import";
 
 type Rule = {
+  readonly id: string;
   readonly test: (path: string) => boolean;
   readonly kind: ImportedComponent["kind"];
 };
@@ -86,7 +87,11 @@ function createAdapter(definition: AdapterDefinition): AgentConfigurationImportA
       for (const file of snapshot.files) {
         for (const rule of definition.rules) {
           if (rule.test(file.path)) {
-            components.push({ kind: rule.kind, evidence: fileEvidence(snapshot, file.path) });
+            components.push({
+              kind: rule.kind,
+              evidence: fileEvidence(snapshot, file.path),
+              adapterRule: `${definition.id}.${rule.id}`,
+            });
           }
         }
         for (const setting of definition.settings ?? []) {
@@ -102,7 +107,13 @@ function createAdapter(definition: AdapterDefinition): AgentConfigurationImportA
           }
           for (const [key, kind] of Object.entries(setting.keys)) {
             const evidence = keyEvidence(file.path, text, key);
-            if (evidence) components.push({ kind, evidence });
+            if (evidence) {
+              components.push({
+                kind,
+                evidence,
+                adapterRule: `${definition.id}.settings.${key}`,
+              });
+            }
           }
           if (!Object.keys(setting.keys).some((key) => keyEvidence(file.path, text, key))) {
             warnings.push({
@@ -141,16 +152,17 @@ export const claudeCodeImportAdapter = createAdapter({
   id: "claude-code",
   runtime: "claude-code",
   markers: [
-    exact("CLAUDE.md", ".mcp.json", ".claude/settings.json", ".claude/settings.local.json"),
+    (path) => path === "CLAUDE.md" || path.endsWith("/CLAUDE.md"),
+    exact(".mcp.json", ".claude/settings.json", ".claude/settings.local.json"),
     (path) => path.startsWith(".claude/"),
   ],
   rules: [
-    { test: exact("CLAUDE.md"), kind: "instruction" },
-    { test: under(".claude/skills/", "/SKILL.md"), kind: "skill" },
-    { test: under(".claude/agents/", ".md"), kind: "subagent" },
-    { test: exact(".mcp.json"), kind: "tool" },
-    { test: under(".claude/rules/", ".md"), kind: "policy" },
-    { test: (path) => path.startsWith(".claude/") && path.includes("/references/"), kind: "reference" },
+    { id: "instructions", test: (path) => path === "CLAUDE.md" || path.endsWith("/CLAUDE.md"), kind: "instruction" },
+    { id: "skill", test: under(".claude/skills/", "/SKILL.md"), kind: "skill" },
+    { id: "subagent", test: under(".claude/agents/", ".md"), kind: "subagent" },
+    { id: "mcp", test: exact(".mcp.json"), kind: "tool" },
+    { id: "rule", test: under(".claude/rules/", ".md"), kind: "policy" },
+    { id: "reference", test: (path) => path.startsWith(".claude/") && path.includes("/references/"), kind: "reference" },
   ],
   settings: [{
     path: exact(".claude/settings.json", ".claude/settings.local.json"),
@@ -162,15 +174,16 @@ export const codexImportAdapter = createAdapter({
   id: "codex",
   runtime: "codex",
   markers: [
-    exact("AGENTS.md", ".codex/config.toml"),
+    (path) => path === "AGENTS.md" || path.endsWith("/AGENTS.md"),
+    exact(".codex/config.toml"),
     (path) => path.startsWith(".codex/"),
   ],
   rules: [
-    { test: exact("AGENTS.md"), kind: "instruction" },
-    { test: under(".codex/skills/", "/SKILL.md"), kind: "skill" },
-    { test: under(".codex/agents/", ".md"), kind: "subagent" },
-    { test: (path) => path.startsWith(".codex/rules/"), kind: "policy" },
-    { test: (path) => path.startsWith(".codex/references/"), kind: "reference" },
+    { id: "instructions", test: (path) => path === "AGENTS.md" || path.endsWith("/AGENTS.md"), kind: "instruction" },
+    { id: "skill", test: under(".codex/skills/", "/SKILL.md"), kind: "skill" },
+    { id: "subagent", test: under(".codex/agents/", ".md"), kind: "subagent" },
+    { id: "rule", test: (path) => path.startsWith(".codex/rules/"), kind: "policy" },
+    { id: "reference", test: (path) => path.startsWith(".codex/references/"), kind: "reference" },
   ],
   settings: [{
     path: exact(".codex/config.toml"),
@@ -192,10 +205,10 @@ export const openClawImportAdapter = createAdapter({
     (path) => path.startsWith(".openclaw/"),
   ],
   rules: [
-    { test: exact("AGENTS.md"), kind: "instruction" },
-    { test: under(".openclaw/skills/", "/SKILL.md"), kind: "skill" },
-    { test: under(".openclaw/agents/", ".md"), kind: "subagent" },
-    { test: (path) => path.startsWith(".openclaw/references/"), kind: "reference" },
+    { id: "instructions", test: exact("AGENTS.md"), kind: "instruction" },
+    { id: "skill", test: under(".openclaw/skills/", "/SKILL.md"), kind: "skill" },
+    { id: "subagent", test: under(".openclaw/agents/", ".md"), kind: "subagent" },
+    { id: "reference", test: (path) => path.startsWith(".openclaw/references/"), kind: "reference" },
   ],
   settings: [{
     path: exact("openclaw.json", ".openclaw/openclaw.json"),
@@ -206,6 +219,7 @@ export const openClawImportAdapter = createAdapter({
       hooks: "hook",
       policies: "policy",
       model: "model",
+      instructions: "instruction",
     },
   }],
 });
@@ -215,15 +229,15 @@ export const agentsLayoutImportAdapter = createAdapter({
   runtime: "agents",
   markers: [(path) => path.startsWith(".agents/")],
   rules: [
-    { test: exact("AGENTS.md"), kind: "instruction" },
-    { test: under(".agents/skills/", "/SKILL.md"), kind: "skill" },
-    { test: under(".agents/agents/", ".md"), kind: "subagent" },
-    { test: under(".agents/subagents/", ".md"), kind: "subagent" },
-    { test: (path) => /^\.agents\/(?:mcp|tools)\.(?:json|ya?ml)$/.test(path), kind: "tool" },
-    { test: (path) => path.startsWith(".agents/hooks/"), kind: "hook" },
-    { test: (path) => path.startsWith(".agents/policies/"), kind: "policy" },
-    { test: (path) => path.startsWith(".agents/models/"), kind: "model" },
-    { test: (path) => path.startsWith(".agents/references/"), kind: "reference" },
+    { id: "instructions", test: (path) => path === "AGENTS.md" || path.startsWith(".agents/instructions/"), kind: "instruction" },
+    { id: "skill", test: under(".agents/skills/", "/SKILL.md"), kind: "skill" },
+    { id: "agent", test: under(".agents/agents/", ".md"), kind: "subagent" },
+    { id: "subagent", test: under(".agents/subagents/", ".md"), kind: "subagent" },
+    { id: "tool", test: (path) => /^\.agents\/(?:mcp|tools)\.(?:json|ya?ml)$/.test(path), kind: "tool" },
+    { id: "hook", test: (path) => path.startsWith(".agents/hooks/"), kind: "hook" },
+    { id: "policy", test: (path) => path.startsWith(".agents/policies/"), kind: "policy" },
+    { id: "model", test: (path) => path.startsWith(".agents/models/"), kind: "model" },
+    { id: "reference", test: (path) => path.startsWith(".agents/references/"), kind: "reference" },
   ],
 });
 

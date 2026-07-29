@@ -48,8 +48,8 @@ describe("agent configuration runtime adapters", () => {
   it.each([
     ["claude", "claude-code", ["hook", "instruction", "model", "policy", "skill", "subagent"]],
     ["codex", "codex", ["instruction", "model", "policy", "tool"]],
-    ["openclaw", "openclaw", ["hook", "model", "policy", "skill", "subagent", "tool"]],
-    ["agents", "agents", ["reference", "skill", "subagent", "tool"]],
+    ["openclaw", "openclaw", ["hook", "instruction", "model", "policy", "skill", "subagent", "tool"]],
+    ["agents", "agents", ["instruction", "reference", "skill", "subagent", "tool"]],
   ] as const)("imports the %s fixture into typed components", async (name, runtime, kinds) => {
     const result = await preview(name);
     expect(result.runtimes.map((item) => item.runtime)).toEqual([runtime]);

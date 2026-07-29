@@ -1,4 +1,5 @@
 {
+  "instructions": ["base"],
   "model": "anthropic/claude",
   "agents": [{ "name": "reviewer" }],
   "tools": { "shell": false },
