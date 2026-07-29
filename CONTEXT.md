@@ -25,7 +25,7 @@ A skill's discovery metadata — one **category** from the closed taxonomy (`SKI
 _Avoid_: labels, keywords (too generic), taxonomy (that's the category list, not a skill's values), SEO fields
 
 **Agent configuration**:
-A runtime-neutral, versioned collection of source files plus source-backed instruction, skill, subagent, tool, hook, policy, model, reference, evaluation, and unknown components. Runtime-specific names and precedence stay at import-adapter boundaries.
+A runtime-neutral, versioned collection of source files plus source-backed instruction, skill, subagent, tool, hook, policy, model, reference, evaluation, and unknown components. Its deterministic import provenance names every detected runtime adapter and version so later export can remain faithful; those names are provenance only and never confer runtime precedence or execution semantics.
 _Avoid_: agent profile, runtime config, converted project
 
 **Source snapshot**:

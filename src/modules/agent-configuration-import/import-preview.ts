@@ -343,6 +343,7 @@ export function createAgentConfigurationImportPreviewAnalyzer(
         files: sanitized.map(({ path, content, encoding }) => ({ path, content, encoding })),
         components,
         secretRequirements: requirements,
+        importProvenance: runtimes.map(({ runtime, adapter }) => ({ runtime, adapter })),
       });
       const componentsByPath = new Map<string, string[]>();
       for (const component of configurationSnapshot.components) {
@@ -401,6 +402,7 @@ const previewRenderer: Renderer<
         component
       ),
       secretRequirements: artifact.snapshot.secretRequirements,
+      importProvenance: artifact.snapshot.importProvenance,
     });
     const contentHashByPath = new Map(snapshot.files.map((file) => [file.path, file.contentHash]));
     return {

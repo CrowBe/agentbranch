@@ -75,6 +75,70 @@ describe("agent configuration runtime adapters", () => {
     expect(result.collisions[0]?.evidence.every((item) => item.path === "AGENTS.md")).toBe(true);
   });
 
+  it("retains polyglot adapter provenance across preview and configuration persistence", async () => {
+    const literalCredential = "SYNTHETIC_PROVENANCE_CREDENTIAL_296";
+    const claude = await fixture("claude");
+    const agents = await fixture("agents");
+    const source = sourceSnapshotFromRepository([
+      ...claude.files,
+      ...agents.files,
+      { path: "AGENTS.md", bytes: new TextEncoder().encode("Shared instructions.") },
+      {
+        path: ".agents/auth.json",
+        bytes: new TextEncoder().encode(JSON.stringify({ authHeader: literalCredential })),
+      },
+      { path: "vendor/blob.bin", bytes: Uint8Array.from([0xff, 0, 1, 2]) },
+    ]);
+    const analyzer = createAgentConfigurationImportPreviewAnalyzer(
+      defaultAgentConfigurationImportAdapters,
+    );
+    const artifact = unwrap(await analyzer.analyze(source));
+    const rendered = unwrap(await runCapability(capability, "preview", source));
+    const expectedProvenance = [
+      { runtime: "agents", adapter: { id: "agents-layout", version: "1" } },
+      { runtime: "claude-code", adapter: { id: "claude-code", version: "1" } },
+      { runtime: "codex", adapter: { id: "codex", version: "1" } },
+    ];
+
+    expect(artifact.runtimes.map(({ runtime, adapter }) => ({ runtime, adapter })))
+      .toEqual(expectedProvenance);
+    expect(artifact.snapshot.importProvenance).toEqual(expectedProvenance);
+    expect(rendered.snapshot.importProvenance).toEqual(expectedProvenance);
+    expect(JSON.stringify(rendered)).not.toContain("/wABAg==");
+
+    const repository = createMemoryAgentConfigurationRepository();
+    const userId = UserId("synthetic-provenance-owner");
+    const created = unwrap(await repository.create({
+      userId,
+      name: "Polyglot import",
+      snapshot: artifact.snapshot,
+    }));
+    const found = unwrap(await repository.findById(created.id, userId));
+    const savedDraft = unwrap(await repository.saveDraft({
+      id: created.id,
+      userId,
+      snapshot: artifact.snapshot,
+    }));
+    const foundDraft = unwrap(await repository.getDraft(created.id, userId));
+    const promoted = unwrap(await repository.promoteDraft({ id: created.id, userId }));
+    const versions = unwrap(await repository.listVersions(created.id, userId));
+
+    for (const snapshot of [
+      created.mainVersion.snapshot,
+      found?.mainVersion.snapshot,
+      savedDraft.snapshot,
+      foundDraft?.snapshot,
+      promoted.mainVersion.snapshot,
+      ...versions.map((version) => version.snapshot),
+    ]) {
+      expect(snapshot?.importProvenance).toEqual(expectedProvenance);
+      expect(JSON.stringify(snapshot)).not.toContain(literalCredential);
+    }
+    for (const boundary of [artifact, rendered, created, found, savedDraft, foundDraft, promoted, versions]) {
+      expect(JSON.stringify(boundary)).not.toContain(literalCredential);
+    }
+  });
+
   it("preserves unsupported text, withholds opaque bytes, and produces stable repeated previews", async () => {
     const snapshot = sourceSnapshotFromRepository([
       { path: "AGENTS.md", bytes: new TextEncoder().encode("Instructions.") },

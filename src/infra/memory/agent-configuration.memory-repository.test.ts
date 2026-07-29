@@ -20,9 +20,16 @@ export function agentConfigurationRepositoryContract(
         { path: "vendor/unknown.cfg", content: "opaque=true\n" },
       ],
       components: [{ id: "root-instructions", kind: "instruction", path: "AGENTS.md" }],
+      importProvenance: [
+        { runtime: "agents", adapter: { id: "agents-layout", version: "1" } },
+        { runtime: "codex", adapter: { id: "codex", version: "1" } },
+      ],
     });
     const created = unwrap(await repository.create({ userId, name: "My agent", snapshot: source }));
     expect(created.mainVersion.snapshot.files[1]?.content).toBe("opaque=true\n");
+    expect(created.mainVersion.snapshot.importProvenance).toEqual(source.importProvenance);
+    expect(unwrap(await repository.findById(created.id, userId))?.mainVersion.snapshot.importProvenance)
+      .toEqual(source.importProvenance);
 
     const candidate = makeAgentConfigurationSnapshot({
       files: source.files.map((file) => ({
@@ -30,14 +37,27 @@ export function agentConfigurationRepositoryContract(
         content: file.path === "AGENTS.md" ? "Use reviewed skills." : file.content,
       })),
       components: [{ id: "root-instructions", kind: "instruction", path: "AGENTS.md" }],
+      importProvenance: source.importProvenance,
     });
-    await repository.saveDraft({ id: created.id, userId, snapshot: candidate });
+    const savedDraft = unwrap(await repository.saveDraft({
+      id: created.id,
+      userId,
+      snapshot: candidate,
+    }));
+    expect(savedDraft.snapshot.importProvenance).toEqual(source.importProvenance);
+    expect(unwrap(await repository.getDraft(created.id, userId))?.snapshot.importProvenance)
+      .toEqual(source.importProvenance);
     expect((await repository.findById(created.id, userId)).ok).toBe(true);
     const promoted = unwrap(await repository.promoteDraft({ id: created.id, userId }));
     expect(promoted.mainVersion.revision).toBe(2);
+    expect(promoted.mainVersion.snapshot.importProvenance).toEqual(source.importProvenance);
     expect(promoted.mainVersion.snapshot.files.find((file) => file.path === "vendor/unknown.cfg")?.content)
       .toBe("opaque=true\n");
-    expect(unwrap(await repository.listVersions(created.id, userId))).toHaveLength(2);
+    const versions = unwrap(await repository.listVersions(created.id, userId));
+    expect(versions).toHaveLength(2);
+    expect(versions.every((version) =>
+      JSON.stringify(version.snapshot.importProvenance) === JSON.stringify(source.importProvenance)
+    )).toBe(true);
     expect(unwrap(await repository.findById(created.id, UserId("other")))).toBeNull();
   });
 }

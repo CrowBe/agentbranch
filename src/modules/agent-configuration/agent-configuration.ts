@@ -3,6 +3,7 @@ import { AgentConfigurationId, AgentConfigurationVersionId, type UserId } from "
 import type {
   AgentComponent,
   AgentConfiguration,
+  AgentConfigurationImportProvenance,
   AgentConfigurationSnapshot,
   SecretRequirement,
   SourceFile,
@@ -99,6 +100,20 @@ function secretRequirement(input: SecretRequirement): SecretRequirement {
   return { name, purpose };
 }
 
+function importProvenance(
+  input: AgentConfigurationImportProvenance,
+): AgentConfigurationImportProvenance {
+  const runtime = input.runtime.trim();
+  const id = input.adapter.id.trim();
+  const version = input.adapter.version.trim();
+  if (runtime.length === 0 || id.length === 0 || version.length === 0) {
+    throw new InvalidAgentConfiguration(
+      "Import provenance needs a runtime, adapter ID, and adapter version.",
+    );
+  }
+  return { runtime, adapter: { id, version } };
+}
+
 export function makeAgentConfigurationSnapshot(input: {
   files: readonly {
     path: string;
@@ -107,6 +122,7 @@ export function makeAgentConfigurationSnapshot(input: {
   }[];
   components?: readonly Omit<AgentComponent, "contentHash">[];
   secretRequirements?: readonly SecretRequirement[];
+  importProvenance?: readonly AgentConfigurationImportProvenance[];
 }): AgentConfigurationSnapshot {
   const files = input.files.map(sourceFile).sort((a, b) => a.path.localeCompare(b.path));
   if (new Set(files.map((file) => file.path)).size !== files.length) {
@@ -130,7 +146,14 @@ export function makeAgentConfigurationSnapshot(input: {
     throw new InvalidAgentConfiguration("Components need stable, unique IDs.");
   }
   const secretRequirements = (input.secretRequirements ?? []).map(secretRequirement);
-  return { files, components, secretRequirements };
+  const provenance = (input.importProvenance ?? [])
+    .map(importProvenance)
+    .sort((a, b) =>
+      a.runtime.localeCompare(b.runtime)
+      || a.adapter.id.localeCompare(b.adapter.id)
+      || a.adapter.version.localeCompare(b.adapter.version)
+    );
+  return { files, components, secretRequirements, importProvenance: provenance };
 }
 
 export function makeAgentConfiguration(input: {
