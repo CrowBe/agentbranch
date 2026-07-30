@@ -297,11 +297,19 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
   `import "server-only"`.
 - `build-stream.ts` — `buildLoopResponse(input, gateway, skills, userId)`: drives
   `runBuildLoop` and encodes events as an SSE `Response`.
-- `response-schema-stream.ts` — `responseSchemaLoopResponse(input, gateway, userId)`:
-  the equipment-authoring driver. Drives `runResponseSchemaLoop`, applies streamed
-  edits to the working draft, follows each write with the primitive's lint feedback,
-  and encodes events as an SSE `Response`. The completed document is saved by
-  the client through the equipment repository route.
+- `response-schema-stream.ts` / `tool-contract-stream.ts` /
+  `subagent-definition-stream.ts` — one equipment-authoring driver per
+  chat-buildable primitive, all the same shape
+  (`responseSchemaLoopResponse(input, gateway, userId)` and its siblings). Each
+  drives its `run*Loop`, applies streamed edits to the working draft, follows
+  each write with that primitive's lint feedback, and encodes events as an SSE
+  `Response`. The completed document is saved by the client through the
+  equipment repository route.
+- `http.ts` — `domainErrorResponse`: the one place the closed `DomainError`
+  union meets HTTP status codes (`cap_reached` → 429, `model_unavailable` /
+  `not_configured` → 503, `not_found` → 404, `auth_failed` → 401,
+  `invalid_operation` → 409, else 500), shared by route handlers and the
+  drivers above so a tag always answers with the same shape.
 - `evaluation-run.ts` — `evaluationResponse({kind, surface, sse, skill, pin, deps})`:
   the recorded-evaluation driver the evaluation routes share. Runs the seam's
   `runEvaluation`, then the persistence choreography — resolve the pinned
@@ -518,6 +526,8 @@ Almost every change is one of these. If a task fits neither, surface it.
 npm run dev        # run the app           npm run typecheck   # tsc --noEmit
 npm run build      # production build      npm run lint        # eslint
 npm test           # vitest (run once)     npm run test:watch
+npm run check:docs # doc-drift guard: MODULE_DESIGN §4 ⇄ src/modules
+                   # (module set, barrel surface, STUB duality)
 npm run test:conformance # opt-in live provider check; set CONFORMANCE_PROVIDER + provider API key
 npm run test:visual # browser-mode screenshot suite (baselines in __screenshots__;
                     # refresh with test:visual:update)  — DESIGN.md §5.3
@@ -533,9 +543,14 @@ npm run tap:initial-release -- --repo <tap-checkout> # reviewed seed snapshot; a
   `@ai-sdk/openai-compatible`, Claude default with optional Nous Portal) ·
   Tailwind 4 · Vitest 4 · npm.
 - Data model lives in `prisma/schema.prisma` (ARCHITECTURE §6): `users`,
-  `skills`, `skill_branches`, `skill_versions` (append-only), `usage`,
+  `skills`, `skill_branches`, `skill_versions` (append-only), `equipment`,
+  `agent_configurations`, `agent_configuration_versions`,
+  `agent_configuration_drafts`, `usage`, `usage_charges`, `rate_limit_windows`,
   `publications`, `harness_versions`, `test_runs`, `eval_runs`,
-  `safety_ratings`, `benchmark_runs`. Migrations under `prisma/migrations/`.
+  `safety_ratings`, `benchmark_runs`. Migrations under `prisma/migrations/` —
+  **the three `agent_configuration*` tables have no migration yet**, so they
+  exist for `db:push` and the Prisma adapter but not for a migrate-based
+  deploy.
 - `npm run tap:apply-snapshot -- --snapshot <url-or-file> --repo <tap-checkout>`
   applies the `/api/tap-repository` file set to a public tap repo checkout. It
   manages only `.claude-plugin/marketplace.json` and `skills/**`, rejects paths

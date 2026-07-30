@@ -127,14 +127,6 @@ Current choices and the reasoning behind them. Live — open to revision while w
 | Eval → build feedback | Evaluation results feed back into the build loop as **eval feedback** messages — a formatter in the `build-loop` module (not the eval modules) translates the structured artifact into a user message; the client appends it and re-submits | No new API, no new gateway primitives; the formatter lives in `build-loop` because "what does Claude need to revise this skill?" is a build-loop concern, not an evaluation concern; the high-value content for triggering eval is the failed cases with model rationale (the classifier's own explanation), not just the Insight headline |
 | Provider/model routing | A standalone **model router** beneath the gateway owns the provider registry, credentials (server pool + bring-your-own override), and the runtime-mutable active selection; the **model console** switches it live | Splitting *selection/credentials* (router) from *metering* (gateway) keeps each pure; runtime switching lets us rotate providers/models to test the flow without redeploying, and bring-your-own keys layer on without breaking the server-owns-key default. Default selection still comes from env, so nothing changes for a plain boot |
 | Local dev inference fallback | Claude Code and Codex CLI profiles may be explicitly enabled outside production; readiness is a cached executable probe, raw calls dispatch to kind-specific adapters, and subscription-funded token accounting uses auditable zero-price keys | The model gateway/router remain the single route and accounting authority while local development can use installed CLI subscriptions. Production never registers these profiles, and no opt-in leaves boot behaviour unchanged |
-
-The Claude Agent SDK is dynamically loaded only when its dev rung receives a
-call, so normal server startup does not initialise it. Next.js still traces the
-dependency into production server artifacts (measured at a 1.2 MB compiled
-server chunk with SDK package contents present); that deployment footprint is
-accepted for now because the shared composition root is synchronous, while the
-production registry makes the code unreachable. Revisit extraction to a
-development-only process if that footprint becomes operationally material.
 | Local inference boundary | On-device inference is a **local suggestion provider** beside the model gateway, limited to editable suggestions. It is not a model-router provider: it runs in the browser on the other side of the HTTP/SSE boundary, has no metered accounting, and cannot produce Insights or write artifacts. Progressive enhancement keeps the UI identical elsewhere: a session-cached availability probe accepts only `available`; `downloadable`, malformed output, and failures silently use the existing route. Prompt API sessions are per suggestion, structured with a JSON-schema response constraint, and long skill source is truncated at the provider boundary. | The gateway remains the single metered model entry while cheap local suggestions keep skill content on-device and never prompt an SMB owner into a multi-gigabyte model download. Per-suggestion sessions avoid retaining skill content or scarce browser model context between actions; the route fallback preserves feature parity. |
 | Model console access | The console + its route are **admin-gated** (an env allowlist of Clerk user ids / emails, checked by `isAdmin`): open on a no-auth dev box, admin-only when auth is configured, locked when auth is on but no allowlist is set | The selection is **instance-wide** in v1 (one shared active provider/model + keys), so a plain signed-in user must not change what everyone runs on. Fail-safe (deny without an allowlist) beats fail-open for a credential surface; per-user config is the heavier future path |
 | Skill scope | **Instruction-only** (`SKILL.md` + reference docs); no bundled runnable code | A test run becomes a mock-tool registry, not a container — removes all code-exec/isolation infra |
@@ -153,6 +145,15 @@ development-only process if that footprint becomes operationally material.
 | Stack | Next.js (App Router) + TS · Postgres via **Prisma 7** (pg driver adapter) · **Clerk** auth (Google+GitHub) · Vercel AI SDK (Claude default, optional Nous Portal) · SSE · Vercel + Neon/Supabase | One language end-to-end; fastest empty-repo-to-deployed; the build loop streams from a route handler, reaching the model through the gateway that holds the key |
 | Billing v1 | **Free initial quota** — one money-denominated spend budget per authenticated account, granted at sign-up ([§8](#8-free-quota)); each `account` call atomically reserves an estimated maximum, then reconciles actual tokens at the resolved model's versioned price; paid top-ups / PAYG later on the same meter | Reservation prevents concurrent admission from oversubscribing the held budget; price-keyed charge records keep the dollar balance auditable across model-router changes |
 | Free-quota aggregate cost | **Provider-side spend/rate cap** (Anthropic Console); app **catches the limit-hit response** → flips sessions to "free usage is at capacity — try again later" | Provider is source of truth; a catch (not a predictive counter) avoids double-accounting and fails safe — the backstop if per-user quota accounting ever drifts |
+
+**Deployment footprint of the dev CLI rung.** The Claude Agent SDK is
+dynamically loaded only when its dev rung receives a call, so normal server
+startup does not initialise it. Next.js still traces the dependency into
+production server artifacts (measured at a 1.2 MB compiled server chunk with SDK
+package contents present); that footprint is accepted for now because the shared
+composition root is synchronous, while the production registry makes the code
+unreachable. Revisit extraction to a development-only process if it becomes
+operationally material.
 
 ---
 
@@ -208,14 +209,16 @@ Presentation-layer architecture — same kind of decision as the rest of this do
 **The shell:**
 
 - **Thin branded top bar** — hamburger + mark + the free-quota chip (the remaining balance in dollars, refreshed after model-bearing actions through `/api/usage`). No nav links (chrome only).
-- **Left slideout menu** — all primary nav (Build / My skills / History / Templates) + the theme picker and account in the footer. A 56px icon rail at every viewport; expansion is a 240px labelled slideout **overlaying** the content (the main window never loses width) — opened by hover where a fine pointer exists, by the hamburger everywhere, and floating over a scrim on compact viewports (closes on scrim tap or after a pick). First-run needs a one-time hint so the expandability is discoverable.
+- **Left slideout menu** — all primary nav (Build / Import / My skills / Equipment / History / Templates / Models — Models opens the admin-gated model console) + the theme picker and account in the footer. A 56px icon rail at every viewport; expansion is a 240px labelled slideout **overlaying** the content (the main window never loses width) — opened by hover where a fine pointer exists, by the hamburger everywhere, and floating over a scrim on compact viewports (closes on scrim tap or after a pick). First-run needs a one-time hint so the expandability is discoverable.
 - **Hero** — centred streaming skill document with **tool chips** on its header. Chip → tool mapping:
 
   | Chip | Backed by | Glossary term |
   |---|---|---|
+  | **Metadata** | metadata-suggest capability | skill metadata (local → gateway → deterministic ladder) |
   | **Visualise** | `visualise_skill` | skill IR → Mermaid |
   | **Run** | `execute_skill` | test run |
   | **Triggers** | triggering-eval runner | triggering eval |
+  | **Safety** | `safetyReviewCapability` | safety rating ([§9.1](#91-skill-tap--open-distribution-with-safety-badges)) |
   | **Export** | export renderer | standard skill folder `.zip` |
 
   **Two views via a header toggle:** *Rendered* (default, friendly sans-serif document) and *Source* (raw monospace `SKILL.md`). Streaming reads as *a document assembling itself* in Rendered, *code being typed* in Source. Default Rendered for the SMB first impression; Source for power users.
@@ -234,7 +237,7 @@ The free tier is one number: a **free initial quota** — **$1.00** of model spe
 - **OAuth-only** signup (Google + GitHub) — no passwords, no password-storage liability, raises per-account scripted-abuse cost; the pressure point of a one-shot grant is account farming, and this is its brake.
 - **Structural bounds stay** — the quota bounds total spend; these bound burst, storage, and abuse: a per-account **skill-count cap** (five, **built or imported** — import costs no model tokens and is the acquisition wedge, [#66](https://github.com/CrowBe/agentbranch/issues/66); held skills cost nothing), a per-user, per-capability **request rate limit** (incl. import fetches, [#73](https://github.com/CrowBe/agentbranch/issues/73)), the gateway byte budget, and request-shape limits.
 - **Analysis capabilities are free forever** — the lint report, hero, visualise fallback, and export (copy + the standard skill folder `.zip`) spend no tokens and never touch the quota.
-- Aggregate protection: provider-side cap + the graceful-degradation catch (see [§4](#4-locked-decisions)).
+- Aggregate protection: provider-side cap + the graceful-degradation catch (see [§4](#4-decisions)).
 
 ---
 
