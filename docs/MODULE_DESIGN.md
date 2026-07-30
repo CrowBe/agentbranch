@@ -125,6 +125,11 @@ most capabilities read a `Skill`, the equipment primitives (`response-schema`,
   Spans are computed with a scan-forward cursor, so duplicate headings resolve
   to the correct occurrence.
 
+The generic `Input` is what makes the **import ladder** (ARCHITECTURE §10) a
+matter of degree rather than three products: rung one feeds one primitive, rung
+two a set, rung three a whole source snapshot — same `artifact → render` tail
+throughout.
+
 **Capabilities on the seam today:**
 
 | Capability | Shape | Module | Analyzer / Evaluator | Renderer(s) | Status |
@@ -191,7 +196,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **equipment** | `EQUIPMENT_COUNT_MAX`, `EQUIPMENT_CAP_MESSAGE`, `Equipment`, `EquipmentKind`, `EquipmentRepository`, `SaveEquipmentInput` | `EquipmentRepository` | real (account-scoped saved equipment; upsert-by-kind/name with content hash and structural cap) |
 | **subagent-definition** | `subagentDefinitionCapability`, `parseSubagentDefinition`, `serializeSubagentDefinition`, `createSubagentDefinitionLintReport`, `subagentDefinitionLintAnalyzer`, `SUBAGENT_DEFINITION_LINT_RULESET_VERSION`, `renderSubagentDefinition`, `renderSubagentDefinitionSource`, `subagentDefinitionInsightsRenderer`, `subagentDefinitionBreakdownRenderer` + types | — | real (third equipment primitive: lossless frontmatter + body source model, pure delegation-quality lint, and seam renderers; no execution or routing) |
 | **concept-library** | `conceptLibrary`, `CONCEPT_GLOSSARY`, `CONCEPT_GLOSSARY_TERMS`, `Concept`, `DefinitionConcept`, `DecisionAidConcept`, `ConceptClaim`, `ConceptCitation` + types | — | real (repo-tracked, content-hashed thin concept kernels; every bounded claim cites a primary source and glossary terms and reviewed definitions are checked verbatim against `CONTEXT.md`) |
-| **skill-import** | `SkillImportFetcher`, `SkillImportFetchError` | `SkillImportFetcher` | port |
+| **import** | `IMPORT_TIERS`, `ImportTier`, `ImportPrimitiveKind`, `ImportClassification`, `classifyImportDocument`, `readableKind`, `SkillImportFetcher`, `SkillImportFetchError` | `SkillImportFetcher` | real (the import ladder's shape + the pure primitive classifier, which defers to each primitive's own source model and reports competing readings rather than guessing) + the GitHub fetch port |
 | **portability** | `portabilityCapability`, `runCrossRuntimeValidation`, runtime-target/result types | — | real cross-runtime validation engine |
 | **build-loop** | `runBuildLoop`, `buildTools`, `BuildToolName`, `BuildLoopEvent`, `formatConceptContext`, `isConceptContextMessage`, `ConceptGlossary`, `formatTestRunFeedback`, `formatTriggeringEvalFeedback`, `runResponseSchemaLoop`, `responseSchemaTools`, `RESPONSE_SCHEMA_AUTHORING_PROMPT`, `formatResponseSchemaLintFeedback` | — (consumes `ModelGateway`) | real (concept interrogation is a pure, closed evidence formatter; canonical-envelope validation requires byte-equality with repo-tracked concept claims, citations, options, content hash, and glossary definitions before write/edit tools are withheld) |
 | **model-gateway** | `ModelGateway` (`classify`/`runAgent`/`streamAgent`/`generate`), `createModelGateway` (the accounting shell: atomic quota reserve/reconcile, request rate, byte budget, resolved-model pricing), `AccountingTag`, `GatewayTool`, `ModelProvider` | `RawModelCalls` (unmetered per-primitive model calls, dispatched by resolved provider kind), `ModelProvider` | real |
@@ -294,6 +299,9 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
 - `container.ts` — `getContainer(): AppContainer` (cached). Picks Prisma vs
   memory, Clerk vs stub **by flag**; builds the **model router** from the registry
   and wires the gateway to resolve through it (no model ⇒ `model_unavailable`).
+  It also holds the **agent-configuration import adapters**: they are a boundary
+  (parsing somebody else's layout is outside knowledge), so the domain declares
+  the interface and the composition root supplies the implementations.
   `import "server-only"`.
 - `build-stream.ts` — `buildLoopResponse(input, gateway, skills, userId)`: drives
   `runBuildLoop` and encodes events as an SSE `Response`.
@@ -329,6 +337,33 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
 - `app/api/build/route.ts` — auth → stream; the **model gateway** gates the
   `build` cap and resolves the model through the router (the route never touches
   the raw model or keys).
+- `app/api/skills/route.ts` + `app/api/skills/[id]/route.ts` — the account's
+  skill list and one skill: create, read, `PATCH` (the metadata-acceptance
+  checkpoint), delete. Ownership is enforced in the query, never only here.
+  `app/api/skills/[id]/restore/route.ts` lands a past revision as a new head,
+  and `app/api/skills/[id]/runs/route.ts` reads that skill's stored evaluation
+  records for History.
+- `app/api/{lint,visualise,export}/route.ts` — the pure analysis capabilities
+  over the skill in the request: parse → `runCapability` → the named surface.
+  Lint and export spend no tokens at all; visualise is model-backed with a
+  deterministic offline fallback.
+- `app/api/import/route.ts` — the import ladder's lower two rungs
+  (ARCHITECTURE §10). A raw body or a `{url}` is the plainest rung-one case, a
+  SKILL.md; `{tier:"primitive"}` classifies the document through
+  `classifyImportDocument` and lands it in the store its kind belongs to
+  (skill → `SkillRepository`, the rest → `EquipmentRepository`), reporting any
+  competing reading rather than guessing silently;
+  `{tier:"related-primitives"}` does the same for a set, so one unreadable
+  document reports itself without discarding the rest.
+- `app/api/agent-configuration/import/route.ts` — the ladder's top rung: a raw
+  archive body (base64 in JSON would inflate past the request ceiling long
+  before the archive limit), parsed into a source snapshot and run through the
+  import-preview capability. Nothing persists unless `?save=1`, and a save
+  re-derives the snapshot from the bytes on that request — the snapshot never
+  round-trips through the client. `app/api/agent-configuration/route.ts` lists
+  the account's saved configurations as an index (identity only).
+- `app/api/usage/route.ts` — the authenticated free-quota snapshot behind the
+  top bar's balance chip.
 - `app/api/{test-run,triggering-eval}/route.ts` — thin HTTP adapters: auth →
   parse → one call into the recorded-evaluation driver (`evaluation-run.ts`),
   identical except for the capability they name. The test-run route also
@@ -344,9 +379,9 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
   never re-spends; GET answers whether the current head version (main or a
   named draft) already carries a rating, which is what makes the offer show
   only for an unrated version.
-- `app/api/{response-schema,tool-contract}/route.ts` — the equipment
-  primitives' quality checks: auth → parse the raw document through the
-  module's source model → `runCapability` (pure, offline) → Insights or
+- `app/api/{response-schema,tool-contract,subagent-definition}/route.ts` — the
+  equipment primitives' quality checks: auth → parse the raw document through
+  the module's source model → `runCapability` (pure, offline) → Insights or
   Breakdown JSON.
 - `app/api/equipment/route.ts` + `app/api/equipment/[id]/route.ts` — account-scoped
   list, check-then-save, and remove. Save parses through the primitive source
@@ -356,10 +391,10 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
   the source model) → one call into the equipment-authoring driver
   (`response-schema-stream.ts`), streaming SSE. The gateway gates the `build`
   capability, exactly like a skill build turn.
-- `app/api/tool-contract/build/route.ts` — the tool-contract authoring route:
-  the same equipment-authoring route shape, with the optional current draft
-  parsed through the tool-contract source model and streamed through
-  `tool-contract-stream.ts`.
+- `app/api/{tool-contract,subagent-definition}/build/route.ts` — the remaining
+  equipment authoring routes: the same shape as the response-schema one, each
+  with its optional current draft parsed through its own source model and
+  streamed through its matching driver.
 - `app/api/skill-library/route.ts` — the publication-backed Skill library feed
   (ARCHITECTURE §9.1): GET renders `renderSkillLibrary` over the visible
   publications joined with their pinned version sources — `?surface=templates`
@@ -547,10 +582,7 @@ npm run tap:initial-release -- --repo <tap-checkout> # reviewed seed snapshot; a
   `agent_configurations`, `agent_configuration_versions`,
   `agent_configuration_drafts`, `usage`, `usage_charges`, `rate_limit_windows`,
   `publications`, `harness_versions`, `test_runs`, `eval_runs`,
-  `safety_ratings`, `benchmark_runs`. Migrations under `prisma/migrations/` —
-  **the three `agent_configuration*` tables have no migration yet**, so they
-  exist for `db:push` and the Prisma adapter but not for a migrate-based
-  deploy.
+  `safety_ratings`, `benchmark_runs`. Migrations under `prisma/migrations/`.
 - `npm run tap:apply-snapshot -- --snapshot <url-or-file> --repo <tap-checkout>`
   applies the `/api/tap-repository` file set to a public tap repo checkout. It
   manages only `.claude-plugin/marketplace.json` and `skills/**`, rejects paths

@@ -15,6 +15,12 @@ type HarnessVersionRow = {
   promptBatteryGeneratorHash: string;
   testRunWorldGeneratorHash: string;
   distractorLibraryHash: string;
+  responseSchemaLintRulesetHash: string;
+  toolContractLintRulesetHash: string;
+  subagentDefinitionLintRulesetHash: string;
+  equipmentAuthoringPromptsHash: string;
+  safetyReviewJudgeHash: string;
+  adversarialNegativeBatteryHash: string;
   gitSha: string | null;
   createdAt: Date;
 };
@@ -28,6 +34,12 @@ function toHarnessVersion(row: HarnessVersionRow): HarnessVersion {
     promptBatteryGenerator: row.promptBatteryGeneratorHash,
     testRunWorldGenerator: row.testRunWorldGeneratorHash,
     distractorLibrary: row.distractorLibraryHash,
+    responseSchemaLintRuleset: row.responseSchemaLintRulesetHash,
+    toolContractLintRuleset: row.toolContractLintRulesetHash,
+    subagentDefinitionLintRuleset: row.subagentDefinitionLintRulesetHash,
+    equipmentAuthoringPrompts: row.equipmentAuthoringPromptsHash,
+    safetyReviewJudge: row.safetyReviewJudgeHash,
+    adversarialNegativeBattery: row.adversarialNegativeBatteryHash,
     gitSha: row.gitSha,
     createdAt: row.createdAt,
   };
@@ -51,6 +63,12 @@ export function createPrismaHarnessVersionRepository(
             promptBatteryGeneratorHash: manifest.promptBatteryGenerator,
             testRunWorldGeneratorHash: manifest.testRunWorldGenerator,
             distractorLibraryHash: manifest.distractorLibrary,
+            responseSchemaLintRulesetHash: manifest.responseSchemaLintRuleset,
+            toolContractLintRulesetHash: manifest.toolContractLintRuleset,
+            subagentDefinitionLintRulesetHash: manifest.subagentDefinitionLintRuleset,
+            equipmentAuthoringPromptsHash: manifest.equipmentAuthoringPrompts,
+            safetyReviewJudgeHash: manifest.safetyReviewJudge,
+            adversarialNegativeBatteryHash: manifest.adversarialNegativeBattery,
             gitSha: manifest.gitSha,
           },
         });

@@ -19,6 +19,8 @@ agent.branch closes that gap. Most tools stop at editing — here a skill leaves
 - **Check its triggering** — does it fire on the prompts it should, and stay quiet on the ones it shouldn't?
 - **Export it** — download an installable skill folder, ready to use in Claude and other compatible tools.
 
+You can also **bring in what you already have**, at whatever size it comes in: one building block (a skill, an output shape, a tool contract, a specialist definition), a few that work together, or a whole agent setup as an archive — which is read, shown to you in full with any secrets stripped out, and saved only once you say so.
+
 ## Who it's for
 
 Two kinds of people, one tool:

@@ -177,22 +177,48 @@ describe("AppShell capability chips", () => {
     render(<AppShell rendered={rendered} source={source} initialSkill={skill} />);
 
     await userEvent.click(screen.getByRole("button", { name: "Import" }));
-    expect(screen.getByRole("heading", { name: "Import a skill" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Import" })).toBeInTheDocument();
     await userEvent.type(
       screen.getByRole("textbox"),
       "---\nname: calendar-planner\ndescription: Plan calendar meetings from plain language requests.\n---\n# Steps\n\nCheck availability.",
     );
-    await userEvent.click(screen.getByRole("button", { name: "Import skill" }));
+    await userEvent.click(screen.getByRole("button", { name: "Import document" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith("/api/import", {
         method: "POST",
-        headers: { "Content-Type": "text/markdown; charset=utf-8" },
-        body: "---\nname: calendar-planner\ndescription: Plan calendar meetings from plain language requests.\n---\n# Steps\n\nCheck availability.",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tier: "primitive",
+          document:
+            "---\nname: calendar-planner\ndescription: Plan calendar meetings from plain language requests.\n---\n# Steps\n\nCheck availability.",
+        }),
       });
     });
     expect(await screen.findByText("calendar-planner")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("Import complete.");
+  });
+
+  it("offers the import rungs in ascending complexity and swaps the input to match", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    render(<AppShell rendered={rendered} source={source} initialSkill={skill} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Import" }));
+
+    const rungs = screen.getAllByRole("button", { pressed: false, name: /building block|configuration/i });
+    expect(screen.getByRole("button", { name: /One building block/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(rungs.length).toBeGreaterThan(0);
+    // Rung one takes prose; the upper rungs take files.
+    expect(screen.getByRole("textbox")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /A whole agent configuration/ }));
+
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Agent configuration archive")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Read archive" })).toBeDisabled();
   });
 
   it("imports a public GitHub skill URL", async () => {
@@ -227,7 +253,7 @@ describe("AppShell capability chips", () => {
       screen.getByRole("textbox"),
       "https://github.com/acme/skills/tree/main/repo-summarizer",
     );
-    await userEvent.click(screen.getByRole("button", { name: "Import skill" }));
+    await userEvent.click(screen.getByRole("button", { name: "Import document" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith("/api/import", {

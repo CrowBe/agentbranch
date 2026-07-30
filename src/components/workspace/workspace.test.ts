@@ -437,8 +437,9 @@ describe("workspace choreography", () => {
     expect(workspace.getSnapshot().entries[0]?.tone).toBe("error");
   });
 
-  it("imports pasted SKILL.md as markdown and a GitHub URL as JSON", async () => {
+  it("sends a pasted document as a rung-one import and a GitHub URL as a fetch", async () => {
     const importBody = {
+      kind: "skill",
       skill: { id: "skill-2", source: skill },
       rendered: init.rendered,
       source: init.source,
@@ -449,7 +450,10 @@ describe("workspace choreography", () => {
     await workspace.actions.importSkill("---\nname: inbox-triage\n---\nBody.");
     expect(fetchMock).toHaveBeenLastCalledWith(
       "/api/import",
-      expect.objectContaining({ headers: { "Content-Type": "text/markdown; charset=utf-8" } }),
+      expect.objectContaining({
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tier: "primitive", document: "---\nname: inbox-triage\n---\nBody." }),
+      }),
     );
     expect(workspace.getSnapshot().status).toBe("Import complete.");
     expect(workspace.getSnapshot().currentSkillId).toBe("skill-2");
@@ -462,6 +466,147 @@ describe("workspace choreography", () => {
         body: JSON.stringify({ url: "https://github.com/acme/skills/tree/main/inbox" }),
       }),
     );
+  });
+
+  it("lands a rung-one equipment import in Equipment, not on the hero", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({
+        kind: "tool-contract",
+        equipment: {
+          id: "equipment-1",
+          name: "fetch_unread_email",
+          document: "{}",
+          contentHash: "hash",
+        },
+        alternatives: [],
+      }),
+    );
+    const workspace = createWorkspace(init, { fetch: fetchMock });
+
+    await workspace.actions.importSkill('{"name":"fetch_unread_email"}');
+
+    expect(workspace.getSnapshot().currentSkillId).toBeNull();
+    expect(workspace.getSnapshot().equipment.contracts).toMatchObject([
+      { id: "equipment-1", name: "fetch_unread_email" },
+    ]);
+  });
+
+  it("offers the competing reading when the server reports one", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({
+        kind: "skill",
+        skill: { id: "skill-3", source: skill },
+        rendered: init.rendered,
+        source: init.source,
+        alternatives: ["subagent-definition"],
+      }),
+    );
+    const workspace = createWorkspace(init, { fetch: fetchMock });
+
+    await workspace.actions.importSkill("---\nname: inbox-triage\n---\nBody.");
+
+    const offer = workspace.getSnapshot().entries.at(-1);
+    expect(offer?.label).toContain("also valid");
+    expect(offer?.actionLabel).toContain("subagent definition");
+  });
+
+  it("imports a related set and reports what it could not read", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({
+        tier: "related-primitives",
+        imported: [
+          {
+            kind: "skill",
+            skill: { id: "skill-4", source: skill },
+            rendered: init.rendered,
+            source: init.source,
+          },
+          {
+            kind: "tool-contract",
+            equipment: { id: "equipment-2", name: "fetch_unread_email", document: "{}" },
+          },
+        ],
+        skipped: [{ message: "That third file could not be read." }],
+      }),
+    );
+    const workspace = createWorkspace(init, { fetch: fetchMock });
+
+    await workspace.actions.importRelated(["a", "b", "c"]);
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/import",
+      expect.objectContaining({
+        body: JSON.stringify({
+          tier: "related-primitives",
+          documents: [{ document: "a" }, { document: "b" }, { document: "c" }],
+        }),
+      }),
+    );
+    expect(workspace.getSnapshot().currentSkillId).toBe("skill-4");
+    expect(workspace.getSnapshot().equipment.contracts).toHaveLength(1);
+    expect(workspace.getSnapshot().entries.at(-1)?.tone).toBe("error");
+  });
+
+  it("previews an agent configuration without saving, then saves on confirmation", async () => {
+    const preview = {
+      preview: {
+        runtimes: [{ runtime: "claude-code", adapter: { id: "claude", version: "1" } }],
+        snapshot: { files: [{}, {}], components: [{}] },
+        redactions: [{ name: "apiKey" }],
+        warnings: [],
+      },
+      saved: null,
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json(preview))
+      .mockResolvedValueOnce(Response.json({ ...preview, saved: { name: "my-setup" } }));
+    const workspace = createWorkspace(init, { fetch: fetchMock });
+
+    await workspace.actions.previewAgentConfiguration({
+      name: "my-setup.zip",
+      format: "zip",
+      bytes: new ArrayBuffer(8),
+    });
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/agent-configuration/import?format=zip",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(workspace.getSnapshot().status).toContain("Nothing saved yet");
+    const entries = workspace.getSnapshot().entries;
+    expect(entries.some((item) => item.label.includes("apiKey"))).toBe(true);
+
+    const confirm = entries.at(-1);
+    expect(confirm?.actionLabel).toBe("Save configuration");
+    confirm?.onAction?.();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/agent-configuration/import?format=zip&save=1&name=my-setup",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("clears a pending configuration preview when the rung changes", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({
+        preview: { runtimes: [], snapshot: { files: [], components: [] }, redactions: [], warnings: [] },
+        saved: null,
+      }),
+    );
+    const workspace = createWorkspace(init, { fetch: fetchMock });
+
+    await workspace.actions.previewAgentConfiguration({
+      name: "setup.zip",
+      format: "zip",
+      bytes: new ArrayBuffer(8),
+    });
+    workspace.actions.setImportTier("primitive");
+
+    expect(workspace.getSnapshot().importTier).toBe("primitive");
+    expect(workspace.getSnapshot().entries).toEqual([]);
   });
 
   it("keeps the import error message from the server", async () => {
