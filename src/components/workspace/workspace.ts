@@ -746,7 +746,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       for (const alternative of landed.alternatives) {
         appendEntry({
           id: `alternative-${alternative}`,
-          label: `Read as ${readableKind(landed.kind)}. This document is also valid ${readableKind(alternative)}.`,
+          label: `Read as ${readableKind(landed.kind)}. This document is also valid as ${readableKind(alternative)}.`,
           tone: "muted",
           actionLabel: `Import as ${readableKind(alternative)} instead`,
           onAction: () => void importSkill(raw, alternative),
