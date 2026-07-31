@@ -1,0 +1,5 @@
+{
+  "instructions": ["local"],
+  "model": "anthropic/claude-opus",
+  "policies": { "network": "deny" }
+}

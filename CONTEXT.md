@@ -36,6 +36,10 @@ _Avoid_: checkout, worktree, extracted folder
 The pre-save analysis artifact for a source snapshot: detected runtime layouts, redacted source files, typed components, exact source evidence, unsupported content, warnings, and ambiguity. Secret values never enter it; only named secret requirements and purposes do.
 _Avoid_: imported configuration (save has not happened), execution plan, conversion report
 
+**Effective configuration graph**:
+The pure, runtime-neutral Artifact resolved from an imported Agent configuration. It names effective instructions, skills, tools, model settings, and policies; connects them with typed loads, overrides, references, selects, delegates-to, permits, and requires relationships; and keeps unknown, unresolved, shadowed, duplicate, unreachable, and ambiguous facts explicit. Every node and relationship carries source path/span, adapter rule, and confidence. Runtime adapters own precedence rules; the core graph does not.
+_Avoid_: execution plan (nothing runs), runtime graph (the vocabulary is runtime-neutral), inferred agent (relationships are deterministic and source-backed)
+
 **Draft** (branching iteration, §9.3):
 *User-facing term* for a working lineage of skill revisions that accumulates without moving the **main version** — the safe space to iterate and evaluate before committing. A skill may have several open at once. The internal/code term is `branch`.
 _Avoid_: branch (code-only — never user copy), working copy, fork, sandbox
@@ -206,6 +210,7 @@ _Avoid_: preview/raw, doc/code, formatted/plain
 - **Usage** is the accounting authority: `account`-tagged calls spend the **free quota** (admitted while quota remains, priced at record time) alongside the structural bounds + provider cap-catch; `platform`-tagged calls go to our own cost ledger (deferred). The gateway is mechanism, usage is policy.
 - When no model is configured (offline / no key) the gateway can't run a primitive — an Evaluation capability fails with the shared `model_unavailable` **DomainError**, checked once in the seam's evaluation path, not in each evaluator. Analysis capabilities still run offline (pure text). This is evaluation's hard dependency that analysis doesn't have.
 - **Visualise** is an Analysis capability whose Artifact is the **Skill IR**; each IR node carries a **Source-span**.
+- **Effective configuration** is an Analysis capability whose Artifact is the **Effective configuration graph**. Runtime adapters translate precedence into runtime-neutral rules before the pure resolver runs; the accessible outline/table is the source-of-truth renderer.
 - A **Test run** drives the **Mock-tool registry**; a **Triggering eval** drives the **Distractor library** + **Prompt battery**. Both are Evaluation capabilities. A test run's input is a **Bundle**: when it carries **Tool contracts**, they drive the registry (mock output conforms to each contract's — possibly **Response schema**-referenced — output schema) and every observed call is validated against the contract.
 - An **Evaluation capability** emits an **Evaluation result** (the run-record Artifact), which renders to **Insights** (default, plain-language) and a detailed breakdown (depth on demand) — two renderers, one result.
 - **Eval feedback** connects the seam's evaluation output back to the build loop's input: a feedback formatter (pure function in `build-loop`) translates an Evaluation result or Lint artifact into a user message. **Insights** is what the *user* reads; eval feedback is what *Claude* reads to author the revision. The same result serves both surfaces.

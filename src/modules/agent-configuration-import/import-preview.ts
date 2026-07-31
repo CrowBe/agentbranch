@@ -324,6 +324,11 @@ export function createAgentConfigurationImportPreviewAnalyzer(
               path: component.evidence.path,
               span: component.evidence.span,
               contentHash: "",
+              importProvenance: {
+                runtime: adapter.runtime,
+                adapter: { id: adapter.id, version: adapter.version },
+                rule: component.adapterRule,
+              },
             },
           });
         }

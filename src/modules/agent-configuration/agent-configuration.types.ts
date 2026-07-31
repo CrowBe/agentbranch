@@ -37,6 +37,19 @@ export type AgentComponent = {
   readonly path: string;
   readonly span?: SourceSpan;
   readonly contentHash: string;
+  /**
+   * Source adapter rule that classified this component. It is provenance, not
+   * precedence: runtime-specific effective-configuration policy stays at the
+   * adapter boundary.
+   */
+  readonly importProvenance?: {
+    readonly runtime: string;
+    readonly adapter: {
+      readonly id: string;
+      readonly version: string;
+    };
+    readonly rule: string;
+  };
 };
 
 export type SecretRequirement = {

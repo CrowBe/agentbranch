@@ -133,4 +133,16 @@ describe("AgentConfiguration snapshot", () => {
       files: [{ path: "../credentials", content: "nope" }],
     })).toThrow("normalized relative path");
   });
+
+  it("rejects component spans outside their source content", () => {
+    expect(() => makeAgentConfigurationSnapshot({
+      files: [{ path: "AGENTS.md", content: "one line" }],
+      components: [{
+        id: "instructions",
+        kind: "instruction",
+        path: "AGENTS.md",
+        span: { startLine: 99, startColumn: 1, endLine: 100, endColumn: 1 },
+      }],
+    })).toThrow(/invalid source span/i);
+  });
 });
