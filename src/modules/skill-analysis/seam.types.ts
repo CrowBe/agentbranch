@@ -27,6 +27,7 @@ export type ArtifactKind =
   | "subagent-definition-lint"
   | "agent-configuration-import-preview"
   | "effective-configuration-graph"
+  | "profile-analysis"
   | "test-run"
   | "triggering-eval"
   | "cross-runtime-validation"

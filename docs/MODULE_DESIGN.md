@@ -99,7 +99,7 @@ most capabilities read a `Skill`, the equipment primitives (`response-schema`,
 `tool-contract`) read their own source models, and the test run reads a
 `TestRunInput` bundle (ARCHITECTURE §9.2).
 
-- **`ArtifactKind`** — closed union of valid kind strings (`"hero" | "concept" | "skill-ir" | "skill-metadata" | "export" | "lint" | "response-schema-lint" | "tool-contract-lint" | "subagent-definition-lint" | "agent-configuration-import-preview" | "effective-configuration-graph" | "test-run" | "triggering-eval" | "cross-runtime-validation" | "safety-review" | "harness-recommendation"`). Add a new member here when a new capability needs its own artifact type. Free-string kinds are a compile error.
+- **`ArtifactKind`** — closed union of valid kind strings (`"hero" | "concept" | "skill-ir" | "skill-metadata" | "export" | "lint" | "response-schema-lint" | "tool-contract-lint" | "subagent-definition-lint" | "agent-configuration-import-preview" | "effective-configuration-graph" | "profile-analysis" | "test-run" | "triggering-eval" | "cross-runtime-validation" | "safety-review" | "harness-recommendation"`). Add a new member here when a new capability needs its own artifact type. Free-string kinds are a compile error.
 - **`Artifact<K>`** — the base artifact type; `K` must be an `ArtifactKind`. Each capability extends this with its own fields.
 - **`Analyzer<Input, A>`** — read an input, emit a structured artifact. Async +
   `Result` (some analyzers call the model).
@@ -178,6 +178,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **agent-configuration** | `makeAgentConfigurationSnapshot`, `makeAgentConfiguration`, configuration/version/draft, source-file/component/span/secret-requirement/import-provenance types | `AgentConfigurationRepository` | real runtime-neutral aggregate + persistence foundation (immutable versions, replaceable configuration-wide draft, source hashes, deterministic detected-runtime adapter identity/version provenance without precedence semantics, UTF-8/base64 unknown-file preservation, path validation, and secret-value redaction) |
 | **agent-configuration-import** | `AgentConfigurationImportAdapter`, source-snapshot/probe/evidence/warning/import-preview types, `createAgentConfigurationImportPreviewCapability` | — | real pure import-preview capability; runtime-neutral orchestration populates the saveable snapshot's detected-adapter provenance and enforces the secret boundary, with runtime/archive implementations outside the domain; opaque binary bytes are withheld from previews while path, size, and source hash remain visible |
 | **effective-configuration** | `resolveEffectiveConfiguration`, `effectiveConfigurationCapability`, graph/node/relationship/evidence/finding types, outline renderer | — | real pure analysis capability; the core vocabulary is runtime-neutral, every node/edge is source-grounded, uncertainty and structural findings remain explicit, and the outline read model is the source-of-truth presentation. **No caller yet** — the resolver and `components/effective-configuration-outline.tsx` are both tested but unreached; wiring the graph into the import-preview response is the pending step |
+| **profile-analysis** | `profileAnalysisCapability`, `analyzeProfile`, profile finding/suppression types, Insights + Breakdown renderers | — | real pure analysis capability over an assembled effective configuration; deterministic diagnostics carry exact source path/span/excerpt evidence, and auditable explicit suppressions must cite matching source evidence for their targeted finding; model-assisted judgments remain structurally separate and absent from the offline path |
 | **skill** | `parseSkillMd`, `serializeSkillMd`, `makeSkill`, `reviseSkill`, `skillName/Description`, `SKILL_CATEGORIES`, `skillMetadata`, `withSkillMetadata`, `SkillBranch`/`RetentionReport` + types | `SkillRepository`, `SkillRetentionRepository` | real (discovery metadata — `category` + `tags` — lives in frontmatter extra keys, so it travels with the standard-native artifact and is pinned by the same content hash) |
 | **skill-analysis** | `defineCapability`, `runCapability`, `Analyzer/Renderer/Capability/SourceSpan/Artifact` | — | real |
 | **hero** | `heroCapability`, `HeroView`, doc types | — | real |
@@ -252,6 +253,9 @@ anything named here that has since been wired up.
   own test. Its resolver (`effective-configuration`) is linked through the
   import barrel but never invoked; both become real when a route returns the
   graph alongside the import preview.
+- `profile-analysis` — the deterministic profile-analysis capability has no
+  route or component yet. It becomes reachable when the agent-configuration
+  workbench presents the assembled effective configuration's diagnostics.
 
 **Eval feedback (build loop — closeable with eval results).** `formatTestRunFeedback`
 and `formatTriggeringEvalFeedback` are pure functions in `build-loop` that translate
