@@ -177,7 +177,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 |---|---|---|---|
 | **agent-configuration** | `makeAgentConfigurationSnapshot`, `makeAgentConfiguration`, configuration/version/draft, source-file/component/span/secret-requirement/import-provenance types | `AgentConfigurationRepository` | real runtime-neutral aggregate + persistence foundation (immutable versions, replaceable configuration-wide draft, source hashes, deterministic detected-runtime adapter identity/version provenance without precedence semantics, UTF-8/base64 unknown-file preservation, path validation, and secret-value redaction) |
 | **agent-configuration-import** | `AgentConfigurationImportAdapter`, source-snapshot/probe/evidence/warning/import-preview types, `createAgentConfigurationImportPreviewCapability` | — | real pure import-preview capability; runtime-neutral orchestration populates the saveable snapshot's detected-adapter provenance and enforces the secret boundary, with runtime/archive implementations outside the domain; opaque binary bytes are withheld from previews while path, size, and source hash remain visible |
-| **effective-configuration** | `resolveEffectiveConfiguration`, `effectiveConfigurationCapability`, graph/node/relationship/evidence/finding types, outline renderer | — | real pure analysis capability; the core vocabulary is runtime-neutral, every node/edge is source-grounded, uncertainty and structural findings remain explicit, and the outline read model is the source-of-truth presentation |
+| **effective-configuration** | `resolveEffectiveConfiguration`, `effectiveConfigurationCapability`, graph/node/relationship/evidence/finding types, outline renderer | — | real pure analysis capability; the core vocabulary is runtime-neutral, every node/edge is source-grounded, uncertainty and structural findings remain explicit, and the outline read model is the source-of-truth presentation. **No caller yet** — the resolver and `components/effective-configuration-outline.tsx` are both tested but unreached; wiring the graph into the import-preview response is the pending step |
 | **skill** | `parseSkillMd`, `serializeSkillMd`, `makeSkill`, `reviseSkill`, `skillName/Description`, `SKILL_CATEGORIES`, `skillMetadata`, `withSkillMetadata`, `SkillBranch`/`RetentionReport` + types | `SkillRepository`, `SkillRetentionRepository` | real (discovery metadata — `category` + `tags` — lives in frontmatter extra keys, so it travels with the standard-native artifact and is pinned by the same content hash) |
 | **skill-analysis** | `defineCapability`, `runCapability`, `Analyzer/Renderer/Capability/SourceSpan/Artifact` | — | real |
 | **hero** | `heroCapability`, `HeroView`, doc types | — | real |
@@ -197,7 +197,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **subagent-definition** | `subagentDefinitionCapability`, `parseSubagentDefinition`, `serializeSubagentDefinition`, `createSubagentDefinitionLintReport`, `subagentDefinitionLintAnalyzer`, `SUBAGENT_DEFINITION_LINT_RULESET_VERSION`, `renderSubagentDefinition`, `renderSubagentDefinitionSource`, `subagentDefinitionInsightsRenderer`, `subagentDefinitionBreakdownRenderer` + types | — | real (third equipment primitive: lossless frontmatter + body source model, pure delegation-quality lint, and seam renderers; no execution or routing) |
 | **concept-library** | `conceptLibrary`, `CONCEPT_GLOSSARY`, `CONCEPT_GLOSSARY_TERMS`, `Concept`, `DefinitionConcept`, `DecisionAidConcept`, `ConceptClaim`, `ConceptCitation` + types | — | real (repo-tracked, content-hashed thin concept kernels; every bounded claim cites a primary source and glossary terms and reviewed definitions are checked verbatim against `CONTEXT.md`) |
 | **import** | `IMPORT_TIERS`, `ImportTier`, `ImportPrimitiveKind`, `ImportClassification`, `classifyImportDocument`, `readableKind`, `SkillImportFetcher`, `SkillImportFetchError` | `SkillImportFetcher` | real (the import ladder's shape + the pure primitive classifier, which defers to each primitive's own source model and reports competing readings rather than guessing) + the GitHub fetch port |
-| **portability** | `portabilityCapability`, `runCrossRuntimeValidation`, runtime-target/result types | — | real cross-runtime validation engine |
+| **portability** | `portabilityCapability`, `runCrossRuntimeValidation`, runtime-target/result types | — | real cross-runtime validation engine — **but nothing imports it**: no route, no server driver, no component. Built and tested, unreachable from `src/app` (ARCHITECTURE §5.9) |
 | **build-loop** | `runBuildLoop`, `buildTools`, `BuildToolName`, `BuildLoopEvent`, `formatConceptContext`, `isConceptContextMessage`, `ConceptGlossary`, `formatTestRunFeedback`, `formatTriggeringEvalFeedback`, `runResponseSchemaLoop`, `responseSchemaTools`, `RESPONSE_SCHEMA_AUTHORING_PROMPT`, `formatResponseSchemaLintFeedback` | — (consumes `ModelGateway`) | real (concept interrogation is a pure, closed evidence formatter; canonical-envelope validation requires byte-equality with repo-tracked concept claims, citations, options, content hash, and glossary definitions before write/edit tools are withheld) |
 | **model-gateway** | `ModelGateway` (`classify`/`runAgent`/`streamAgent`/`generate`), `createModelGateway` (the accounting shell: atomic quota reserve/reconcile, request rate, byte budget, resolved-model pricing), `AccountingTag`, `GatewayTool`, `ModelProvider` | `RawModelCalls` (unmetered per-primitive model calls, dispatched by resolved provider kind), `ModelProvider` | real |
 | **model-router** | `ModelRouter` (`resolve`/`snapshot`/`setActive`/`setCredential`/`clearCredential`), `ProviderProfile` (API and dev-gated CLI kinds), `ModelSelection`, `RouterSnapshot`, selection helpers | `ModelRouter` | real |
@@ -239,6 +239,19 @@ only through the admin routes (below), gated by `isAdmin`.
 
 **Stub boundaries (where the real interface is set but behaviour is a
 placeholder):** none.
+
+**Unreached — built and tested, but no import path from `src/app`.** A resolver
+nothing calls is not a capability, so this list is debt, not a design choice.
+The drift guard fails on anything unreached that is not named here, and on
+anything named here that has since been wired up.
+
+- `portability` — the cross-runtime validation engine has no route and no chip,
+  so the v1 slice's capability 9 (ARCHITECTURE §5) cannot be exercised at all.
+- `src/components/effective-configuration-outline.tsx` — the accessible outline
+  renderer for the effective configuration graph, rendered by nothing but its
+  own test. Its resolver (`effective-configuration`) is linked through the
+  import barrel but never invoked; both become real when a route returns the
+  graph alongside the import preview.
 
 **Eval feedback (build loop — closeable with eval results).** `formatTestRunFeedback`
 and `formatTriggeringEvalFeedback` are pure functions in `build-loop` that translate

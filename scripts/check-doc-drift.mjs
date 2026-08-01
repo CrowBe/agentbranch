@@ -3,7 +3,7 @@
 // code advances past what docs/MODULE_DESIGN.md claim. Zero deps so it runs in
 // CI and locally (and inside the vitest wrapper at src/meta/docs-drift.test.ts).
 //
-// Four falsifiable checks (no LLM judgment, no false positives by design):
+// Nine falsifiable checks (no LLM judgment, no false positives by design):
 //   1. module-set sync   — every src/modules/<m> has a §4 row, and vice versa.
 //   2. barrel surface     — every name MODULE_DESIGN §4 lists as a module's
 //                           public surface is actually exported by its index.ts.
@@ -17,6 +17,9 @@
 //   6. artifact kinds     — the seam's closed ArtifactKind union ⇄ the §3 list.
 //   7. api routes         — every src/app/api route handler is named in the doc.
 //   8. hero chips         — the rendered chip set ⇄ ARCHITECTURE §7's chip table.
+//   9. reachability       — every module/component has an import path from
+//                           src/app, or is named in the "Unreached" list with a
+//                           reason (a resolver nothing calls is not a feature).
 //
 // Semantic prose drift ("does the description still describe the code?") is out
 // of scope here — that is what knip (dead exports) and the pre-commit agent
@@ -149,7 +152,81 @@ export function findDocDrift() {
     }
   }
 
+  // 9. reachability (built ⇄ reachable, or listed as known debt) ------------
+  // A resolver nothing calls is not a capability. This is the check that
+  // catches domain code landing without the surface that makes it real.
+  const { modules: unreachedModules, components: unreachedComponents } = unreachedFromApp();
+  const declared = new Set(parseUnreached(doc));
+  for (const name of [...unreachedModules, ...unreachedComponents]) {
+    if (!declared.has(name)) {
+      drift.push(`\`${name}\` is built but nothing in src/app reaches it, and MODULE_DESIGN's "Unreached" list does not name it — wire it up, or record it there with the reason.`);
+    }
+  }
+  for (const name of declared) {
+    if (!unreachedModules.includes(name) && !unreachedComponents.includes(name)) {
+      drift.push(`MODULE_DESIGN's "Unreached" list names \`${name}\`, but src/app reaches it now — delete the entry.`);
+    }
+  }
+
   return drift;
+}
+
+/**
+ * Domain modules and components with no import path from `src/app`. Follows
+ * `@/` and relative specifiers through the real files, so a module reached
+ * only via a barrel re-export still counts as linked.
+ */
+function unreachedFromApp() {
+  const files = [];
+  const walk = (dir) => {
+    for (const item of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, item.name);
+      if (item.isDirectory()) walk(full);
+      else if (/\.tsx?$/.test(item.name) && !/\.test\.tsx?$/.test(item.name)) files.push(full);
+    }
+  };
+  for (const dir of ["app", "server", "components", "infra", "modules"]) walk(join(ROOT, "src", dir));
+
+  const candidates = (spec, from) => {
+    let base;
+    if (spec.startsWith("@/")) base = join(ROOT, "src", spec.slice(2));
+    else if (spec.startsWith(".")) base = join(from, "..", spec);
+    else return [];
+    return [`${base}.ts`, `${base}.tsx`, join(base, "index.ts")].filter((f) => files.includes(f));
+  };
+
+  const seen = new Set();
+  const queue = files.filter((f) => f.startsWith(join(ROOT, "src", "app")));
+  while (queue.length > 0) {
+    const file = queue.pop();
+    if (seen.has(file)) continue;
+    seen.add(file);
+    const source = readFileSync(file, "utf8");
+    const specs = [
+      ...[...source.matchAll(/from\s+"([^"]+)"/g)].map((m) => m[1]),
+      ...[...source.matchAll(/import\("([^"]+)"\)/g)].map((m) => m[1]),
+    ];
+    for (const spec of specs) for (const target of candidates(spec, file)) queue.push(target);
+  }
+
+  const reached = [...seen];
+  const modules = readdirSync(MODULES_DIR)
+    .filter((name) => statSync(join(MODULES_DIR, name)).isDirectory())
+    .filter((name) => !reached.some((f) => f.startsWith(join(MODULES_DIR, name) + "/")));
+  const components = files
+    .filter((f) => f.startsWith(join(ROOT, "src", "components")) && !seen.has(f))
+    .map((f) => f.slice(ROOT.length + 1));
+  return { modules, components };
+}
+
+/** Entries of the "Unreached" list — things built but not yet wired up. */
+function parseUnreached(doc) {
+  const start = doc.indexOf("**Unreached");
+  if (start === -1) return [];
+  const rest = doc.slice(start);
+  const end = rest.indexOf("\n**", 3);
+  const section = rest.slice(0, end === -1 ? undefined : end);
+  return [...section.matchAll(/^- `([^`]+)`/gm)].map((m) => m[1]);
 }
 
 /** Table names in the §7 "Data model lives in `prisma/schema.prisma`" bullet. */
