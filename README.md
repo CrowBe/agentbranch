@@ -19,6 +19,8 @@ agent.branch closes that gap. Most tools stop at editing — here a skill leaves
 - **Check its triggering** — does it fire on the prompts it should, and stay quiet on the ones it shouldn't?
 - **Export it** — download an installable skill folder, ready to use in Claude and other compatible tools.
 
+You can also **bring in what you already have**, at whatever size it comes in: one building block (a skill, an output shape, a tool contract, a specialist definition), a few that work together, or a whole agent setup as an archive — which is read, shown to you in full with any secrets stripped out, and saved only once you say so.
+
 ## Who it's for
 
 Two kinds of people, one tool:
@@ -49,7 +51,7 @@ npm run dev         # start the app at http://localhost:3000
 
 - **No database** → persistence is in-memory. Skills you create disappear on restart.
 - **No auth** → a fixed dev identity is signed in for you.
-- **No model key** → the four model-backed capabilities (build, visualise, test-run, triggering-eval) return `model_unavailable`. The document/source views, the skill list, and **import from a public GitHub URL** still work.
+- **No model key** → every model-backed capability (build and the equipment authoring loops, visualise, test-run, triggering-eval, safety rating, metadata suggestions, cross-runtime validation) returns `model_unavailable`. The document/source views, lint and the other quality checks, export, the skill list, Templates, and **import from a public GitHub URL** still work — analysis capabilities are pure and offline.
 
 So an empty boot is enough to click around the shell — but to drive a skill *through the model*, you need at least a model provider key.
 
@@ -76,7 +78,7 @@ If those are green, the shell is ready; the only thing standing between you and 
 
 Add only what you want to exercise. **A model key is the one that unlocks the core flow;** the other two make the run faithful to production (real persistence, real auth). Put everything in `.env` (see `.env.example` for the full annotated list).
 
-#### Model provider — *required for build / visualise / test-run / triggering-eval*
+#### Model provider — *required for every model-backed capability*
 
 The default provider is Anthropic (Claude). Get a key from the [Anthropic Console](https://console.anthropic.com/) and set:
 

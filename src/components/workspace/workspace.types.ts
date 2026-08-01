@@ -1,4 +1,5 @@
 import type { ConceptView } from "@/modules/concept";
+import type { ImportTier } from "@/modules/import";
 import type { RenderedDoc, SourceDoc, HeroView } from "@/modules/hero";
 import type { SafetyReviewScore, SafetyReviewVerdict } from "@/modules/safety-review";
 import type { SkillSource, SkillVersionLintSummary } from "@/modules/skill";
@@ -229,6 +230,8 @@ export type WorkspaceSnapshot = {
   readonly heroFocus: HeroFocus;
   readonly view: HeroView;
   readonly mode: InteractionMode;
+  /** Which rung of the import ladder the Import surface is offering (§10). */
+  readonly importTier: ImportTier;
   readonly current: SkillSource | null;
   readonly currentSkillId: string | null;
   readonly lintSummary: SkillVersionLintSummary | null;
@@ -250,6 +253,16 @@ export type WorkspaceSnapshot = {
 
 export type EvaluationSurface = "insights" | "breakdown";
 
+/**
+ * An archive handed to the top rung. Plain data, not a `File`, so the store
+ * stays testable without DOM file APIs — the panel does the reading.
+ */
+export type AgentConfigurationImportInput = {
+  readonly name: string;
+  readonly format: "zip" | "tar" | "tar.gz";
+  readonly bytes: ArrayBuffer;
+};
+
 export type WorkspaceActions = {
   readonly setView: (view: HeroView) => void;
   readonly showBuild: () => void;
@@ -260,7 +273,13 @@ export type WorkspaceActions = {
   readonly showHistory: () => Promise<void>;
   readonly showTemplates: (query?: string) => Promise<void>;
   readonly send: (message: string) => Promise<void>;
+  readonly setImportTier: (tier: ImportTier) => void;
+  /** Rung one: one pasted building block, or a public GitHub SKILL.md URL. */
   readonly importSkill: (raw: string) => Promise<void>;
+  /** Rung two: several documents that belong together. */
+  readonly importRelated: (documents: readonly string[]) => Promise<void>;
+  /** Rung three, step one: read an archive and show what is in it. */
+  readonly previewAgentConfiguration: (input: AgentConfigurationImportInput) => Promise<void>;
   readonly submitEquipment: (raw: string) => Promise<void>;
   readonly openEquipmentDecisionConcept: () => Promise<void>;
   readonly askAboutConcept: (question: string) => Promise<void>;

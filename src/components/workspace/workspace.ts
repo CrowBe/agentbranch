@@ -12,6 +12,7 @@ import {
   formatTriggeringEvalFeedback,
 } from "@/modules/build-loop/feedback-formatters";
 import { CONCEPT_GLOSSARY, conceptLibrary } from "@/modules/concept-library";
+import { readableKind, type ImportPrimitiveKind, type ImportTier } from "@/modules/import";
 import { conceptCapability } from "@/modules/concept";
 import { runCapability } from "@/modules/skill-analysis";
 import {
@@ -61,7 +62,9 @@ import {
   decodeCapabilityPanel,
   decodeDraftList,
   decodeEquipmentInsight,
-  decodeImportResponse,
+  decodeAgentConfigurationImport,
+  decodeImportedPrimitive,
+  decodeImportedSet,
   decodeLintPanel,
   decodePromotedSkill,
   decodeRunHistory,
@@ -76,9 +79,11 @@ import {
   latestLintSummary,
   lintSummaryFromPanel,
   toolErrorMessage,
+  type AgentConfigurationImportResult,
   type SkillDetail,
 } from "./decoders";
 import type {
+  AgentConfigurationImportInput,
   CapabilityPanel,
   EquipmentKind,
   EquipmentState,
@@ -117,6 +122,7 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     heroFocus: { kind: "skill" },
     view: "rendered",
     mode: "build",
+    importTier: "primitive",
     current: init.initialSkill,
     currentSkillId: null,
     lintSummary: init.initialLintSummary ?? null,
@@ -144,6 +150,11 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
   let toolContractDraft: ToolContractSource | null = null;
   let subagentDefinitionDraft: SubagentDefinitionSource | null = null;
   let comparisonLeftRunId: string | null = null;
+  // The archive behind an unsaved agent-configuration preview. Held here, not
+  // on the snapshot, so confirming a save re-sends the same bytes the preview
+  // was derived from — the server re-derives the snapshot rather than trusting
+  // one assembled here (ARCHITECTURE §10).
+  let pendingConfigurationArchive: AgentConfigurationImportInput | null = null;
   let entrySeq = 0;
 
   const listeners = new Set<() => void>();
@@ -360,6 +371,18 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
 
   function showImport() {
     patch({ mode: "import", entries: [], status: null, branchId: null, openDrafts: [] });
+  }
+
+  /**
+   * Move between the rungs of the import ladder (ARCHITECTURE §10). Switching
+   * rungs clears the log and any half-finished configuration preview: the
+   * rungs take different inputs, so carrying state across them would only
+   * offer the user a stale confirmation for something they left behind.
+   */
+  function setImportTier(tier: ImportTier) {
+    if (snapshot.busy) return;
+    pendingConfigurationArchive = null;
+    patch({ mode: "import", importTier: tier, entries: [], status: null });
   }
 
   async function showSkills(): Promise<void> {
@@ -657,7 +680,13 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
   // -------------------------------------------------------------------------
   // Import + saved skills
 
-  async function importSkill(raw: string): Promise<void> {
+  /**
+   * Rung one of the import ladder: one building block. A GitHub URL is still
+   * fetched as a SKILL.md; anything pasted is classified server-side, so a tool
+   * contract or subagent definition lands in Equipment without the user having
+   * to say which surface it belongs to.
+   */
+  async function importSkill(raw: string, kind?: ImportPrimitiveKind): Promise<void> {
     if (snapshot.busy) return;
     const isUrlImport = isGithubUrl(raw);
     patch({
@@ -667,39 +696,204 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
       branchId: null,
       openDrafts: [],
       status: "Importing…",
-      entries: [entry(isUrlImport ? "Importing GitHub SKILL.md." : "Importing pasted SKILL.md.", "muted")],
+      entries: [entry(isUrlImport ? "Importing GitHub SKILL.md." : "Importing pasted document.", "muted")],
     });
 
     try {
       const res = await fetchImpl("/api/import", {
         method: "POST",
-        headers: isUrlImport
-          ? { "Content-Type": "application/json" }
-          : { "Content-Type": "text/markdown; charset=utf-8" },
-        body: isUrlImport ? JSON.stringify({ url: raw }) : raw,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          isUrlImport ? { url: raw } : { tier: "primitive", document: raw, ...(kind ? { kind } : {}) },
+        ),
       });
       const body = (await res.json().catch(() => null)) as unknown;
       if (!res.ok) {
         fail(importErrorMessage(body, res.status));
         return;
       }
-      const imported = decodeImportResponse(body);
 
-      patch({
-        current: imported.skill.source,
-        currentSkillId: imported.skill.id,
-        lintSummary: imported.skill.lintSummary ?? null,
-        heroDocs: { rendered: imported.rendered, source: imported.source },
-        view: "rendered",
-        safetyRating: null,
-        status: "Import complete.",
-      });
-      appendEntry(entry(`Imported ${imported.rendered.title}.`, "muted"));
+      const landed = decodeImportedPrimitive(body);
+      if (landed.kind === "skill") {
+        patch({
+          current: landed.skill.source,
+          currentSkillId: landed.skill.id,
+          lintSummary: landed.skill.lintSummary ?? null,
+          heroDocs: { rendered: landed.rendered, source: landed.source },
+          view: "rendered",
+          safetyRating: null,
+          status: "Import complete.",
+        });
+        appendEntry(entry(`Imported ${landed.rendered.title}.`, "muted"));
+      } else {
+        patch({
+          equipment: storeEquipment(
+            snapshot.equipment,
+            landed.kind,
+            landed.name,
+            raw,
+            landed.id,
+            landed.contentHash,
+          ),
+          status: "Import complete.",
+        });
+        appendEntry(entry(`Imported ${landed.name} into Equipment.`, "muted"));
+      }
+
+      // The same bytes can be a valid skill *and* a valid subagent definition.
+      // Say so and offer the other reading rather than letting the user find it
+      // filed under the wrong primitive later (ARCHITECTURE §10).
+      for (const alternative of landed.alternatives) {
+        appendEntry({
+          id: `alternative-${alternative}`,
+          label: `Read as ${readableKind(landed.kind)}. This document is also valid as ${readableKind(alternative)}.`,
+          tone: "muted",
+          actionLabel: `Import as ${readableKind(alternative)} instead`,
+          onAction: () => void importSkill(raw, alternative),
+        });
+      }
     } catch (cause) {
       fail(friendlyError(String(cause)));
     } finally {
       patch({ busy: false });
     }
+  }
+
+  /**
+   * Rung two: several documents that belong together. Each lands on its own
+   * terms — one unreadable document is reported and the rest still arrive.
+   */
+  async function importRelated(documents: readonly string[]): Promise<void> {
+    if (snapshot.busy || documents.length === 0) return;
+    patch({
+      busy: true,
+      capability: null,
+      activeTool: null,
+      branchId: null,
+      openDrafts: [],
+      status: "Importing…",
+      entries: [entry(`Importing ${documents.length} documents.`, "muted")],
+    });
+
+    try {
+      const res = await fetchImpl("/api/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tier: "related-primitives",
+          documents: documents.map((document) => ({ document })),
+        }),
+      });
+      const body = (await res.json().catch(() => null)) as unknown;
+      if (!res.ok) {
+        fail(importErrorMessage(body, res.status));
+        return;
+      }
+
+      const set = decodeImportedSet(body);
+      let equipment = snapshot.equipment;
+      for (const item of set.imported) {
+        if (item.kind === "skill") {
+          patch({
+            current: item.skill.source,
+            currentSkillId: item.skill.id,
+            lintSummary: item.skill.lintSummary ?? null,
+            heroDocs: { rendered: item.rendered, source: item.source },
+            view: "rendered",
+            safetyRating: null,
+          });
+        } else {
+          equipment = storeEquipment(equipment, item.kind, item.name, item.document, item.id, item.contentHash);
+        }
+      }
+      patch({ equipment, status: `Imported ${set.imported.length} of ${set.imported.length + set.skipped.length}.` });
+      for (const item of set.imported) {
+        appendEntry(entry(`Imported ${item.name} (${readableKind(item.kind)}).`, "muted"));
+      }
+      for (const item of set.skipped) {
+        appendEntry(entry(item.message, "error"));
+      }
+    } catch (cause) {
+      fail(friendlyError(String(cause)));
+    } finally {
+      patch({ busy: false });
+    }
+  }
+
+  /**
+   * Rung three, step one: read an archive and report what is in it. Nothing is
+   * saved — the whole point of the rung is that the user sees the components,
+   * the redactions, and the unreadable parts before anything lands.
+   */
+  async function previewAgentConfiguration(input: AgentConfigurationImportInput): Promise<void> {
+    if (snapshot.busy) return;
+    patch({
+      busy: true,
+      capability: null,
+      activeTool: null,
+      status: "Reading archive…",
+      entries: [entry(`Reading ${input.name}.`, "muted")],
+    });
+
+    try {
+      const preview = await postArchive(input, false);
+      if (preview === null) return;
+      pendingConfigurationArchive = input;
+      patch({ status: "Nothing saved yet — review what was found." });
+      for (const line of describePreview(preview)) appendEntry(entry(line, "muted"));
+      appendEntry({
+        id: "save-configuration",
+        label: `Save this as an agent configuration named "${configurationName(input.name)}"?`,
+        actionLabel: "Save configuration",
+        onAction: () => void saveAgentConfiguration(),
+      });
+    } catch (cause) {
+      fail(friendlyError(String(cause)));
+    } finally {
+      patch({ busy: false });
+    }
+  }
+
+  /** Rung three, step two: re-send the previewed bytes, this time to keep. */
+  async function saveAgentConfiguration(): Promise<void> {
+    const input = pendingConfigurationArchive;
+    if (input === null || snapshot.busy) return;
+    patch({ busy: true, status: "Saving configuration…" });
+
+    try {
+      const saved = await postArchive(input, true);
+      if (saved === null) return;
+      pendingConfigurationArchive = null;
+      patch({ status: "Configuration saved." });
+      appendEntry(entry(`Saved ${configurationName(input.name)}.`, "muted"));
+    } catch (cause) {
+      fail(friendlyError(String(cause)));
+    } finally {
+      patch({ busy: false });
+    }
+  }
+
+  /** Returns null when the response was an error (already surfaced). */
+  async function postArchive(
+    input: AgentConfigurationImportInput,
+    save: boolean,
+  ): Promise<AgentConfigurationImportResult | null> {
+    const query = new URLSearchParams({ format: input.format });
+    if (save) {
+      query.set("save", "1");
+      query.set("name", configurationName(input.name));
+    }
+    const res = await fetchImpl(`/api/agent-configuration/import?${query.toString()}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: input.bytes,
+    });
+    const body = (await res.json().catch(() => null)) as unknown;
+    if (!res.ok) {
+      fail(importErrorMessage(body, res.status));
+      return null;
+    }
+    return decodeAgentConfigurationImport(body);
   }
 
   async function openSkill(id: string): Promise<void> {
@@ -1693,7 +1887,10 @@ export function createWorkspace(init: WorkspaceInit, deps: WorkspaceDeps = {}): 
     showHistory,
     showTemplates,
     send,
+    setImportTier,
     importSkill,
+    importRelated,
+    previewAgentConfiguration,
     submitEquipment,
     openSkill,
     restoreVersion,
@@ -1834,6 +2031,35 @@ function apiPath(action: ToolAction): string {
   if (action === "test-run") return "api/test-run";
   if (action === "triggering-eval") return "api/triggering-eval";
   return "api/export";
+}
+
+/**
+ * What the user is being asked to approve before a configuration is saved: what
+ * was found, what was hidden, and what could not be read. Redactions are
+ * reported by name because "we removed something" is not an honest summary of
+ * "we removed your API key" (ARCHITECTURE §10).
+ */
+function describePreview(preview: AgentConfigurationImportResult): readonly string[] {
+  const lines: string[] = [];
+  lines.push(
+    preview.runtimes.length === 0
+      ? "No known runtime layout was recognised."
+      : `Recognised ${preview.runtimes.map((r) => `${r.runtime} (adapter ${r.version})`).join(", ")}.`,
+  );
+  lines.push(`${preview.fileCount} files, ${preview.componentCount} components identified.`);
+  if (preview.redactionNames.length > 0) {
+    lines.push(
+      `Secret values removed before anything was stored: ${[...new Set(preview.redactionNames)].join(", ")}.`,
+    );
+  }
+  for (const warning of preview.warnings) lines.push(warning);
+  return lines;
+}
+
+/** An archive's file name makes a reasonable default configuration name. */
+function configurationName(fileName: string): string {
+  const base = fileName.replace(/\.(zip|tar|tar\.gz|tgz)$/i, "").trim();
+  return base.length > 0 ? base : "Imported configuration";
 }
 
 function isGithubUrl(value: string): boolean {

@@ -14,6 +14,7 @@ export type {
   SuggestionWithProvenance,
 } from "./local-suggestion-provider";
 export type {
+  AgentConfigurationImportInput,
   CapabilityPanel,
   DraftSummary,
   EvaluationBreakdown,

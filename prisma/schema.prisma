@@ -109,6 +109,14 @@ model HarnessVersion {
   promptBatteryGeneratorHash     String   @map("prompt_battery_generator_hash")
   testRunWorldGeneratorHash      String   @map("test_run_world_generator_hash")
   distractorLibraryHash          String   @map("distractor_library_hash")
+  // Added after the first five. Rows minted before this widening carry "" and
+  // are explicitly incomparable on these axes rather than silently equal.
+  responseSchemaLintRulesetHash  String   @default("") @map("response_schema_lint_ruleset_hash")
+  toolContractLintRulesetHash    String   @default("") @map("tool_contract_lint_ruleset_hash")
+  subagentDefinitionLintRulesetHash String @default("") @map("subagent_definition_lint_ruleset_hash")
+  equipmentAuthoringPromptsHash  String   @default("") @map("equipment_authoring_prompts_hash")
+  safetyReviewJudgeHash          String   @default("") @map("safety_review_judge_hash")
+  adversarialNegativeBatteryHash String   @default("") @map("adversarial_negative_battery_hash")
   gitSha                         String?  @map("git_sha")
   createdAt                      DateTime @default(now()) @map("created_at")
 

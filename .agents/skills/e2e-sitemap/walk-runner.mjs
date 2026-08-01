@@ -70,11 +70,20 @@ page.on("dialog", (d) =>
 await walk("WALK-01 import", async () => {
   await page.goto(BASE + "/", { waitUntil: "domcontentloaded", timeout: 30000 });
   await page.getByRole("button", { name: "Import" }).first().click();
-  await page.getByText("Import a skill").first().waitFor();
+  await page.getByRole("heading", { name: "Import", exact: true }).first().waitFor();
   await page.locator("textarea").fill(FIXTURE);
-  await page.getByRole("button", { name: "Import skill" }).click();
+  await page.getByRole("button", { name: "Import document" }).click();
   await status("Import complete.");
   await page.getByRole("heading", { name: /inbox.triage/i }).first().waitFor();
+
+  // The rung chooser swaps the input: the upper rungs take files, not prose.
+  await page.getByRole("button", { name: /A whole agent configuration/ }).click();
+  await page.getByLabel("Agent configuration archive").waitFor();
+  if ((await page.locator("textarea").count()) !== 0) {
+    throw new Error("The configuration rung still offers a textarea.");
+  }
+  await page.getByRole("button", { name: /One building block/ }).click();
+  await page.locator("textarea").first().waitFor();
 });
 
 await walk("WALK-02 hero views", async () => {

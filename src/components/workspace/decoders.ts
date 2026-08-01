@@ -1,4 +1,5 @@
 import type { RenderedDoc, SourceDoc } from "@/modules/hero";
+import type { ImportPrimitiveKind } from "@/modules/import";
 import type { SkillSource, SkillVersionLintSummary } from "@/modules/skill";
 import type { TestRunResult } from "@/modules/test-run";
 import type { TriggeringResult } from "@/modules/triggering-eval";
@@ -96,6 +97,143 @@ export function decodeImportResponse(body: unknown): ImportResponse {
     },
     rendered: body.rendered,
     source: body.source,
+  };
+}
+
+/** One building block that landed on rung one or two of the import ladder. */
+export type ImportedPrimitive =
+  | (ImportResponse & {
+      readonly kind: "skill";
+      readonly name: string;
+      readonly document: string;
+      readonly alternatives: readonly ImportPrimitiveKind[];
+    })
+  | {
+      readonly kind: Exclude<ImportPrimitiveKind, "skill">;
+      readonly id: string;
+      readonly name: string;
+      readonly document: string;
+      readonly contentHash?: string;
+      readonly alternatives: readonly ImportPrimitiveKind[];
+    };
+
+const PRIMITIVE_KINDS: readonly ImportPrimitiveKind[] = [
+  "skill",
+  "response-schema",
+  "tool-contract",
+  "subagent-definition",
+];
+
+function isPrimitiveKind(value: unknown): value is ImportPrimitiveKind {
+  return typeof value === "string" && (PRIMITIVE_KINDS as readonly string[]).includes(value);
+}
+
+function decodeLanded(body: unknown): ImportedPrimitive {
+  if (!isRecord(body)) throw new Error("Import returned an unexpected response.");
+  // The payloads are self-identifying, so an absent `kind` is readable rather
+  // than a shape error — but a `kind` that *is* present must be one we know.
+  const kind = "kind" in body ? body.kind : isRecord(body.skill) ? "skill" : undefined;
+  if (!isPrimitiveKind(kind)) throw new Error("Import returned an unexpected response.");
+  const alternatives = Array.isArray(body.alternatives)
+    ? body.alternatives.filter(isPrimitiveKind)
+    : [];
+  if (kind === "skill") {
+    const skill = decodeImportResponse(body);
+    return { ...skill, kind: "skill", name: skill.rendered.title, document: "", alternatives };
+  }
+  if (
+    !isRecord(body.equipment) ||
+    typeof body.equipment.id !== "string" ||
+    typeof body.equipment.name !== "string" ||
+    typeof body.equipment.document !== "string"
+  ) {
+    throw new Error("Import returned an unexpected response.");
+  }
+  return {
+    kind,
+    id: body.equipment.id,
+    name: body.equipment.name,
+    document: body.equipment.document,
+    contentHash:
+      typeof body.equipment.contentHash === "string" ? body.equipment.contentHash : undefined,
+    alternatives,
+  };
+}
+
+export function decodeImportedPrimitive(body: unknown): ImportedPrimitive {
+  return decodeLanded(body);
+}
+
+export type ImportedSet = {
+  readonly imported: readonly ImportedPrimitive[];
+  readonly skipped: readonly { readonly message: string }[];
+};
+
+export function decodeImportedSet(body: unknown): ImportedSet {
+  if (!isRecord(body) || !Array.isArray(body.imported)) {
+    throw new Error("Import returned an unexpected response.");
+  }
+  return {
+    imported: body.imported.map(decodeLanded),
+    skipped: Array.isArray(body.skipped)
+      ? body.skipped.flatMap((item) =>
+          isRecord(item) && typeof item.message === "string" ? [{ message: item.message }] : [],
+        )
+      : [],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/agent-configuration/import
+
+/**
+ * The preview is read for what the user is being asked to approve — what was
+ * found, what was hidden, what could not be read — not re-modelled in full.
+ */
+export type AgentConfigurationImportResult = {
+  readonly runtimes: readonly { readonly runtime: string; readonly version: string }[];
+  readonly componentCount: number;
+  readonly fileCount: number;
+  readonly redactionNames: readonly string[];
+  readonly warnings: readonly string[];
+  readonly savedName: string | null;
+};
+
+export function decodeAgentConfigurationImport(body: unknown): AgentConfigurationImportResult {
+  if (!isRecord(body) || !isRecord(body.preview)) {
+    throw new Error("Agent configuration import returned an unexpected response.");
+  }
+  const preview = body.preview;
+  const snapshot = isRecord(preview.snapshot) ? preview.snapshot : {};
+  return {
+    runtimes: Array.isArray(preview.runtimes)
+      ? preview.runtimes.flatMap((item) =>
+          isRecord(item) && typeof item.runtime === "string"
+            ? [
+                {
+                  runtime: item.runtime,
+                  version:
+                    isRecord(item.adapter) && typeof item.adapter.version === "string"
+                      ? item.adapter.version
+                      : "unknown",
+                },
+              ]
+            : [],
+        )
+      : [],
+    componentCount: Array.isArray(snapshot.components) ? snapshot.components.length : 0,
+    fileCount: Array.isArray(snapshot.files) ? snapshot.files.length : 0,
+    redactionNames: Array.isArray(preview.redactions)
+      ? preview.redactions.flatMap((item) =>
+          isRecord(item) && typeof item.name === "string" ? [item.name] : [],
+        )
+      : [],
+    warnings: Array.isArray(preview.warnings)
+      ? preview.warnings.flatMap((item) =>
+          isRecord(item) && typeof item.message === "string" ? [item.message] : [],
+        )
+      : [],
+    savedName: isRecord(body.saved) && typeof body.saved.name === "string" ? body.saved.name : null,
   };
 }
 

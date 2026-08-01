@@ -8,6 +8,7 @@ const createSkill = vi.fn();
 const listSkills = vi.fn();
 const consumeRateLimit = vi.fn();
 const fetchSkillMd = vi.fn();
+const saveEquipment = vi.fn();
 
 vi.mock("@/server/container", () => ({
   getContainer: () => ({
@@ -15,6 +16,7 @@ vi.mock("@/server/container", () => ({
     skills: { create: createSkill, listByUser: listSkills },
     requestRateLimiter: { consume: consumeRateLimit },
     skillImportFetcher: { fetchSkillMd },
+    equipment: { save: saveEquipment },
   }),
 }));
 
@@ -25,8 +27,21 @@ describe("POST /api/import", () => {
     listSkills.mockReset();
     consumeRateLimit.mockReset();
     fetchSkillMd.mockReset();
+    saveEquipment.mockReset();
     listSkills.mockResolvedValue(ok([]));
     consumeRateLimit.mockResolvedValue(ok({ allowed: true }));
+    saveEquipment.mockImplementation(async ({ userId, kind, name, document }) =>
+      ok({
+        id: `equipment-${name}`,
+        userId,
+        kind,
+        name,
+        document,
+        contentHash: "hash",
+        createdAt: new Date(0),
+        updatedAt: new Date(0),
+      }),
+    );
   });
 
   it("fetches and persists a public GitHub SKILL.md URL", async () => {
@@ -191,6 +206,136 @@ describe("POST /api/import", () => {
       { maxRequests: 12, windowMs: 60_000 },
     );
     expect(createSkill).not.toHaveBeenCalled();
+  });
+
+  it("lands a tool contract on the primitive rung without touching skills", async () => {
+    currentIdentity.mockResolvedValue(ok({ userId: UserId("user-1"), email: "u@example.test" }));
+
+    const response = await POST(new Request("https://example.test/api/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        tier: "primitive",
+        document: JSON.stringify({
+          name: "fetch_unread_email",
+          description: "Fetch unread messages from the inbox.",
+          input: { schema: { type: "object", properties: {} } },
+          output: { schema: { type: "object", properties: {} } },
+        }),
+      }),
+    }));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      kind: "tool-contract",
+      equipment: { kind: "tool-contract", name: "fetch_unread_email" },
+    });
+    expect(createSkill).not.toHaveBeenCalled();
+  });
+
+  it("reports the competing reading when a document is genuinely ambiguous", async () => {
+    currentIdentity.mockResolvedValue(ok({ userId: UserId("user-1"), email: "u@example.test" }));
+    createSkill.mockImplementation(async ({ userId, source }) =>
+      ok(makeSkill({
+        id: SkillId("skill-1"),
+        userId,
+        source,
+        createdAt: new Date(0),
+        updatedAt: new Date(0),
+      })),
+    );
+
+    const response = await POST(new Request("https://example.test/api/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        tier: "primitive",
+        document: "---\nname: inbox-triage\ndescription: Sort unread mail into buckets.\n---\nRead mail.",
+      }),
+    }));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      kind: "skill",
+      alternatives: ["subagent-definition"],
+    });
+  });
+
+  it("honours an explicit kind over the default reading", async () => {
+    currentIdentity.mockResolvedValue(ok({ userId: UserId("user-1"), email: "u@example.test" }));
+
+    const response = await POST(new Request("https://example.test/api/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        tier: "primitive",
+        kind: "subagent-definition",
+        document: "---\nname: inbox-triage\ndescription: Sort unread mail into buckets.\n---\nRead mail.",
+      }),
+    }));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ kind: "subagent-definition" });
+    expect(createSkill).not.toHaveBeenCalled();
+  });
+
+  it("lands a related set and reports the ones it could not read", async () => {
+    currentIdentity.mockResolvedValue(ok({ userId: UserId("user-1"), email: "u@example.test" }));
+    createSkill.mockImplementation(async ({ userId, source }) =>
+      ok(makeSkill({
+        id: SkillId("skill-1"),
+        userId,
+        source,
+        createdAt: new Date(0),
+        updatedAt: new Date(0),
+      })),
+    );
+
+    const response = await POST(new Request("https://example.test/api/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        tier: "related-primitives",
+        documents: [
+          { document: "---\nname: inbox-triage\ndescription: Sort unread mail.\n---\nRead mail.", kind: "skill" },
+          {
+            document: JSON.stringify({
+              name: "fetch_unread_email",
+              description: "Fetch unread messages.",
+              input: { schema: { type: "object", properties: {} } },
+              output: { schema: { type: "object", properties: {} } },
+            }),
+          },
+          { document: "definitely not a document" },
+        ],
+      }),
+    }));
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.tier).toBe("related-primitives");
+    expect(body.imported.map((item: { kind: string }) => item.kind)).toEqual([
+      "skill",
+      "tool-contract",
+    ]);
+    expect(body.skipped).toHaveLength(1);
+  });
+
+  it("fails a related set only when nothing in it could be read", async () => {
+    currentIdentity.mockResolvedValue(ok({ userId: UserId("user-1"), email: "u@example.test" }));
+
+    const response = await POST(new Request("https://example.test/api/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        tier: "related-primitives",
+        documents: [{ document: "nope" }, { document: "also nope" }],
+      }),
+    }));
+
+    expect(response.status).toBe(400);
+    expect(createSkill).not.toHaveBeenCalled();
+    expect(saveEquipment).not.toHaveBeenCalled();
   });
 
   it("rejects oversized payloads before parsing", async () => {

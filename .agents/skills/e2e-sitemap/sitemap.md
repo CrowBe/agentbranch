@@ -26,7 +26,7 @@ into a labelled slideout (name = visible text, `aria-label` gone), so a CSS
 | Nav node | Accessible name | Interaction-panel mode it opens |
 |---|---|---|
 | Build | `Build` | `Describe your skill` — chat drives the build loop |
-| Import | `Import` | `Import a skill` — paste `SKILL.md` or a public GitHub URL |
+| Import | `Import` | `Import` — a rung chooser (`One building block` / `Building blocks that work together` / `A whole agent configuration`); rung one takes a pasted document or a public GitHub URL, the upper rungs take files |
 | My skills | `My skills` | saved-skill list with `Open` cards |
 | Equipment | `Equipment` | paste a response schema / tool contract / subagent definition, or chat-author one |
 | History | `History` | revision + run entries, restore cards |
@@ -75,7 +75,9 @@ Equipment quality routes take `{ "document": "<source string>", "surface": "insi
 | Route | Method | Auth | Plain offline (no model key, no CLI rung / memory adapters) |
 |---|---|---|---|
 | `/api/build` | POST (SSE) | signed-in | stream opens; model error surfaces as streamed error event |
-| `/api/import` | POST | signed-in | works (GitHub URL fetch needs a token; paste always works) |
+| `/api/import` | POST | signed-in | the ladder's lower two rungs — `{tier:"primitive"}` or `{tier:"related-primitives"}` (a raw body or `{url}` still means a SKILL.md; GitHub URL fetch needs a token, paste always works) |
+| `/api/agent-configuration/import` | POST (binary) | signed-in | the ladder's top rung — raw archive body, `?format=zip\|tar\|tar.gz`; previews only unless `?save=1&name=` |
+| `/api/agent-configuration` | GET | signed-in | the account's saved configurations, identity only |
 | `/api/skills/[id]` | GET, PATCH, DELETE | signed-in | works — PATCH appends an accepted metadata revision to main or the active draft |
 | `/api/lint` | POST | signed-in | works — pure analysis |
 | `/api/visualise` | POST | signed-in | works — deterministic fallback |
@@ -130,9 +132,11 @@ description: Sort unread email into respond, archive, and escalate piles.
 | # | action | selector | expect (`[role="status"]` unless noted) |
 |---|---|---|---|
 | 1 | goto `/` | — | page 200; hero renders a skill document |
-| 2 | click | nav button `Import` | panel title `Import a skill` |
-| 3 | fill fixture, click | `textarea`, then button `Import skill` | `Importing…` → `Import complete.` |
+| 2 | click | nav button `Import` | panel title `Import`; rung `One building block` is pressed |
+| 3 | fill fixture, click | `textarea`, then button `Import document` | `Importing…` → `Import complete.` |
 | 4 | assert | hero heading | title reflects `inbox-triage` |
+| 5 | click | rung `A whole agent configuration` | the `textarea` is gone; file input `Agent configuration archive` is present; button `Read archive` disabled with nothing chosen |
+| 6 | click | rung `One building block` | the `textarea` returns (the rung chooser swaps the input, and switching clears the log) |
 
 ### WALK-02 · Hero views
 
@@ -345,7 +349,7 @@ Internal by design (no user surface expected):
 | `skill-analysis` | the seam itself |
 | `model-gateway` · `model-router` | platform plumbing; the model console is the router's surface |
 | `usage` | accounting authority behind the quota pill |
-| `auth` · `skill-import` | ports (import reached via `/api/import`) |
+| `auth` | port (identity, resolved in every route) |
 | `harness-version` | identity stamping for evaluation records |
 | `baseline-corpus` | frozen ground for the regression benchmark |
 | `response-schema-corpus` | frozen characterisation ground for schema lint (#211); feeds the benchmark, not a surface |

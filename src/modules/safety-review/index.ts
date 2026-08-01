@@ -30,7 +30,7 @@ export type {
   SafetyReviewVerdict,
 } from "./safety-review.types";
 export type { SafetyRatingRepository } from "./safety-rating.repository";
-export { runSafetyReview } from "./run-safety-review";
+export { runSafetyReview, safetyReviewPrompts } from "./run-safety-review";
 
 const safetyReviewEvaluator: Evaluator<SafetyReviewInput, SafetyReviewResult> = {
   kind: "safety-review",

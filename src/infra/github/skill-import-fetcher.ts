@@ -1,5 +1,5 @@
 import { err, ok, REQUEST_BYTES_MAX, LIMIT_MESSAGES } from "@/shared";
-import type { SkillImportFetcher, SkillImportFetchError } from "@/modules/skill-import";
+import type { SkillImportFetcher, SkillImportFetchError } from "@/modules/import";
 
 type FetchLike = typeof fetch;
 

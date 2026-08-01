@@ -26,7 +26,11 @@ _Avoid_: labels, keywords (too generic), taxonomy (that's the category list, not
 
 **Agent configuration**:
 A runtime-neutral, versioned collection of source files plus source-backed instruction, skill, subagent, tool, hook, policy, model, reference, evaluation, and unknown components. Its deterministic import provenance names every detected runtime adapter and version so later export can remain faithful; those names are provenance only and never confer runtime precedence or execution semantics.
-_Avoid_: agent profile, runtime config, converted project
+_Avoid_: agent profile, runtime config, converted project, **agent harness / harness config** (reserved for *our* validation harness — see *Distinctions*)
+
+**Import ladder** (§10):
+The three rungs of increasing complexity a user can arrive at: **one building block** (a single primitive), **building blocks that work together** (a related set), and **a whole agent configuration**. The user picks the rung matching what they hold; the rungs differ only in the size of the seam's `Input`.
+_Avoid_: import wizard, onboarding flow, tiers (the code term is `ImportTier`; user copy names the rung)
 
 **Source snapshot**:
 The immutable, path-addressed bytes offered to agent-configuration import adapters. Repository and local-archive ingestion validate paths, collisions, links, and resource bounds before constructing one; nothing in it is executed.
@@ -240,7 +244,6 @@ The easy confusions, stated as rules. Each names a pair people collapse and the 
 - **Evaluation result ≠ Insights.** The raw run-record is the **Evaluation result** (internal, never shown raw); the interpreted, user-facing surface is **Insights**. A result is *always* rendered into meaning — never a data wall. The audience bridge (§1) lives in the renderer, not the artifact.
 - **Evaluation result ≠ Evaluation record.** The result is ephemeral on the seam; the record is the persisted row (§6). Don't render straight from the DB row, and don't persist the render.
 - **An Evaluator owns its method, not its resources.** It builds its own Scenario / distractor field / battery and runs the input (its method); model access is handed in via the **model gateway** (its resource). Building its own conditions is intrinsic to *being* that evaluator; the gateway stays out because the resource is shared + sensitive.
-- **No "harness."** Model *mechanism* and accounting *policy* are two things: the **model gateway** (mechanism — owns the key, exposes `classify`/`runAgent`, knows no evaluation kinds) depends on the **usage** module (policy — caps + recording by tag). "Harness" is banned (also jargon). The gateway is a **platform** concern; evaluation is just its first consumer (portability transform, mock-data generation, the build loop follow).
+- **"Harness" means one thing: the validation harness.** It is the versioned set of *our* artifacts that produce a graded outcome — the build-loop and equipment authoring prompts, the lint rulesets, the generators, the distractor and adversarial batteries, the safety judge — pinned as a `harness_versions` row (ARCHITECTURE §6, §9). It is **not** the model gateway: model *mechanism* and accounting *policy* are two things, and the gateway (owns the key, exposes `classify`/`runAgent`, knows no evaluation kinds) depends on the **usage** module for policy. It is also **not** the user's imported setup — that is an **agent configuration** (§10). Getting these apart matters because attribution runs on two axes, *skill version × harness version*; if "harness" also meant the user's configuration, neither axis would mean anything.
+  _Avoid_: harness as a synonym for the model gateway, the agent loop, or a user's agent configuration
 - **Not all model spend is user-attributable.** The **accounting tag** splits it: `account` (user-attributable, spends the free quota) vs `platform` (the platform's own cost — e.g. generating mock data to stress a skill — never charged to a user's quota). The caller declares the tag because only it knows *why* it's spending.
-</content>
-</invoke>

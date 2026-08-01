@@ -1,11 +1,21 @@
 import { createHash } from "node:crypto";
-import { BUILD_LOOP_SYSTEM_PROMPT } from "@/modules/build-loop";
+import {
+  BUILD_LOOP_SYSTEM_PROMPT,
+  RESPONSE_SCHEMA_AUTHORING_PROMPT,
+  SUBAGENT_DEFINITION_AUTHORING_PROMPT,
+  TOOL_CONTRACT_AUTHORING_PROMPT,
+} from "@/modules/build-loop";
 import { LINT_RULESET_VERSION } from "@/modules/lint";
 import {
   PROMPT_BATTERY_GENERATOR_VERSION,
   distractorLibrary,
 } from "@/modules/triggering-eval";
 import { TEST_RUN_WORLD_GENERATOR_VERSION } from "@/modules/test-run";
+import { RESPONSE_SCHEMA_LINT_RULESET_VERSION } from "@/modules/response-schema";
+import { TOOL_CONTRACT_LINT_RULESET_VERSION } from "@/modules/tool-contract";
+import { SUBAGENT_DEFINITION_LINT_RULESET_VERSION } from "@/modules/subagent-definition";
+import { safetyReviewPrompts } from "@/modules/safety-review";
+import { adversarialTriggeringNegativePrompts } from "@/modules/adversarial-safety-battery";
 import type { HarnessManifest } from "./harness-version.types";
 
 export function currentHarnessManifest(): HarnessManifest {
@@ -15,6 +25,16 @@ export function currentHarnessManifest(): HarnessManifest {
     promptBatteryGenerator: hashStable(PROMPT_BATTERY_GENERATOR_VERSION),
     testRunWorldGenerator: hashStable(TEST_RUN_WORLD_GENERATOR_VERSION),
     distractorLibrary: hashStable(distractorLibrary),
+    responseSchemaLintRuleset: hashStable(RESPONSE_SCHEMA_LINT_RULESET_VERSION),
+    toolContractLintRuleset: hashStable(TOOL_CONTRACT_LINT_RULESET_VERSION),
+    subagentDefinitionLintRuleset: hashStable(SUBAGENT_DEFINITION_LINT_RULESET_VERSION),
+    equipmentAuthoringPrompts: hashStable([
+      RESPONSE_SCHEMA_AUTHORING_PROMPT,
+      TOOL_CONTRACT_AUTHORING_PROMPT,
+      SUBAGENT_DEFINITION_AUTHORING_PROMPT,
+    ]),
+    safetyReviewJudge: hashStable(safetyReviewPrompts()),
+    adversarialNegativeBattery: hashStable(adversarialTriggeringNegativePrompts),
     gitSha: currentGitSha(),
   };
 }

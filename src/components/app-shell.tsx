@@ -125,9 +125,13 @@ export function AppShell({
           entries={snapshot.entries}
           busy={snapshot.busy || snapshot.equipmentBusy}
           mode={snapshot.mode}
+          importTier={snapshot.importTier}
           className={mobileTab === "chat" ? "flex" : "hidden lg:flex"}
           onSend={(message) => void actions.send(message)}
           onImport={(raw) => void actions.importSkill(raw)}
+          onImportTier={(tier) => actions.setImportTier(tier)}
+          onImportRelated={(documents) => void actions.importRelated(documents)}
+          onImportAgentConfiguration={(input) => void actions.previewAgentConfiguration(input)}
           onEquipment={(raw) => void actions.submitEquipment(raw)}
           onEquipmentHelp={() => void actions.openEquipmentDecisionConcept()}
           onTemplates={(query) => void actions.showTemplates(query)}

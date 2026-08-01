@@ -1,8 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { IMPORT_TIERS, type ImportTier } from "@/modules/import";
 import { Button } from "./ui/button";
-import type { InteractionEntry, InteractionMode } from "./workspace";
+import type {
+  AgentConfigurationImportInput,
+  InteractionEntry,
+  InteractionMode,
+} from "./workspace";
 
 /**
  * Slim right interaction panel — the demoted control surface beside the hero
@@ -13,9 +18,13 @@ export function InteractionPanel({
   entries,
   busy = false,
   mode = "build",
+  importTier = "primitive",
   className = "flex",
   onSend,
   onImport,
+  onImportTier,
+  onImportRelated,
+  onImportAgentConfiguration,
   onEquipment,
   onEquipmentHelp,
   onTemplates,
@@ -23,12 +32,16 @@ export function InteractionPanel({
   entries: readonly InteractionEntry[];
   busy?: boolean;
   mode?: InteractionMode;
+  importTier?: ImportTier;
   /** Display classes from the shell (the mobile Chat | Skill tabs decide
    * visibility); must include the panel's display, e.g. "flex" or
    * "hidden lg:flex". */
   className?: string;
   onSend: (message: string) => void;
   onImport?: (raw: string) => void;
+  onImportTier?: (tier: ImportTier) => void;
+  onImportRelated?: (documents: readonly string[]) => void;
+  onImportAgentConfiguration?: (input: AgentConfigurationImportInput) => void;
   onEquipment?: (raw: string) => void;
   onEquipmentHelp?: () => void;
   onTemplates?: (query: string) => void;
@@ -51,9 +64,12 @@ export function InteractionPanel({
     setValue("");
   };
 
-  const copy = copyForMode(mode);
+  const copy = copyForMode(mode, importTier);
+  // The upper rungs take files, not prose: several documents, or one archive.
+  const importTakesFiles = mode === "import" && importTier !== "primitive";
   const acceptsInput =
-    mode === "build" || mode === "import" || mode === "equipment" || mode === "templates";
+    !importTakesFiles &&
+    (mode === "build" || mode === "import" || mode === "equipment" || mode === "templates");
 
   return (
     <aside
@@ -62,6 +78,10 @@ export function InteractionPanel({
       <div className="border-b border-outline-variant px-4 py-3">
         <h2 className="text-label text-on-surface-variant">{copy.title}</h2>
       </div>
+
+      {mode === "import" && onImportTier ? (
+        <ImportTierChooser value={importTier} disabled={busy} onChange={onImportTier} />
+      ) : null}
 
       <div className="flex flex-1 flex-col gap-3 overflow-auto px-4 py-4 text-doc-rendered">
         {entries.length === 0 ? (
@@ -87,6 +107,16 @@ export function InteractionPanel({
         )}
       </div>
 
+      {importTakesFiles && (
+        <ImportFilePicker
+          tier={importTier}
+          busy={busy}
+          copy={copy}
+          onRelated={onImportRelated}
+          onArchive={onImportAgentConfiguration}
+        />
+      )}
+
       {acceptsInput && (
         <div className="flex flex-col gap-2 border-t border-outline-variant p-3">
           <textarea
@@ -105,6 +135,105 @@ export function InteractionPanel({
         </div>
       )}
     </aside>
+  );
+}
+
+/**
+ * The import ladder's three rungs, in ascending order of complexity
+ * (ARCHITECTURE §10). A vertical list rather than a segmented control: each
+ * rung needs its one-line summary to be choosable, and the summary is what
+ * tells an SMB owner they are allowed to start at the bottom.
+ */
+function ImportTierChooser({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: ImportTier;
+  disabled: boolean;
+  onChange: (tier: ImportTier) => void;
+}) {
+  return (
+    <fieldset className="flex flex-col gap-1 border-b border-outline-variant px-3 py-3">
+      <legend className="text-label px-1 text-on-surface-variant">What are you bringing in?</legend>
+      {IMPORT_TIERS.map((rung) => (
+        <button
+          key={rung.tier}
+          type="button"
+          aria-pressed={rung.tier === value}
+          disabled={disabled}
+          onClick={() => onChange(rung.tier)}
+          className={`flex flex-col gap-0.5 rounded-[var(--radius-sm)] px-2 py-2 text-left transition-colors ${
+            rung.tier === value
+              ? "bg-primary/15 text-primary"
+              : "text-on-surface-variant hover:bg-surface-high"
+          } disabled:cursor-not-allowed disabled:opacity-60`}
+        >
+          <span className="text-label">{rung.label}</span>
+          <span className="text-label opacity-80">{rung.summary}</span>
+        </button>
+      ))}
+    </fieldset>
+  );
+}
+
+const ARCHIVE_FORMATS: readonly { suffix: string; format: AgentConfigurationImportInput["format"] }[] = [
+  { suffix: ".tar.gz", format: "tar.gz" },
+  { suffix: ".tgz", format: "tar.gz" },
+  { suffix: ".tar", format: "tar" },
+  { suffix: ".zip", format: "zip" },
+];
+
+/** The upper rungs take files. Reading them here keeps the store DOM-free. */
+function ImportFilePicker({
+  tier,
+  busy,
+  copy,
+  onRelated,
+  onArchive,
+}: {
+  tier: ImportTier;
+  busy: boolean;
+  copy: { button: string; busy: string };
+  onRelated?: (documents: readonly string[]) => void;
+  onArchive?: (input: AgentConfigurationImportInput) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [chosen, setChosen] = useState<readonly File[]>([]);
+  const related = tier === "related-primitives";
+
+  const submit = async () => {
+    if (busy || chosen.length === 0) return;
+    if (related) {
+      onRelated?.(await Promise.all(chosen.map((file) => file.text())));
+    } else {
+      const file = chosen[0];
+      if (!file) return;
+      const match = ARCHIVE_FORMATS.find(({ suffix }) =>
+        file.name.toLowerCase().endsWith(suffix),
+      );
+      if (!match) return;
+      onArchive?.({ name: file.name, format: match.format, bytes: await file.arrayBuffer() });
+    }
+    setChosen([]);
+    if (input.current) input.current.value = "";
+  };
+
+  return (
+    <div className="flex flex-col gap-2 border-t border-outline-variant p-3">
+      <input
+        ref={input}
+        type="file"
+        multiple={related}
+        accept={related ? ".md,.json,.txt" : ".zip,.tar,.tar.gz,.tgz"}
+        aria-label={related ? "Documents to import" : "Agent configuration archive"}
+        onChange={(e) => setChosen(Array.from(e.target.files ?? []))}
+        className="text-label file:mr-2 file:rounded-[var(--radius-sm)] file:border file:border-outline-variant file:bg-surface file:px-2 file:py-1 file:text-on-surface"
+      />
+      <Button onClick={() => void submit()} variant="primary" disabled={busy || chosen.length === 0}>
+        {busy ? copy.busy : copy.button}
+      </Button>
+    </div>
   );
 }
 
@@ -131,7 +260,10 @@ function InteractionEntryView({ entry }: { entry: InteractionEntry }) {
   return <p className={className}>{entry.label}</p>;
 }
 
-function copyForMode(mode: InteractionMode): {
+function copyForMode(
+  mode: InteractionMode,
+  importTier: ImportTier,
+): {
   title: string;
   empty: string;
   placeholder: string;
@@ -151,11 +283,32 @@ function copyForMode(mode: InteractionMode): {
     };
   }
   if (mode === "import") {
+    if (importTier === "related-primitives") {
+      return {
+        title: "Import",
+        empty:
+          "Choose the documents that belong together — a skill plus the tool contracts and output shapes it works with. Each one is checked on its own, so a document we can't read won't lose you the rest.",
+        placeholder: "",
+        button: "Import documents",
+        busy: "Importing…",
+      };
+    }
+    if (importTier === "agent-configuration") {
+      return {
+        title: "Import",
+        empty:
+          "Choose an archive of an existing agent setup. We'll show you every part we find — and remove any secret values before anything is stored. Nothing is saved until you say so.",
+        placeholder: "",
+        button: "Read archive",
+        busy: "Reading…",
+      };
+    }
     return {
-      title: "Import a skill",
-      empty: "Paste a SKILL.md document or a public GitHub URL to add it to your workspace.",
+      title: "Import",
+      empty:
+        "Paste a skill, response schema, tool contract, or subagent definition — or a public GitHub URL. We'll work out which one it is.",
       placeholder: "https://github.com/acme/skills/tree/main/inbox\n\n---\nname: inbox-triage\ndescription: Sort unread email.\n---",
-      button: "Import skill",
+      button: "Import document",
       busy: "Importing…",
     };
   }
