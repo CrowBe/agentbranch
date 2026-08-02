@@ -44,6 +44,10 @@ _Avoid_: imported configuration (save has not happened), execution plan, convers
 The pure, runtime-neutral Artifact resolved from an imported Agent configuration. It names effective instructions, skills, tools, model settings, and policies; connects them with typed loads, overrides, references, selects, delegates-to, permits, and requires relationships; and keeps unknown, unresolved, shadowed, duplicate, unreachable, and ambiguous facts explicit. Every node and relationship carries source path/span, adapter rule, and confidence. Runtime adapters own precedence rules; the core graph does not.
 _Avoid_: execution plan (nothing runs), runtime graph (the vocabulary is runtime-neutral), inferred agent (relationships are deterministic and source-backed)
 
+**Profile analysis**:
+The pure, offline Analysis capability over an assembled **Effective configuration graph** and its source snapshot. It emits deterministic findings with exact source path/span/excerpt evidence, actionable fixes, and a quality score; explicit suppressions retain a non-empty rationale that exactly cites and overlaps source evidence for the targeted finding, and remain visible. Any future model-assisted judgment is structurally separate from deterministic findings and never required for this capability.
+_Avoid_: profile execution, model audit, hidden suppression
+
 **Draft** (branching iteration, §9.3):
 *User-facing term* for a working lineage of skill revisions that accumulates without moving the **main version** — the safe space to iterate and evaluate before committing. A skill may have several open at once. The internal/code term is `branch`.
 _Avoid_: branch (code-only — never user copy), working copy, fork, sandbox
