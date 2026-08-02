@@ -237,6 +237,28 @@ and set hashes are recorded per harness version behind
 `BenchmarkRunRepository`. All three surface
 only through the admin routes (below), gated by `isAdmin`.
 
+**Third-party harness benchmark (planned, #301–#303).** This is deliberately
+outside the production module graph. A pinned `smevals` development/CI tool
+drives repository-owned Tasks through a thin executable Runner into the same
+runtime-adapter and provider-neutral trace seams used by whole-agent evaluation.
+Its Config identity is the complete resolved harness — provider/model and
+parameters, instructions, skills, subagents, tools, policies, runtime adapter,
+and harness version — rather than a model id. A checked-in skill under
+`.agents/skills/` is the human/agent operator surface; it delegates validation,
+smoke/full execution, resume, regrade, and report operations to pinned scripts.
+No `smevals` package is imported by `src/`, and no external evaluator owns
+product persistence.
+
+The storage boundary proven by that benchmark becomes a product seam in #303:
+an immutable **Run** holds the resolved Config, provider-neutral trace, output,
+artifacts, timing, usage/cost, and completion status; one or more versioned
+**Grades** interpret it later. Infrastructure failure, cancellation, and grader
+failure are separate states, not failed agent behaviour. Native and third-party
+graders can therefore assess the same evidence, and a changed grader can regrade
+without another model/runtime call. The scheduled benchmark (#302) consumes
+this seam to test AgentBranch's own harnessing; user-owned suites (#289) and
+configuration experiments (#291) consume it to test imported harnesses.
+
 **Stub boundaries (where the real interface is set but behaviour is a
 placeholder):** none.
 
