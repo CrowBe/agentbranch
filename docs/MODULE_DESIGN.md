@@ -239,25 +239,31 @@ only through the admin routes (below), gated by `isAdmin`.
 
 **Third-party harness benchmark (planned, #301–#303).** This is deliberately
 outside the production module graph. A pinned `smevals` development/CI tool
-drives repository-owned Tasks through a thin executable Runner into the same
+drives repository-owned evaluation cases through a thin executable runner into the same
 runtime-adapter and provider-neutral trace seams used by whole-agent evaluation.
-Its Config identity is the complete resolved harness — provider/model and
-parameters, instructions, skills, subagents, tools, policies, runtime adapter,
-and harness version — rather than a model id. A checked-in skill under
+Inside the removable PoC, a smevals `Config` maps explicitly to AgentBranch's
+two existing attribution axes: the complete resolved agent configuration and
+the harness version that produced the outcome. The external Task / Config / Run
+/ Grade vocabulary does not enter product modules. A checked-in skill under
 `.agents/skills/` is the human/agent operator surface; it delegates validation,
 smoke/full execution, resume, regrade, and report operations to pinned scripts.
 No `smevals` package is imported by `src/`, and no external evaluator owns
 product persistence.
 
 The storage boundary proven by that benchmark becomes a product seam in #303:
-an immutable **Run** holds the resolved Config, provider-neutral trace, output,
-artifacts, timing, usage/cost, and completion status; one or more versioned
-**Grades** interpret it later. Infrastructure failure, cancellation, and grader
+immutable execution evidence holds the resolved agent configuration, harness
+version, provider-neutral trace, output, artifacts, timing, usage/cost, and
+completion status; one or more versioned evaluation results interpret it later.
+Infrastructure failure, cancellation, and grader
 failure are separate states, not failed agent behaviour. Native and third-party
-graders can therefore assess the same evidence, and a changed grader can regrade
-without another model/runtime call. The scheduled benchmark (#302) consumes
-this seam to test AgentBranch's own harnessing; user-owned suites (#289) and
-configuration experiments (#291) consume it to test imported harnesses.
+graders can therefore assess the same evidence within a privacy scope, and a
+changed grader can regrade without another model call. The scheduled benchmark
+(#302) extends the existing admin-only `benchmark_runs` system to cover
+whole-configuration behaviour. User-owned suites (#289) and configuration
+experiments (#291) reuse the contracts and implementation seams but retain
+their separate user-scoped stores. Provider/model coverage goes through the
+model router; real external agent runtimes and user credentials remain out of
+scope. #303 lands before #302.
 
 **Stub boundaries (where the real interface is set but behaviour is a
 placeholder):** none.
