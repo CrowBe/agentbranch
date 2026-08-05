@@ -1,0 +1,5 @@
+{
+  "harness_version": "hv-2026-08-05-0001",
+  "runner_contract_version": "1",
+  "source": "eval/validation-harness/configs/default.yaml"
+}

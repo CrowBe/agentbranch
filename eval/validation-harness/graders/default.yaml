@@ -1,0 +1,8 @@
+name: default
+checks:
+  - checker: ../checkers/evidence-complete
+    required: true
+  - checker: ../checkers/scenario-expected
+    required: true
+scoring:
+  pass_threshold: 1.0

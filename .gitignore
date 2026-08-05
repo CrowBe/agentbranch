@@ -38,3 +38,7 @@ yarn-error.log*
 
 # vitest browser-mode run artifacts (visual suite)
 .vitest-attachments/
+
+# smevals validation-harness PoC generated output (issue #301)
+/eval/validation-harness/runs/
+/.poc/
