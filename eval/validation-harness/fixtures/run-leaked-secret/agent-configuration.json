@@ -1,0 +1,13 @@
+{
+  "agent_configuration_id": "ac-default-v1",
+  "harness_version": "hv-2026-08-05-0001",
+  "model": "agentbranch/default-config",
+  "resolved": {
+    "instructions": ["follow the configured system prompt"],
+    "skills": ["email-triage"],
+    "tools": ["fetch_email", "delegate"],
+    "policies": ["no-extra-policy"]
+  },
+  "api_key": "sk-live-12345-abcdef",
+  "redacted": { "named_secret_requirements": [] }
+}

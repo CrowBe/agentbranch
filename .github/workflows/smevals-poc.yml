@@ -1,0 +1,44 @@
+name: smevals-poc
+
+# Manual dispatch: run the full deterministic validation-harness PoC matrix
+# (issue #301) and upload the Markdown + static HTML report artifacts. No
+# credentials, no model API secrets, no model spend — the Runner is a
+# deterministic mock and every smevals invocation is pinned to
+# `uvx --from smevals==0.2.0 smevals`.
+on:
+  workflow_dispatch:
+
+jobs:
+  poc-matrix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install uv (pinned)
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.7"
+      - run: npm ci
+      - name: PoC contract
+        run: npm run poc:validate
+      - name: Full deterministic matrix (top-up to 3 samples per pair)
+        run: npm run poc:full
+      - name: Resume (must not duplicate completed samples)
+        run: npm run poc:resume
+      - name: Regrade stored runs (no Runner execution)
+        run: npm run poc:regrade
+      - name: Markdown report
+        run: npm run poc:report
+      - name: Static HTML report
+        run: npm run poc:report:html
+      - name: Upload report artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: smevals-poc-reports
+          path: |
+            .poc/reports/validation-harness-report.md
+            .poc/reports/site/
+          if-no-files-found: error

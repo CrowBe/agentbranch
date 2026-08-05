@@ -1,0 +1,6 @@
+{
+  "steps": [
+    { "kind": "model", "text": "Candidate skill \"email-triage\": description matches the request." },
+    { "kind": "model", "text": "Activated \"email-triage\"." }
+  ]
+}

@@ -1,0 +1,9 @@
+name: strict
+description: >-
+  PoC Config mapping to resolved agent configuration `ac-strict-v1` at harness
+  version `hv-2026-08-05-0001`. A second complete configuration so the same
+  pinned Tasks run under two configurations; deterministic mock model id only.
+runner: ../run-agentbranch
+model: agentbranch/strict-config
+agent_configuration_id: ac-strict-v1
+harness_version: hv-2026-08-05-0001

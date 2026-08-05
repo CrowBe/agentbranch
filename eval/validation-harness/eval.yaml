@@ -1,0 +1,9 @@
+name: validation-harness
+description: >-
+  Removable, offline-safe proof-of-concept eval (agentbranch #301) that exercises
+  AgentBranch's validation-harness behaviour through the pinned smevals 0.2.0
+  orchestrator. Runs a deterministic mock Runner against six scenario tasks and
+  one simulated infrastructure-failure task, graded by deterministic Checkers
+  only (no model judge, no credentials, no model spend). Two Configs map
+  explicitly to resolved agent configurations plus a harness version, keeping
+  the external Task / Config / Run / Grade vocabulary inside this PoC.

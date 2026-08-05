@@ -1,0 +1,4 @@
+name: harness-crash
+scenario: harness-crash
+expect_infra_failure: true
+prompt: Trigger a simulated harness infrastructure failure.

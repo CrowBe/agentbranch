@@ -1,0 +1,9 @@
+name: default
+description: >-
+  PoC Config mapping to resolved agent configuration `ac-default-v1` at harness
+  version `hv-2026-08-05-0001`. The model id is a deterministic mock discriminator
+  used by the Runner; no real model is called.
+runner: ../run-agentbranch
+model: agentbranch/default-config
+agent_configuration_id: ac-default-v1
+harness_version: hv-2026-08-05-0001
