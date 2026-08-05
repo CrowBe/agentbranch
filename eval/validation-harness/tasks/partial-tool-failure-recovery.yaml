@@ -1,0 +1,4 @@
+name: partial-tool-failure-recovery
+scenario: partial-tool-failure-recovery
+prompt: Fetch email; the first call may fail transiently — retry until it succeeds.
+flaky_tool: fetch_email

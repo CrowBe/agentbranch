@@ -1,0 +1,195 @@
+#!/usr/bin/env node
+/**
+ * Thin deterministic AgentBranch Runner for the validation-harness smevals PoC
+ * (agentbranch #301). Executed by smevals once per Task/Config/model with no
+ * arguments; everything arrives via environment variables:
+ *   SMEVALS_MODEL, SMEVALS_TASK, SMEVALS_PROMPT, SMEVALS_TASK_<KEY>, SMEVALS_RUN_DIR
+ *
+ * This is a *mock*: it deterministically simulates an agent configuration's
+ * behaviour for each scenario instead of calling a real model, so the PoC runs
+ * offline with zero model spend and zero credentials. It writes the retained
+ * evidence contract into SMEVALS_RUN_DIR:
+ *   trace.json                  provider-neutral trace (TranscriptStep-shaped:
+ *                               {kind: model|tool-call|tool-result})
+ *   agent-configuration.json    fully resolved agent configuration, no secrets
+ *   harness-version.json        harness version identity
+ *   timing.json                 started_at / duration_ms
+ *   usage.json                  simulated token/cost fields (marked simulated)
+ *   completion.json             completion status + exit code
+ * and prints the final response to stdout (captured as output.txt by smevals).
+ *
+ * A task with `expect_infra_failure: true` simulates a harness/infrastructure
+ * failure: it exits non-zero (retained for diagnosis, never graded).
+ *
+ * The provider-neutral trace envelope intentionally mirrors TranscriptStep in
+ * src/modules/test-run (model | tool-call | tool-result) — the explicitly
+ * mapped removable adapter around the existing seam; this PoC never imports src.
+ */
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
+import { parse as parseYaml } from "yaml";
+
+const { SMEVALS_RUN_DIR, SMEVALS_MODEL, SMEVALS_TASK, SMEVALS_PROMPT } = process.env;
+if (!SMEVALS_RUN_DIR) {
+  console.error("SMEVALS_RUN_DIR is required");
+  process.exit(42);
+}
+
+function taskKey(key) {
+  return process.env[`SMEVALS_TASK_${key.replace(/[^A-Za-z0-9]+/g, "_").toUpperCase()}`];
+}
+
+// Derive the config name from the run dir path: runs/<task>/<config>/<model>/<timestamp>.
+const configName = basename(dirname(dirname(SMEVALS_RUN_DIR)));
+// This runner lives at eval/validation-harness/run-agentbranch.
+const evalDir = dirname(process.argv[1]);
+const configPath = join(evalDir, "configs", `${configName}.yaml`);
+
+let config = { model: SMEVALS_MODEL, agent_configuration_id: "unknown", harness_version: "unknown" };
+if (existsSync(configPath)) {
+  const parsed = parseYaml(readFileSync(configPath, "utf8"));
+  config = { ...config, ...parsed };
+}
+const agentConfigurationId = config.agent_configuration_id ?? "unknown";
+const harnessVersion = config.harness_version ?? "unknown";
+
+const scenario = taskKey("scenario") ?? "unknown";
+const skill = taskKey("skill");
+const expectedTool = taskKey("expected_tool");
+const delegateTo = taskKey("delegate_to");
+const forbiddenTool = taskKey("forbidden_tool");
+const flakyTool = taskKey("flaky_tool");
+// smevals passes scalar task keys via Python's str(), so a YAML true becomes
+// the string "True". Accept both casings and the numeric form.
+const expectInfraFailure = ["true", "True", "1"].includes(taskKey("expect_infra_failure"));
+
+const startedAt = new Date().toISOString();
+const t0 = Date.now();
+
+/** model step */
+const model = (text) => ({ kind: "model", text });
+/** tool-call step (TranscriptStep shape) */
+const toolCall = (tool, input) => ({ kind: "tool-call", tool, input });
+/** tool-result step (TranscriptStep shape) */
+const toolResult = (tool, output) => ({ kind: "tool-result", tool, output });
+
+function buildTraceAndOutput() {
+  if (scenario === "skill-activation") {
+    return {
+      trace: [
+        model(`Candidate skill "${skill}": description matches the request.`),
+        model(`Activated "${skill}".`),
+      ],
+      output: `Skill activated: ${skill}. Summary: 3 unread messages, 1 flagged for follow-up.`,
+    };
+  }
+  if (scenario === "skill-non-activation") {
+    return {
+      trace: [
+        model(`Candidate skill "${skill}": description does not match a haiku request.`),
+        model("No matching skill; responding directly."),
+      ],
+      output: "No matching skill activated; here is a haiku about pelicans.",
+    };
+  }
+  if (scenario === "tool-selection-exact-arguments") {
+    const args = JSON.parse(taskKey("expected_args") ?? "{}");
+    return {
+      trace: [
+        model(`Selecting tool "${expectedTool}".`),
+        toolCall(expectedTool, args),
+        toolResult(expectedTool, { count: 5, messages: ["m1", "m2", "m3", "m4", "m5"] }),
+      ],
+      output: `Fetched 5 messages from inbox using ${expectedTool}.`,
+    };
+  }
+  if (scenario === "delegation-routing") {
+    return {
+      trace: [
+        model(`Routing research to subagent "${delegateTo}".`),
+        toolCall("delegate", { to: delegateTo }),
+        toolResult("delegate", { accepted: true }),
+      ],
+      output: `Delegated research to ${delegateTo}.`,
+    };
+  }
+  if (scenario === "forbidden-behaviour") {
+    return {
+      trace: [
+        model(`Refusing: "${forbiddenTool}" is forbidden by policy; no tool call is made.`),
+      ],
+      output: `Refused: I will not ${forbiddenTool.replace(/_/g, " ")} — that is forbidden behaviour.`,
+    };
+  }
+  if (scenario === "partial-tool-failure-recovery") {
+    return {
+      trace: [
+        model(`Calling "${flakyTool}".`),
+        toolCall(flakyTool, { folder: "inbox" }),
+        toolResult(flakyTool, { error: "transient timeout", recovered: false }),
+        model("Transient failure; retrying once."),
+        toolCall(flakyTool, { folder: "inbox", retry: 1 }),
+        toolResult(flakyTool, { count: 5, recovered: true }),
+      ],
+      output: `Recovered after one retry: ${flakyTool} succeeded on the second attempt.`,
+    };
+  }
+  return {
+    trace: [model(`Unknown scenario "${scenario}"; responding generically.`)],
+    output: `Scenario ${scenario} not recognised by the mock Runner.`,
+  };
+}
+
+function writeArtifacts(trace, output, status, exitCode) {
+  const durationMs = Date.now() - t0;
+  writeFileSync(join(SMEVALS_RUN_DIR, "trace.json"), JSON.stringify({ steps: trace }, null, 2) + "\n");
+  writeFileSync(
+    join(SMEVALS_RUN_DIR, "agent-configuration.json"),
+    JSON.stringify(
+      {
+        agent_configuration_id: agentConfigurationId,
+        harness_version: harnessVersion,
+        model: SMEVALS_MODEL,
+        resolved: {
+          instructions: ["follow the configured system prompt"],
+          skills: skill ? [skill] : [],
+          tools: [expectedTool, flakyTool, "delegate"].filter(Boolean),
+          policies: [forbiddenTool ? `forbid:${forbiddenTool}` : "no-extra-policy"],
+        },
+        // Named secret *requirements* only — never values, never environment.
+        redacted: { named_secret_requirements: [] },
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+  writeFileSync(
+    join(SMEVALS_RUN_DIR, "harness-version.json"),
+    JSON.stringify({ harness_version: harnessVersion, source: `eval/validation-harness/configs/${configName}.yaml` }, null, 2) + "\n",
+  );
+  writeFileSync(
+    join(SMEVALS_RUN_DIR, "timing.json"),
+    JSON.stringify({ started_at: startedAt, duration_ms: durationMs }, null, 2) + "\n",
+  );
+  // Simulated usage/cost — the PoC never calls a real model.
+  writeFileSync(
+    join(SMEVALS_RUN_DIR, "usage.json"),
+    JSON.stringify({ simulated: true, input_tokens: 128, output_tokens: 32, cost_micros: 0 }, null, 2) + "\n",
+  );
+  writeFileSync(
+    join(SMEVALS_RUN_DIR, "completion.json"),
+    JSON.stringify({ status, exit_code: exitCode, scenario, task: SMEVALS_TASK, prompt: SMEVALS_PROMPT }, null, 2) + "\n",
+  );
+}
+
+if (expectInfraFailure) {
+  // Infrastructure/harness failure: retain partial evidence, exit non-zero.
+  writeArtifacts([], "", "infra_failure", 42);
+  console.error(`simulated harness infrastructure failure (exit 42) for task ${SMEVALS_TASK}`);
+  process.exit(42);
+}
+
+const { trace, output } = buildTraceAndOutput();
+writeArtifacts(trace, output, "completed", 0);
+console.log(output);
+process.exit(0);

@@ -1,0 +1,4 @@
+name: delegation-routing
+scenario: delegation-routing
+prompt: Research the competitive landscape for this task.
+delegate_to: researcher

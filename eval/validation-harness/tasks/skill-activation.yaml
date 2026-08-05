@@ -1,0 +1,4 @@
+name: skill-activation
+scenario: skill-activation
+prompt: Triage my inbox and summarise what needs attention today.
+skill: email-triage

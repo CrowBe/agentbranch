@@ -1,0 +1,112 @@
+#!/usr/bin/env node
+/**
+ * Deterministic Checker: evidence-complete (agentbranch #301 PoC).
+ *
+ * Verifies the retained-evidence contract for one Run, with no model judge:
+ *   - every required artifact exists (output.txt, trace.json,
+ *     agent-configuration.json, harness-version.json, timing.json, usage.json,
+ *     completion.json)
+ *   - each JSON artifact parses and carries its schema-required fields
+ *   - agent-configuration.json is fully resolved and secret-free
+ *   - the Run's exit code is 0 (a non-zero Runner exit is an infrastructure
+ *     failure: retained for diagnosis, never graded as a model failure)
+ *
+ * Checker contract: no arguments; reads SMEVALS_RUN_DIR; emits JSON on stdout
+ * ({score, metrics, tags, notes, details}); exit 0 = pass, non-zero = fail.
+ */
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
+const runDir = process.env.SMEVALS_RUN_DIR;
+if (!runDir) {
+  console.error(JSON.stringify({ notes: "SMEVALS_RUN_DIR is required" }));
+  process.exit(1);
+}
+
+const REQUIRED = [
+  "output.txt",
+  "trace.json",
+  "agent-configuration.json",
+  "harness-version.json",
+  "timing.json",
+  "usage.json",
+  "completion.json",
+];
+
+const problems = [];
+
+// 1. Presence.
+for (const file of REQUIRED) {
+  if (!existsSync(join(runDir, file))) problems.push(`missing ${file}`);
+}
+
+// 2. Schema.
+const readJson = (file) => {
+  try {
+    return JSON.parse(readFileSync(join(runDir, file), "utf8"));
+  } catch (error) {
+    problems.push(`${file} is not valid JSON: ${error.message}`);
+    return null;
+  }
+};
+
+const trace = readJson("trace.json");
+if (trace && (!Array.isArray(trace.steps) || trace.steps.length === 0)) problems.push("trace.json.steps must be a non-empty array");
+
+const agentConfig = readJson("agent-configuration.json");
+if (agentConfig) {
+  if (!agentConfig.agent_configuration_id) problems.push("agent-configuration.json missing agent_configuration_id");
+  if (!agentConfig.harness_version) problems.push("agent-configuration.json missing harness_version");
+  if (typeof agentConfig.resolved !== "object" || agentConfig.resolved === null) problems.push("agent-configuration.json missing resolved configuration");
+  // Secret scan: the resolved configuration must never carry values for
+  // secret-shaped keys, environment dumps, or process env references.
+  const blob = JSON.stringify(agentConfig);
+  if (/SMEVALS_|process\.env|api[_-]?key|password|private[_-]?key/i.test(blob)) {
+    problems.push("agent-configuration.json contains secret/environment-shaped content");
+  }
+  const secrets = agentConfig.secrets ?? agentConfig.redacted?.named_secret_requirements;
+  if (secrets && Array.isArray(secrets) && secrets.some((s) => s && s.value !== undefined)) {
+    problems.push("agent-configuration.json leaks a secret value");
+  }
+}
+
+const harnessVersion = readJson("harness-version.json");
+if (harnessVersion && !harnessVersion.harness_version) problems.push("harness-version.json missing harness_version");
+
+const timing = readJson("timing.json");
+if (timing && (!timing.started_at || typeof timing.duration_ms !== "number")) problems.push("timing.json missing started_at/duration_ms");
+
+const usage = readJson("usage.json");
+if (usage && typeof usage.input_tokens !== "number") problems.push("usage.json missing numeric input_tokens");
+
+const completion = readJson("completion.json");
+if (completion && !completion.status) problems.push("completion.json missing status");
+
+// 3. Infrastructure failure guard: never grade a non-zero Runner exit as a
+//    model/agent-configuration failure.
+const runYaml = join(runDir, "run.yaml");
+if (existsSync(runYaml)) {
+  const runDoc = readFileSync(runYaml, "utf8");
+  const exitMatch = runDoc.match(/^exit_code:\s*(-?\d+)\s*$/m);
+  if (exitMatch && Number(exitMatch[1]) !== 0) {
+    problems.push(`runner exit ${exitMatch[1]}: infrastructure failure, excluded from grading`);
+  }
+} else if (!completion || completion.status === "infra_failure") {
+  problems.push("run.yaml missing and completion.json indicates infrastructure failure");
+}
+
+const ok = problems.length === 0;
+const result = {
+  score: ok ? 1.0 : 0.0,
+  metrics: {
+    artifacts_present: REQUIRED.filter((f) => existsSync(join(runDir, f))).length,
+    artifacts_required: REQUIRED.length,
+  },
+  tags: ok ? ["evidence_complete"] : ["evidence_incomplete"],
+  notes: ok
+    ? "all retained-evidence artifacts present, schema-valid, and secret-free"
+    : problems.join("; "),
+  details: { problems },
+};
+console.log(JSON.stringify(result, null, 2));
+process.exit(ok ? 0 : 1);

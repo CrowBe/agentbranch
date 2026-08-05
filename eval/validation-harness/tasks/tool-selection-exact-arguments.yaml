@@ -1,0 +1,5 @@
+name: tool-selection-exact-arguments
+scenario: tool-selection-exact-arguments
+prompt: Fetch my inbox, limiting to 5 messages from the inbox folder.
+expected_tool: fetch_email
+expected_args: '{"folder":"inbox","limit":5}'
