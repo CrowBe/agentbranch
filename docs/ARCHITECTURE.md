@@ -159,6 +159,15 @@ composition root is synchronous, while the production registry makes the code
 unreachable. Revisit extraction to a development-only process if it becomes
 operationally material.
 
+**Production dependency override.** Next.js declares PostCSS `8.4.31` exactly,
+while the production audit requires a release later than `8.5.22`. The root
+PostCSS dependency and its `$postcss` override deliberately hold the traced
+Next.js copy at the lockfile-pinned `8.5.25`. This same-major exception to
+Next.js's exact range is accepted because PostCSS handles only repository-owned
+CSS during the build — no application route accepts CSS or source-map input —
+and every lockfile change must pass `npm ci`, the full test suite, the production
+audit, and the production build.
+
 ---
 
 ## 5. v1 thin-slice spec (per capability)
