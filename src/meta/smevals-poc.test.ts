@@ -32,6 +32,14 @@ function tempRunsDir() {
 }
 
 describe("smevals validation-harness PoC contract", () => {
+  it("executes the focused Runner contract suite", () => {
+    const res = spawnSync(process.execPath, ["--test", join(EVAL_DIR, "runner.test.mjs")], {
+      cwd: ROOT,
+      encoding: "utf8",
+    });
+    expect(res.status, `Runner tests exited ${res.status}: ${res.stdout}${res.stderr}`).toBe(0);
+  });
+
   it("defines a deterministic matrix with at least two Configs and full scenario coverage", () => {
     const res = runNode(["validate", "--json"]);
     expect(res.status, `validate exited ${res.status}: ${res.stderr}`).toBe(0);

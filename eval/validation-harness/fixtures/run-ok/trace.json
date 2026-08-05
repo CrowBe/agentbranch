@@ -1,4 +1,10 @@
 {
+  "schema_version": "agentbranch.provider-neutral-trace.v1",
+  "source_seam": {
+    "module": "model-gateway",
+    "contract": "AgentTurn.transcript",
+    "adapter": "smevals-poc/v1"
+  },
   "steps": [
     { "kind": "model", "text": "Candidate skill \"email-triage\": description matches the request." },
     { "kind": "model", "text": "Activated \"email-triage\"." }

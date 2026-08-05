@@ -5,7 +5,7 @@
  * Verifies the retained-evidence contract for one Run, with no model judge:
  *   - every required artifact exists (output.txt, trace.json,
  *     agent-configuration.json, harness-version.json, timing.json, usage.json,
- *     completion.json)
+ *     completion.json, artifacts.json)
  *   - each JSON artifact parses and carries its schema-required fields
  *   - agent-configuration.json is fully resolved and secret-free
  *   - the Run's exit code is 0 (a non-zero Runner exit is an infrastructure
@@ -31,6 +31,7 @@ const REQUIRED = [
   "timing.json",
   "usage.json",
   "completion.json",
+  "artifacts.json",
 ];
 
 const problems = [];
@@ -51,36 +52,49 @@ const readJson = (file) => {
 };
 
 const trace = readJson("trace.json");
-if (trace && (!Array.isArray(trace.steps) || trace.steps.length === 0)) problems.push("trace.json.steps must be a non-empty array");
+if (trace && (trace.schema_version !== "agentbranch.provider-neutral-trace.v1" || !Array.isArray(trace.steps) || trace.steps.length === 0)) problems.push("trace.json must carry the provider-neutral schema and non-empty steps");
 
 const agentConfig = readJson("agent-configuration.json");
 if (agentConfig) {
-  if (!agentConfig.agent_configuration_id) problems.push("agent-configuration.json missing agent_configuration_id");
-  if (!agentConfig.harness_version) problems.push("agent-configuration.json missing harness_version");
-  if (typeof agentConfig.resolved !== "object" || agentConfig.resolved === null) problems.push("agent-configuration.json missing resolved configuration");
+  if (agentConfig.schema_version !== "agentbranch.resolved-agent-configuration.v1") problems.push("agent-configuration.json has the wrong schema_version");
+  if (!agentConfig.id) problems.push("agent-configuration.json missing id");
+  if (!agentConfig.runtime_adapter?.id || !agentConfig.runtime_adapter?.version) problems.push("agent-configuration.json missing runtime_adapter identity");
+  if (!agentConfig.model?.provider || !agentConfig.model?.id) problems.push("agent-configuration.json missing resolved model");
+  for (const field of ["instructions", "skills", "subagents", "tools", "policies", "secret_requirements"]) {
+    if (!Array.isArray(agentConfig[field])) problems.push(`agent-configuration.json missing ${field} array`);
+  }
   // Secret scan: the resolved configuration must never carry values for
   // secret-shaped keys, environment dumps, or process env references.
   const blob = JSON.stringify(agentConfig);
-  if (/SMEVALS_|process\.env|api[_-]?key|password|private[_-]?key/i.test(blob)) {
+  if (/SMEVALS_|process\.env/i.test(blob)) {
     problems.push("agent-configuration.json contains secret/environment-shaped content");
   }
-  const secrets = agentConfig.secrets ?? agentConfig.redacted?.named_secret_requirements;
-  if (secrets && Array.isArray(secrets) && secrets.some((s) => s && s.value !== undefined)) {
+  const leaks = sensitiveValuePaths(agentConfig);
+  if (leaks.length > 0) problems.push(`agent-configuration.json exposes secret-shaped keys: ${leaks.join(", ")}`);
+  if (
+    Array.isArray(agentConfig.secret_requirements) &&
+    agentConfig.secret_requirements.some((requirement) => requirement && requirement.value !== undefined)
+  ) {
     problems.push("agent-configuration.json leaks a secret value");
   }
 }
 
 const harnessVersion = readJson("harness-version.json");
-if (harnessVersion && !harnessVersion.harness_version) problems.push("harness-version.json missing harness_version");
+if (harnessVersion && (!harnessVersion.harness_version || !harnessVersion.runner_contract_version)) problems.push("harness-version.json missing harness_version/runner_contract_version");
 
 const timing = readJson("timing.json");
-if (timing && (!timing.started_at || typeof timing.duration_ms !== "number")) problems.push("timing.json missing started_at/duration_ms");
+if (timing && (!timing.started_at || !timing.completed_at || typeof timing.duration_ms !== "number")) problems.push("timing.json missing started_at/completed_at/duration_ms");
 
 const usage = readJson("usage.json");
-if (usage && typeof usage.input_tokens !== "number") problems.push("usage.json missing numeric input_tokens");
+if (usage && (typeof usage.input_tokens !== "number" || typeof usage.output_tokens !== "number" || typeof usage.total_tokens !== "number" || typeof usage.cost?.amount_micros !== "number")) problems.push("usage.json missing token/cost fields");
 
 const completion = readJson("completion.json");
-if (completion && !completion.status) problems.push("completion.json missing status");
+if (completion && (completion.status !== "completed" || completion.exit_code !== 0)) problems.push("completion.json does not describe a successful Runner sample");
+
+const artifacts = readJson("artifacts.json");
+if (artifacts && (!Array.isArray(artifacts.tool_calls) || !Array.isArray(artifacts.delegations) || !Array.isArray(artifacts.recoveries))) {
+  problems.push("artifacts.json missing tool/delegation/recovery arrays");
+}
 
 // 3. Infrastructure failure guard: never grade a non-zero Runner exit as a
 //    model/agent-configuration failure.
@@ -91,8 +105,24 @@ if (existsSync(runYaml)) {
   if (exitMatch && Number(exitMatch[1]) !== 0) {
     problems.push(`runner exit ${exitMatch[1]}: infrastructure failure, excluded from grading`);
   }
-} else if (!completion || completion.status === "infra_failure") {
+} else if (!completion || completion.status === "runner_failed") {
   problems.push("run.yaml missing and completion.json indicates infrastructure failure");
+}
+
+function sensitiveValuePaths(node, path = []) {
+  const found = [];
+  if (Array.isArray(node)) {
+    node.forEach((value, index) => found.push(...sensitiveValuePaths(value, [...path, String(index)])));
+  } else if (node && typeof node === "object") {
+    for (const [key, value] of Object.entries(node)) {
+      const next = [...path, key];
+      if (key !== "secret_requirements" && /(?:^|[_-])(?:api[_-]?key|secret|password|credential|private[_-]?key|(?:access|refresh|auth)[_-]?token|token)(?:$|[_-])/i.test(key)) {
+        found.push(next.join("."));
+      }
+      found.push(...sensitiveValuePaths(value, next));
+    }
+  }
+  return found;
 }
 
 const ok = problems.length === 0;

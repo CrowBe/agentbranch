@@ -63,9 +63,10 @@ const REQUIRED_ARTIFACTS = [
   "trace.json",            // provider-neutral trace (TranscriptStep-shaped)
   "agent-configuration.json", // fully resolved agent configuration, no secrets
   "harness-version.json",  // harness version identity
-  "timing.json",           // started_at / duration_ms
+  "timing.json",           // started_at / completed_at / duration_ms
   "usage.json",            // simulated token/cost fields
   "completion.json",       // completion status + exit code
+  "artifacts.json",        // tool/delegation/recovery evidence
 ];
 
 // --- small helpers ----------------------------------------------------------
@@ -185,13 +186,20 @@ function checkRunEvidence(runDir) {
       if (dumped.includes("SMEVALS_") || dumped.includes("process.env")) {
         problems.push("agent-configuration.json contains environment-shaped content");
       }
-      if (!doc.agent_configuration_id) problems.push("agent-configuration.json missing agent_configuration_id");
-      if (!doc.harness_version) problems.push("agent-configuration.json missing harness_version");
+      if (doc.schema_version !== "agentbranch.resolved-agent-configuration.v1") problems.push("agent-configuration.json has the wrong schema_version");
+      if (!doc.id) problems.push("agent-configuration.json missing id");
+      if (!doc.runtime_adapter?.id || !doc.runtime_adapter?.version) problems.push("agent-configuration.json missing runtime_adapter identity");
+      if (!doc.model?.provider || !doc.model?.id) problems.push("agent-configuration.json missing resolved model");
+      for (const field of ["instructions", "skills", "subagents", "tools", "policies", "secret_requirements"]) {
+        if (!Array.isArray(doc[field])) problems.push(`agent-configuration.json missing ${field} array`);
+      }
     }
-    if (file === "harness-version.json" && !doc.harness_version) problems.push("harness-version.json missing harness_version");
-    if (file === "timing.json" && (!doc.started_at || typeof doc.duration_ms !== "number")) problems.push("timing.json missing started_at/duration_ms");
-    if (file === "usage.json" && typeof doc.input_tokens !== "number") problems.push("usage.json missing numeric input_tokens");
-    if (file === "completion.json" && !doc.status) problems.push("completion.json missing status");
+    if (file === "trace.json" && (doc.schema_version !== "agentbranch.provider-neutral-trace.v1" || !Array.isArray(doc.steps))) problems.push("trace.json has the wrong schema or steps");
+    if (file === "harness-version.json" && (!doc.harness_version || !doc.runner_contract_version)) problems.push("harness-version.json missing harness_version/runner_contract_version");
+    if (file === "timing.json" && (!doc.started_at || !doc.completed_at || typeof doc.duration_ms !== "number")) problems.push("timing.json missing started_at/completed_at/duration_ms");
+    if (file === "usage.json" && (typeof doc.input_tokens !== "number" || typeof doc.output_tokens !== "number" || typeof doc.total_tokens !== "number" || typeof doc.cost?.amount_micros !== "number")) problems.push("usage.json missing token/cost fields");
+    if (file === "completion.json" && (!doc.status || typeof doc.exit_code !== "number")) problems.push("completion.json missing status/exit_code");
+    if (file === "artifacts.json" && (!Array.isArray(doc.tool_calls) || !Array.isArray(doc.delegations) || !Array.isArray(doc.recoveries))) problems.push("artifacts.json missing tool/delegation/recovery arrays");
   }
   if (existsSync(join(runDir, "output.txt")) && readFileSync(join(runDir, "output.txt"), "utf8").trim() === "") {
     problems.push("output.txt is empty");
@@ -210,7 +218,7 @@ function findSecretKeys(node, path = []) {
       const next = [...path, k];
       // A secret-shaped key is a leak only when it carries a real value:
       // empty strings, nulls, and empty requirement lists are fine.
-      if (/(api[_-]?key|secret|password|token|credential|private[_-]?key)/i.test(k)) {
+      if (k !== "secret_requirements" && /(?:^|[_-])(?:api[_-]?key|secret|password|credential|private[_-]?key|(?:access|refresh|auth)[_-]?token|token)(?:$|[_-])/i.test(k)) {
         const empty =
           v === "" || v === null || v === undefined ||
           (Array.isArray(v) && v.length === 0) ||
