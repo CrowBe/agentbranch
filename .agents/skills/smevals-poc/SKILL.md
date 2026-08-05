@@ -39,8 +39,8 @@ invent ad-hoc smevals invocations.
 | Static HTML report | `npm run poc:report:html` | `smevals build` site at `.poc/reports/site/index.html`. |
 
 The vitest contract suite (`npm test` → `src/meta/smevals-poc.test.ts`) runs the
-static contract always and the smoke/resume/regrade semantics whenever `uv` is
-available.
+focused Runner contract suite and static contract always, plus the
+smoke/resume/regrade semantics whenever `uv` is available.
 
 ## Interpreting results
 

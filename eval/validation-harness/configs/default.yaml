@@ -7,3 +7,32 @@ runner: ../run-agentbranch
 model: agentbranch/default-config
 agent_configuration_id: ac-default-v1
 harness_version: hv-2026-08-05-0001
+agent_configuration:
+  id: ac-default-v1
+  runtime_adapter:
+    id: validation-harness-deterministic
+    version: "1"
+  model:
+    provider: deterministic
+    id: agentbranch/default-config
+    parameters:
+      temperature: 0
+      max_output_tokens: 4096
+  instructions:
+    - id: system
+      content: Follow the configured instructions and use only declared tools.
+  skills:
+    - name: email-triage
+      source: skills/email-triage/SKILL.md
+  subagents:
+    - name: research-specialist
+      source: agents/research-specialist.md
+  tools:
+    - name: fetch_email
+      description: Read deterministic inbox fixture data.
+    - name: delegate
+      description: Route bounded work to a declared subagent.
+  policies:
+    - id: no-real-side-effects
+      rule: Use fixture data only; never touch a production system.
+  secret_requirements: []

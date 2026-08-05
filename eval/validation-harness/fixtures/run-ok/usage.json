@@ -1,6 +1,9 @@
 {
   "simulated": true,
+  "provider": "deterministic",
+  "model": "agentbranch/default-config",
   "input_tokens": 128,
   "output_tokens": 32,
-  "cost_micros": 0
+  "total_tokens": 160,
+  "cost": { "amount_micros": 0, "currency": "USD" }
 }
