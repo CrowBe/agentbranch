@@ -27,6 +27,9 @@ const eslintConfig = [
       ".next/**",
       "node_modules/**",
       "coverage/**",
+      // Hermes-runtime artifacts (no-build ESM against @hermes/plugin-sdk),
+      // not app code — linted by Hermes' own tooling (`hermes plugins doctor`).
+      "integrations/**",
     ],
   },
 ];

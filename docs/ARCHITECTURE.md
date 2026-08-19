@@ -168,6 +168,17 @@ CSS during the build — no application route accepts CSS or source-map input �
 and every lockfile change must pass `npm ci`, the full test suite, the production
 audit, and the production build.
 
+**deepmerge-ts override.** `@prisma/config` pins deepmerge-ts to `7.1.5`
+exactly, and every 7.x release carries the stack-exhaustion advisory
+(GHSA-ggr8-5vv4-36mx); the fix landed only in `8.0.0`. The `deepmerge-ts`
+override holds the traced Prisma copy at `^8.0.1`. This major-version exception
+to Prisma's exact pin is accepted because `@prisma/config` calls only the
+core `deepmerge` export as a config merger, which none of the 8.0.0 breaking
+changes (deep `Map` merging, `deepmergeInto` mutation semantics, TypeScript
+type renames) affect — and npm's only alternative remedy is a major *downgrade*
+of Prisma itself. Every lockfile change must pass `npm ci`, client generation,
+the full test suite, the production audit, and the production build.
+
 ---
 
 ## 5. v1 thin-slice spec (per capability)
