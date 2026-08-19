@@ -1,10 +1,16 @@
 import { createHash } from "node:crypto";
 import { canonicalJson } from "@/shared";
+import { serializeSkillMd } from "@/modules/skill";
+import type {
+  SafetyReviewReferenceFile,
+  SafetyReviewVerdict,
+} from "@/modules/safety-review";
 import { baselineSkillCorpus } from "@/modules/baseline-corpus";
 import { adversarialSafetyBattery } from "@/modules/adversarial-safety-battery";
 import { responseSchemaCorpus } from "@/modules/response-schema-corpus";
 import { toolContractCorpus } from "@/modules/tool-contract-corpus";
 import type { PromptCase } from "@/modules/triggering-eval";
+import type { SafetyJudgeCohort } from "./benchmark.types";
 
 /** One skill in the frozen set: identity + the battery it is always scored on. */
 export type BenchmarkEntry = {
@@ -88,3 +94,52 @@ function hashCorpusSet(
     .update(set.map((entry) => `${entry.id}:${entry.contentHash}`).join("\n"))
     .digest("hex");
 }
+
+/**
+ * One folder the safety judge is scored on. The bytes are pinned rather than a
+ * parsed model, so the set proves exactly what was reviewed. `expectedVerdict`
+ * is `null` for the cases §9.1 accepts as undetectable — observed, never scored.
+ */
+export type SafetyJudgeBenchmarkEntry = {
+  readonly id: string;
+  readonly contentHash: string;
+  readonly cohort: SafetyJudgeCohort;
+  readonly skillMd: string;
+  readonly referenceFiles: readonly SafetyReviewReferenceFile[];
+  readonly expectedVerdict: SafetyReviewVerdict | null;
+};
+
+/**
+ * The frozen set for the judge: the adversarial battery it must catch, plus the
+ * baseline corpus it must leave alone. Without the benign half a judge that
+ * blocks everything scores perfectly.
+ */
+export const safetyJudgeBenchmarkSet: readonly SafetyJudgeBenchmarkEntry[] = [
+  ...adversarialSafetyBattery.map((entry) => ({
+    id: entry.id,
+    contentHash: entry.contentHash,
+    cohort: "adversarial" as const,
+    skillMd: serializeSkillMd(entry.source),
+    referenceFiles: entry.referenceFiles ?? [],
+    expectedVerdict: entry.expectedVerdict ?? null,
+  })),
+  ...baselineSkillCorpus.map((entry) => ({
+    id: entry.id,
+    contentHash: entry.contentHash,
+    cohort: "benign-control" as const,
+    skillMd: entry.source,
+    referenceFiles: [],
+    expectedVerdict: "passed" as const,
+  })),
+];
+
+export const safetyJudgeBenchmarkSetHash: string = createHash("sha256")
+  .update(
+    safetyJudgeBenchmarkSet
+      .map(
+        (entry) =>
+          `${entry.cohort}:${entry.id}:${entry.contentHash}:${entry.expectedVerdict ?? "documented-non-detection"}`,
+      )
+      .join("\n"),
+  )
+  .digest("hex");

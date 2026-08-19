@@ -3,6 +3,7 @@ import type { AccountingTag, ModelGateway } from "@/modules/model-gateway";
 import { baselineSkillCorpus } from "@/modules/baseline-corpus";
 import { createMemoryBenchmarkRunRepository } from "@/infra/memory/benchmark.memory-repository";
 import { HarnessVersionId, isErr, unwrap, wilson95 } from "@/shared";
+import type { SafetyReviewVerdict } from "@/modules/safety-review";
 import {
   regressionBenchmarkSet,
   regressionBenchmarkSetHash,
@@ -10,10 +11,13 @@ import {
   responseSchemaBenchmarkSetHash,
   safetyBenchmarkSet,
   safetyBenchmarkSetHash,
+  safetyJudgeBenchmarkSet,
+  safetyJudgeBenchmarkSetHash,
   toolContractBenchmarkSet,
   toolContractBenchmarkSetHash,
   canonicalBenchmarkCase,
   runRegressionBenchmark,
+  runSafetyJudgeBenchmarkDimension,
   runTaskOutcomeBenchmarkDimension,
 } from "./index";
 import { taskOutcomeCorpus, taskOutcomeCorpusSetHash } from "@/modules/task-outcome-corpus";
@@ -49,6 +53,8 @@ function perfectGateway(observed: {
       return ok({ transcript: [] });
     },
     async generate(input) {
+      const judged = judgeOutput(input.system, input.prompt);
+      if (judged) return ok(input.schema.parse(judged));
       const output = input.prompt.includes("Acme owes")
         ? { customer: "Acme", currency: "AUD", totalOutstanding: 2450, overdueInvoices: 2, priority: "high" }
         : input.prompt.includes("Jamie requests")
@@ -61,6 +67,52 @@ function perfectGateway(observed: {
   };
 }
 
+/**
+ * A judge oracle: it recognises the exact folder it was handed and returns the
+ * verdict the frozen set expects — so the dimension scores 1 when the judge is
+ * perfect, and the latent cases stay missed, as §9.1 says they are.
+ */
+function judgeOutput(system: string, prompt: string): unknown {
+  if (system.includes("explain a skill safety review result")) {
+    return {
+      verdict: "good",
+      summary: "Reviewed.",
+      findings: [],
+      watch: [],
+    };
+  }
+  if (!system.includes("security reviewer")) return null;
+  const entry = safetyJudgeBenchmarkSet.find((candidate) =>
+    prompt.includes(candidate.skillMd.trim()),
+  );
+  return scoresFor(entry?.expectedVerdict ?? "passed");
+}
+
+/** Class scores that land on the given verdict under the live bands. */
+function scoresFor(verdict: SafetyReviewVerdict): unknown {
+  const peak = verdict === "blocked" ? 0.9 : verdict === "needs-review" ? 0.5 : 0.02;
+  return {
+    scores: [
+      { class: "injection", score: peak, rationale: "oracle" },
+      { class: "exfiltration", score: 0.01, rationale: "oracle" },
+      { class: "deception", score: 0.01, rationale: "oracle" },
+    ],
+  };
+}
+
+/** A judge that blocks everything — perfect detection, useless in practice. */
+function blanketBlockGateway(base: ModelGateway): ModelGateway {
+  return {
+    ...base,
+    async generate(input) {
+      if (input.system.includes("security reviewer")) {
+        return ok(input.schema.parse(scoresFor("blocked")));
+      }
+      return base.generate(input);
+    },
+  } as ModelGateway;
+}
+
 describe("regression benchmark", () => {
   it("freezes the baseline corpus as the set, with a stable content-derived hash", () => {
     expect({
@@ -68,11 +120,13 @@ describe("regression benchmark", () => {
       responseSchemaBenchmarkSetHash,
       toolContractBenchmarkSetHash,
       safetyBenchmarkSetHash,
+      safetyJudgeBenchmarkSetHash,
     }).toEqual({
       regressionBenchmarkSetHash: "bdf6cdc99a346f5811232f2b33b4cc84beae647875b419e057488bfd46517cbb",
       responseSchemaBenchmarkSetHash: "c835434bbf0a7fd5c042070c460563fa244ef502e946d67c8bd2d6ad00d4fbbc",
       toolContractBenchmarkSetHash: "3731c7e923ff738503bbfafdb2dcc679d3bb1fb740ea66d456447119b5ee9312",
       safetyBenchmarkSetHash: "f342701b2fd1b9ba830159299556feb9a8d9f89a0fadec442d30008ba05e412e",
+      safetyJudgeBenchmarkSetHash: "c72e6d03b309dbf837468826cf50685e5446b8979b764b11367f7e91b332e908",
     });
     expect(regressionBenchmarkSet).toHaveLength(baselineSkillCorpus.length);
     expect(regressionBenchmarkSetHash).toMatch(/^[0-9a-f]{64}$/);
@@ -323,6 +377,95 @@ describe("regression benchmark", () => {
         (run) => run.benchmarkSetHash === regressionBenchmarkSetHash,
       ),
     ).toBe(true);
+  });
+
+  it("scores the safety judge live on both cohorts, platform-tagged", async () => {
+    const observed: { tags: AccountingTag[]; choiceFields: string[][] } = { tags: [], choiceFields: [] };
+    const dimension = unwrap(
+      await runSafetyJudgeBenchmarkDimension(perfectGateway(observed)),
+    );
+
+    const scorable = safetyJudgeBenchmarkSet.filter((entry) => entry.expectedVerdict !== null);
+    expect(dimension.benchmarkSetHash).toBe(safetyJudgeBenchmarkSetHash);
+    expect(dimension.totalCases).toBe(scorable.length);
+    expect(dimension.passedCases).toBe(scorable.length);
+    expect(dimension.score).toBe(1);
+    expect(dimension.cohorts.adversarial.totalCases).toBeGreaterThan(0);
+    expect(dimension.cohorts["benign-control"].totalCases).toBe(baselineSkillCorpus.length);
+    expect(dimension.method).toMatchObject({
+      kind: "model",
+      grader: "safety-verdict",
+      graderVersion: 1,
+      method: "cohort-severity-bound",
+      methodVersion: 1,
+      attemptsPerCase: 1,
+    });
+    expect(dimension.attemptPassRateInterval).toMatchObject({
+      method: "wilson",
+      version: 1,
+      confidence: 0.95,
+      numerator: dimension.passedAttempts,
+      denominator: dimension.totalAttempts,
+    });
+    // Every entry keeps what the judge actually said, so over-blocking is legible.
+    expect(
+      dimension.entries.every(
+        (entry) =>
+          entry.observations.length === 1 &&
+          Object.keys(entry.observations[0]!.classScores).sort().join() ===
+            "deception,exfiltration,injection",
+      ),
+    ).toBe(true);
+  });
+
+  it("records the latent payloads as documented non-detections, never as score", async () => {
+    const dimension = unwrap(
+      await runSafetyJudgeBenchmarkDimension(perfectGateway({ tags: [], choiceFields: [] })),
+    );
+    const latent = safetyJudgeBenchmarkSet.filter((entry) => entry.expectedVerdict === null);
+
+    expect(latent.length).toBeGreaterThan(0);
+    expect(dimension.documentedNonDetections.map((entry) => entry.corpusEntryId).sort()).toEqual(
+      latent.map((entry) => entry.id).sort(),
+    );
+    expect(
+      dimension.entries.some((entry) => latent.some((miss) => miss.id === entry.corpusEntryId)),
+    ).toBe(false);
+    expect(dimension.documentedNonDetections.every((entry) => entry.observations.length === 1)).toBe(true);
+  });
+
+  it("costs a blanket-blocking judge everything it gains — the benign controls are the point", async () => {
+    const dimension = unwrap(
+      await runSafetyJudgeBenchmarkDimension(
+        blanketBlockGateway(perfectGateway({ tags: [], choiceFields: [] })),
+      ),
+    );
+
+    expect(dimension.cohorts.adversarial.score).toBe(1);
+    expect(dimension.cohorts["benign-control"].score).toBe(0);
+    expect(dimension.score).toBeLessThan(1);
+  });
+
+  it("fails the safety-judge dimension honestly offline", async () => {
+    const result = await runSafetyJudgeBenchmarkDimension({
+      ...perfectGateway({ tags: [], choiceFields: [] }),
+      hasModel: false,
+    });
+    expect(isErr(result) && result.error.tag === "model_unavailable").toBe(true);
+  });
+
+  it("repeats the judge per case when attempts are raised", async () => {
+    const dimension = unwrap(
+      await runSafetyJudgeBenchmarkDimension(perfectGateway({ tags: [], choiceFields: [] }), {
+        attempts: 3,
+      }),
+    );
+
+    expect(dimension.attempts).toBe(3);
+    expect(dimension.method.attemptsPerCase).toBe(3);
+    expect(dimension.totalAttempts).toBe(dimension.totalCases * 3);
+    expect(dimension.passedAttempts).toBe(dimension.totalAttempts);
+    expect(dimension.entries.every((entry) => entry.observations.length === 3)).toBe(true);
   });
 
   afterEach(() => {
