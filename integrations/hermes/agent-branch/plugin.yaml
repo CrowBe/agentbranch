@@ -1,0 +1,29 @@
+name: agent-branch
+version: 0.1.0
+manifest_version: 2
+api_version: 1
+description: >-
+  agent.branch for Hermes — per-profile configuration analysis and skill
+  triggering evals. Deterministic findings with source evidence and a quality
+  score, plus model-backed triggering evals rendered as plain-language Insights.
+author: CrowBe
+license: MIT
+homepage: https://github.com/CrowBe/agentbranch
+tags: [profiles, skills, evals, analysis]
+provides_tools:
+  - agent_branch_profiles
+  - agent_branch_analyze
+  - agent_branch_triggering_eval
+config_schema:
+  battery_size:
+    type: int
+    default: 4
+    description: "Prompts per side of a triggering eval's battery (positives and negatives each)"
+  max_skills:
+    type: int
+    default: 64
+    description: "Maximum skills read from a profile during analysis"
+  eval_timeout:
+    type: int
+    default: 60
+    description: "Per-model-call timeout in seconds during a triggering eval"

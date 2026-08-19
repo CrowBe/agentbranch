@@ -38,3 +38,4 @@ yarn-error.log*
 
 # vitest browser-mode run artifacts (visual suite)
 .vitest-attachments/
+__pycache__/
