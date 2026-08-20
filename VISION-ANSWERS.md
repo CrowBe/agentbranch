@@ -54,14 +54,14 @@ No hypothetical verdicts were recorded in this round; the identity itself was th
 | H-2 | Auto-promote when the interval says the change wins | **Off mission** | The premise behind agentbranch is that the user as an approver is valuable. The product aims to surface previously opaque information and evaluation results about a harness or agent primitive and enable them to make decisions about it. |
 | H-3 | Grade the model as part of the setup | **In vision** | In vision in the sense that the underlying model and inference provider is a significant variable in eval results, but not in the sense that we will offer any conclusions about the model itself. |
 | H-4 | Read-only real-credential runs | **Off mission** | Off mission for now. The Hermes agent plugin is a test case for real-credential runs. Building handling of that into agentbranch is too much of an increase in scope and risk. |
-| H-5 | \1| **In vision** | Make it a clear part of the platform that we use your data and results to improve the meta-harness. Clearly distinguish what we read from what we do not: configuration and evaluations, nothing private. This also supports the conclusion not to include real data integrations in the main product. |
-| H-6 | \1| **Off mission** | We need this. Having a user come in, discover their config is not good, but offer no surface that facilitates iterating on it seems bad. If anything we need the ability to create and iterate on more primitives. |
-| H-7 | \1| **Off mission** | The tap should offer quality tagging and gates for publish, not CI actions that run outside agentbranch. |
-| H-8 | \1| **Off mission** | We need to build toward this more rapidly, not retreat from it. |
-| H-9 | \1| **Off mission** | We want this. If anything, expand the tap so a user can publish a high-performing Hermes profile that another user imports directly for high value. |
-| H-10 | \1| **Conditional** | Removing our temporary gap-fill work is right. The third-party evaluation of agentbranch as a harness being fully vendored makes sense. |
-| H-11 | \1| **In vision** |  |
-| H-12 | \1| **Conditional** | I like meta-harness, in that it captures the idea of a harness for improving harnesses. Open to being corrected. |
+| H-5 | Let the improvement loop read consented content | **In vision** | Make it a clear part of the platform that we use your data and results to improve the meta-harness. Clearly distinguish what we read from what we do not: configuration and evaluations, nothing private. This also supports the conclusion not to include real data integrations in the main product. |
+| H-6 | Go bring-only and retire the authoring loop | **Off mission** | We need this. Having a user come in, discover their config is not good, but offer no surface that facilitates iterating on it seems bad. If anything we need the ability to create and iterate on more primitives. |
+| H-7 | A merge-gating GitHub Action | **Off mission** | The tap should offer quality tagging and gates for publish, not CI actions that run outside agentbranch. |
+| H-8 | Retire cross-runtime validation | **Off mission** | We need to build toward this more rapidly, not retreat from it. |
+| H-9 | Divest the skill tap | **Off mission** | We want this. If anything, expand the tap so a user can publish a high-performing Hermes profile that another user imports directly for high value. |
+| H-10 | Vendor the unreleased third-party judge | **Conditional** | Removing our temporary gap-fill work is right. The third-party evaluation of agentbranch as a harness being fully vendored makes sense. |
+| H-11 | Long-horizon execution for loops and compaction | **In vision** |  |
+| H-12 | Meta-harness, or qualify both | **Conditional** | I like meta-harness, in that it captures the idea of a harness for improving harnesses. Open to being corrected. |
 
 ## Round 2 - author response on the naming conflict
 
@@ -141,9 +141,9 @@ No hypothetical verdicts were recorded in this round; the identity itself was th
 
 | id | title | verdict | reasoning |
 |---|---|---|---|
-| H-13 | \1| **In vision** | Clarification: incorporating NVIDIA's skill evaluation tooling brings back into scope the option of a threshold at which something is high-signal enough that we refuse to publish. We still need clear caveats that we do not guarantee safety, so above that threshold we offer clearer labelling, never guarantees. |
-| H-14 | \1| **In vision** |  |
-| H-15 | \1| **Conditional** | Open to a different model that does not vendor, to provide real third-party separation. |
+| H-13 | Quality gates on publish | **In vision** | Clarification: incorporating NVIDIA's skill evaluation tooling brings back into scope the option of a threshold at which something is high-signal enough that we refuse to publish. We still need clear caveats that we do not guarantee safety, so above that threshold we offer clearer labelling, never guarantees. |
+| H-14 | Publish whole profiles, not just primitives | **In vision** |  |
+| H-15 | Does independence survive vendoring? | **Conditional** | Open to a different model that does not vendor, to provide real third-party separation. |
 
 ### Changelog - round 5
 
