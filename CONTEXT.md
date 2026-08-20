@@ -26,7 +26,15 @@ _Avoid_: labels, keywords (too generic), taxonomy (that's the category list, not
 
 **Agent configuration**:
 A runtime-neutral, versioned collection of source files plus source-backed instruction, skill, subagent, tool, hook, policy, model, reference, evaluation, and unknown components. Its deterministic import provenance names every detected runtime adapter and version so later export can remain faithful; those names are provenance only and never confer runtime precedence or execution semantics.
-_Avoid_: agent profile, runtime config, converted project, **agent harness / harness config** (reserved for *our* validation harness — see *Distinctions*)
+_Avoid_: agent profile, runtime config, converted project, **agent harness / harness config** (the layer a user brings is their **harness**; *this* is the persisted, runtime-neutral artifact we store — see *Distinctions*)
+
+**Harness**:
+The layer a user brings us to judge — the skills, tool and MCP surfaces, subagent definitions, agent loops, compaction and context strategy, policies, instructions and model settings that sit around a model and decide how an agentic system behaves. Bare **harness** always means this, the one under test. What we persist when a whole one is imported is an **agent configuration**; the harness is the thing, the configuration is our record of it.
+_Avoid_: harness for anything of ours (that's the **meta-harness**), setup / rig / stack in domain text
+
+**Meta-harness**:
+Our side of the pair — the versioned set of prompts, rules, generators, distractor and adversarial batteries and judges that produce our verdicts, pinned as a `harness_versions` row and the thing we grade ourselves on. Named because it is a harness for improving harnesses. Internal term; never user copy.
+_Avoid_: bare harness, our harness, the validation harness, the platform harness
 
 **Import ladder** (§10):
 The three rungs of increasing complexity a user can arrive at: **one building block** (a single primitive), **building blocks that work together** (a related set), and **a whole agent configuration**. The user picks the rung matching what they hold; the rungs differ only in the size of the seam's `Input`.
@@ -102,7 +110,7 @@ _Avoid_: report, results, test output, eval data
 
 **Model gateway**:
 The platform's *single, controlled, metered* entry to the model — its own module (`src/modules/model-gateway`). Exposes fine intent-level **primitives** (`classify`/`runAgent`/`generate`); every model call passes through it. Pure mechanism — it does not pick the provider/model or hold the key (that's the **model router**), and knows no capability kinds.
-_Avoid_: harness (evaluation-narrow + banned jargon), engine (feature-specific), runner, the SDK, model provider (that's the raw `LanguageModel` port the gateway resolves through the router)
+_Avoid_: harness (that word names the setup under test), meta-harness (the gateway is mechanism the meta-harness calls, not part of it), engine (feature-specific), runner, the SDK, model provider (that's the raw `LanguageModel` port the gateway resolves through the router)
 
 **Model router**:
 The platform's *single* provider + model **selection** authority — its own module (`src/modules/model-router`), the layer beneath the gateway. Owns the provider registry, credentials (server-pool key + optional **bring-your-own override**), and the runtime-mutable active selection; resolves a `LanguageModel` per primitive. Pure *selection* mechanism, as the gateway is pure *metering* mechanism.
@@ -248,6 +256,6 @@ The easy confusions, stated as rules. Each names a pair people collapse and the 
 - **Evaluation result ≠ Insights.** The raw run-record is the **Evaluation result** (internal, never shown raw); the interpreted, user-facing surface is **Insights**. A result is *always* rendered into meaning — never a data wall. The audience bridge (§1) lives in the renderer, not the artifact.
 - **Evaluation result ≠ Evaluation record.** The result is ephemeral on the seam; the record is the persisted row (§6). Don't render straight from the DB row, and don't persist the render.
 - **An Evaluator owns its method, not its resources.** It builds its own Scenario / distractor field / battery and runs the input (its method); model access is handed in via the **model gateway** (its resource). Building its own conditions is intrinsic to *being* that evaluator; the gateway stays out because the resource is shared + sensitive.
-- **"Harness" means one thing: the validation harness.** It is the versioned set of *our* artifacts that produce a graded outcome — the build-loop and equipment authoring prompts, the lint rulesets, the generators, the distractor and adversarial batteries, the safety judge — pinned as a `harness_versions` row (ARCHITECTURE §6, §9). It is **not** the model gateway: model *mechanism* and accounting *policy* are two things, and the gateway (owns the key, exposes `classify`/`runAgent`, knows no evaluation kinds) depends on the **usage** module for policy. It is also **not** the user's imported setup — that is an **agent configuration** (§10). Getting these apart matters because attribution runs on two axes, *skill version × harness version*; if "harness" also meant the user's configuration, neither axis would mean anything.
-  _Avoid_: harness as a synonym for the model gateway, the agent loop, or a user's agent configuration
+- **Harness is the judged; meta-harness is the judge.** Bare **harness** means the one under test — the harness layer somebody brings us. Ours has its own name, the **meta-harness**: the versioned set of *our* artifacts that produce a graded outcome, pinned as a `harness_versions` row (ARCHITECTURE §6, §9; the table name predates the term). Neither is the model gateway: model *mechanism* and accounting *policy* are two things, and the gateway (owns the key, exposes `classify`/`runAgent`, knows no evaluation kinds) depends on the **usage** module for policy. Getting these apart matters because attribution runs on two axes at once, *skill version × meta-harness version*; a word that means the judge and the judged makes neither axis mean anything, so a sentence where **harness** could mean either is a defect — qualify it or use **meta-harness**.
+  _Avoid_: harness as a synonym for the model gateway, the agent loop, or the meta-harness; **meta-harness** for anything a user brings
 - **Not all model spend is user-attributable.** The **accounting tag** splits it: `account` (user-attributable, spends the free quota) vs `platform` (the platform's own cost — e.g. generating mock data to stress a skill — never charged to a user's quota). The caller declares the tag because only it knows *why* it's spending.
