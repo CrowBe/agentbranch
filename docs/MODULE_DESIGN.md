@@ -258,21 +258,32 @@ smoke/full execution, resume, regrade, and report operations to pinned scripts.
 No `smevals` package is imported by `src/`, and no external evaluator owns
 product persistence.
 
-The spike's measured conclusion is **borrow the contracts, keep smevals
-external, do not adopt it as a production dependency** ([#301](https://github.com/CrowBe/agentbranch/issues/301);
-`docs/ARCHITECTURE.md` §10). What works: immutable runs written last,
-independent versioned grades with byte-for-byte grader snapshots, `--regrade`
-without rerunning the Runner, deterministic checkers before any judge, retained
-arbitrary artifacts, and infrastructure failures kept out of graded statistics
-(via a separate runs dir). What blocks adoption: smevals 0.2.0 has no native
-top-up sampling (our orchestrator implements top-up/resume in
-`scripts/smevals-poc.mjs`), `grade` grades every run including failed ones, and
-`build` only reads the eval's own `runs/` dir. The deterministic gate costs
-~1.2s cold `uvx` fetch, ~2.9s smoke, and ~4.4s for the full 36-sample top-up
-matrix on a dev machine. For [#302](https://github.com/CrowBe/agentbranch/issues/302)
-(scheduled, credential-holding), wrap smevals in our own top-up/resume/regrade
-orchestration and the immutable-evidence store of [#303](https://github.com/CrowBe/agentbranch/issues/303)
-rather than trusting its defaults.
+The conclusion the PoC exists to record is **borrow the contracts, keep smevals
+external, do not adopt it as a production dependency**
+([#301](https://github.com/CrowBe/agentbranch/issues/301);
+`docs/ARCHITECTURE.md` §10). The contracts worth borrowing are immutable runs
+written last, independent versioned grades with byte-for-byte grader snapshots,
+`--regrade` without rerunning the Runner, deterministic checkers before any
+judge, retained arbitrary artifacts, and infrastructure failures kept out of
+graded statistics.
+
+`scripts/smevals-poc.mjs` owns what the pinned release does not. `smevals==0.2.0`
+has no top-up sampling and grades every Run including failed ones, so the script
+runs its own round-based top-up across the Task/Config matrix, counts only
+successful Runs towards the target, and routes non-zero Runner exits to
+`.poc/runs-infra/` so they never reach graded statistics; `report` re-attaches
+them as a diagnostic appendix, which the tool cannot do itself because `build`
+reads only the eval's own `runs/` dir. Upstream `main` handles the sampling and
+the failed-Run distinction natively (`run -n`; failed Runs are never graded,
+are excluded from reports, and do not count towards an `-n` target), but no
+release carries it and a CI gate pins a release rather than an unreleased
+commit. That orchestration is deliberate and time-limited: it is carried until
+upstream cuts a release with native `-n`, and deleted in its favour then. For
+[#302](https://github.com/CrowBe/agentbranch/issues/302) (scheduled,
+credential-holding), smevals stays wrapped in that orchestration and the
+immutable-evidence store of
+[#303](https://github.com/CrowBe/agentbranch/issues/303) rather than trusted at
+its defaults.
 
 The storage boundary proven by that benchmark becomes a product seam in #303:
 immutable execution evidence holds the resolved agent configuration, harness

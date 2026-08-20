@@ -7,6 +7,12 @@
  * invocations are pinned to `uvx --from smevals==0.2.0 smevals` — nothing adds
  * smevals or Python to the production application manifest.
  *
+ * The round-based top-up (runMatrix/countSuccessfulRuns) and the separate
+ * infrastructure-runs dir exist because the pinned release has no `run -n` and
+ * grades failed runs. Upstream `main` does both natively, but a CI gate pins a
+ * release, not a commit — so this orchestration is carried until smevals cuts a
+ * release with native `-n`, then deleted in its favour. See ARCHITECTURE.md §10.
+ *
  * Subcommands (npm run poc:*):
  *   validate   static + executable contract checks (no model spend, offline)
  *   smoke      1 successful sample per (config, task) pair + crash retention

@@ -47,6 +47,9 @@ function taskKey(key) {
 }
 
 // Derive the config name from the run dir path: runs/<task>/<config>/<model>/<timestamp>.
+// Parsing the layout is the only option, not an oversight: smevals passes a Runner
+// SMEVALS_MODEL, SMEVALS_TASK, SMEVALS_PROMPT, SMEVALS_TASK_<KEY>, and SMEVALS_RUN_DIR,
+// but no SMEVALS_CONFIG — on the pinned 0.2.0 and on upstream main alike.
 const configName = basename(dirname(dirname(SMEVALS_RUN_DIR)));
 // This runner lives at eval/validation-harness/run-agentbranch.
 const evalDir = dirname(process.argv[1]);
