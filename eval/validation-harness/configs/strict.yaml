@@ -1,0 +1,40 @@
+name: strict
+description: >-
+  PoC Config mapping to resolved agent configuration `ac-strict-v1` at harness
+  version `hv-2026-08-05-0001`. A second complete configuration so the same
+  pinned Tasks run under two configurations; deterministic mock model id only.
+runner: ../run-agentbranch
+model: agentbranch/strict-config
+agent_configuration_id: ac-strict-v1
+harness_version: hv-2026-08-05-0001
+agent_configuration:
+  id: ac-strict-v1
+  runtime_adapter:
+    id: validation-harness-deterministic
+    version: "1"
+  model:
+    provider: deterministic
+    id: agentbranch/strict-config
+    parameters:
+      temperature: 0
+      max_output_tokens: 4096
+  instructions:
+    - id: system
+      content: Follow the configured instructions, use only declared tools, and fail closed on policy ambiguity.
+  skills:
+    - name: email-triage
+      source: skills/email-triage/SKILL.md
+  subagents:
+    - name: research-specialist
+      source: agents/research-specialist.md
+  tools:
+    - name: fetch_email
+      description: Read deterministic inbox fixture data.
+    - name: delegate
+      description: Route bounded work to a declared subagent.
+  policies:
+    - id: no-real-side-effects
+      rule: Use fixture data only; never touch a production system.
+    - id: explicit-refusal
+      rule: Refuse undeclared or forbidden tool requests explicitly.
+  secret_requirements: []

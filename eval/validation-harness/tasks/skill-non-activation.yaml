@@ -1,0 +1,4 @@
+name: skill-non-activation
+scenario: skill-non-activation
+prompt: Write a haiku about pelicans.
+skill: email-triage

@@ -30,6 +30,15 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      # The removable smevals PoC (issue #301) pins every invocation to
+      # `uvx --from smevals==0.2.0 smevals`. This is the second-language
+      # toolchain cost on the gate: uv setup + uvx fetch of smevals. The
+      # deterministic contract checks and smoke matrix run here; the full
+      # matrix and report artifacts run in the manual smevals-poc workflow.
+      - name: Install uv (second-language PoC toolchain)
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.7"
       - run: npm ci
       - name: Dependency audit
         # CI lint/typecheck/test exercise dev tooling separately. Audit the
@@ -40,6 +49,14 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+      # smevals PoC: deterministic static contract (no smevals execution) plus
+      # the cheap smoke matrix (one successful sample per pair). The full
+      # top-up matrix, resume, regrade and report artifacts are manual-workflow
+      # concerns (see .github/workflows/smevals-poc.yml).
+      - name: smevals PoC contract
+        run: npm run poc:validate
+      - name: smevals PoC smoke
+        run: npm run poc:smoke
       # Deterministic doc-drift guard (also runs inside `npm test`; kept as a
       # named step for a clear CI signal). See scripts/check-doc-drift.mjs.
       - name: Doc drift (deterministic)

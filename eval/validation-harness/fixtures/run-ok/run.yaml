@@ -1,0 +1,12 @@
+task:
+  name: skill-activation
+  scenario: skill-activation
+  prompt: Triage my inbox and summarise what needs attention today.
+  skill: email-triage
+config:
+  name: default
+  runner: /home/user/agentbranch/eval/validation-harness/run-agentbranch
+  model: agentbranch/default-config
+started: 2026-08-05T00:00:00.000Z
+duration_seconds: 0.01
+exit_code: 0

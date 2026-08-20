@@ -245,7 +245,7 @@ and set hashes are recorded per harness version behind
 `BenchmarkRunRepository`. All three surface
 only through the admin routes (below), gated by `isAdmin`.
 
-**Third-party harness benchmark (planned, #301–#303).** This is deliberately
+**Third-party harness benchmark (built as a removable PoC, [#301](https://github.com/CrowBe/agentbranch/issues/301)).** This is deliberately
 outside the production module graph. A pinned `smevals` development/CI tool
 drives repository-owned evaluation cases through a thin executable runner into the same
 runtime-adapter and provider-neutral trace seams used by whole-agent evaluation.
@@ -257,6 +257,33 @@ the harness version that produced the outcome. The external Task / Config / Run
 smoke/full execution, resume, regrade, and report operations to pinned scripts.
 No `smevals` package is imported by `src/`, and no external evaluator owns
 product persistence.
+
+The conclusion the PoC exists to record is **borrow the contracts, keep smevals
+external, do not adopt it as a production dependency**
+([#301](https://github.com/CrowBe/agentbranch/issues/301);
+`docs/ARCHITECTURE.md` §10). The contracts worth borrowing are immutable runs
+written last, independent versioned grades with byte-for-byte grader snapshots,
+`--regrade` without rerunning the Runner, deterministic checkers before any
+judge, retained arbitrary artifacts, and infrastructure failures kept out of
+graded statistics.
+
+`scripts/smevals-poc.mjs` owns what the pinned release does not. `smevals==0.2.0`
+has no top-up sampling and grades every Run including failed ones, so the script
+runs its own round-based top-up across the Task/Config matrix, counts only
+successful Runs towards the target, and routes non-zero Runner exits to
+`.poc/runs-infra/` so they never reach graded statistics; `report` re-attaches
+them as a diagnostic appendix, which the tool cannot do itself because `build`
+reads only the eval's own `runs/` dir. Upstream `main` handles the sampling and
+the failed-Run distinction natively (`run -n`; failed Runs are never graded,
+are excluded from reports, and do not count towards an `-n` target), but no
+release carries it and a CI gate pins a release rather than an unreleased
+commit. That orchestration is deliberate and time-limited: it is carried until
+upstream cuts a release with native `-n`, and deleted in its favour then. For
+[#302](https://github.com/CrowBe/agentbranch/issues/302) (scheduled,
+credential-holding), smevals stays wrapped in that orchestration and the
+immutable-evidence store of
+[#303](https://github.com/CrowBe/agentbranch/issues/303) rather than trusted at
+its defaults.
 
 The storage boundary proven by that benchmark becomes a product seam in #303:
 immutable execution evidence holds the resolved agent configuration, harness
@@ -620,6 +647,13 @@ npm run test:visual # browser-mode screenshot suite (baselines in __screenshots_
                     # refresh with test:visual:update)  — DESIGN.md §5.3
 npm run db:generate / db:push / db:migrate / db:seed # Prisma (needs DATABASE_URL)
 npm run tap:initial-release -- --repo <tap-checkout> # reviewed seed snapshot; add --fire only for the owner-run release
+npm run poc:validate # smevals PoC (issue #301): deterministic static contract, no smevals execution
+npm run poc:smoke # one successful sample per pair, graded; infra-failure runs retained, never graded
+npm run poc:full # top every Task/Config pair up to 3 successful samples (idempotent)
+npm run poc:resume # top up from on-disk runs; never duplicates completed samples
+npm run poc:regrade # regenerate grades from stored runs (--regrade); no Runner execution
+npm run poc:report # markdown report + infrastructure-failure appendix -> .poc/reports/validation-harness-report.md
+npm run poc:report:html # static HTML site -> .poc/reports/site/index.html
 ```
 
 - **Boots with no secrets.** Missing `DATABASE_URL` / Clerk keys / selected
