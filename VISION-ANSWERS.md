@@ -180,8 +180,9 @@ No hypothetical verdicts were recorded in this round; the identity itself was th
 
 Sixteen hypotheticals, sixteen recorded verdicts, no unanswered cards.
 
-## Open follow-up
+## Follow-up, resolved
 
-`CONTEXT.md`'s harness entry reserves the word for our side and explicitly forbids the
-user-side sense this vision depends on. Rewriting it to the meta-harness convention is the
-obvious next change and was left out of this pull request pending the author's call.
+H-12's naming decision landed in `CONTEXT.md` in the same change: bare **harness** is now the
+one under test, **meta-harness** is ours, both carry a Language entry, and the *Distinctions*
+rule states the two-axis reason. `docs/ARCHITECTURE.md` and `docs/MODULE_DESIGN.md` still use
+the old sense and are the remaining work.
