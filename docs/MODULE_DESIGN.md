@@ -211,7 +211,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **adversarial-safety-battery** | `adversarialSafetyBattery`, `adversarialTriggeringNegativePrompts`, `AdversarialCase` + types | — | real (curated, hash-pinned malicious/deceptive whole-folder fixtures across the §9.1 threat classes; freezes static policy expectations and documented latent non-detection) |
 | **task-outcome-corpus** | `taskOutcomeCorpus`, `taskOutcomeCorpusSetHash`, `TaskOutcomeCorpusEntry` | — | real (curated, provenance-bearing SMB workflow prompts with hash-pinned JSON-output expectations; readable offline) |
 | **harness-recommendation** | `harnessRecommendationCapability`, `CorpusCohort`, `HarnessRecommendationReport` + types | — | real (Tier-1 static correlation) |
-| **regression-benchmark** | `regressionBenchmarkSet`, its named dimension sets, `runRegressionBenchmark`, `runTaskOutcomeBenchmarkDimension`, `BenchmarkRun` + types | `BenchmarkRunRepository` | real; `responseSchema`, `toolContract`, and `safety` are deterministic and interval-free; `taskOutcome` is model-bearing and uses the shared versioned JSON-output grader |
+| **regression-benchmark** | `regressionBenchmarkSet`, its named dimension sets, `runRegressionBenchmark`, `runSafetyJudgeBenchmarkDimension`, `runTaskOutcomeBenchmarkDimension`, `BenchmarkRun` + types | `BenchmarkRunRepository` | real; `responseSchema`, `toolContract`, and `safety` are deterministic and interval-free; `safetyJudge` and `taskOutcome` are model-bearing — the judge runs `runSafetyReview` itself, the outcome dimension the shared versioned JSON-output grader |
 
 **Harness improvement loop (admin).** ARCHITECTURE §9 carries the design; the
 build spans three seams. The **aggregate read** is `listForAnalysis` on
@@ -224,13 +224,20 @@ rules) rides along as the static feature set. The **report** is the
 `harness-recommendation` module — an analysis capability whose `Input` is the
 corpus cohort. The **measurement guardrail** is the `regression-benchmark`
 module: the baseline corpus plus the response-schema, tool-contract, safety,
-and task-outcome corpora as independently hash-pinned frozen sets. Triggering is scored through
+safety-judge, and task-outcome corpora as independently hash-pinned frozen sets. Triggering is scored through
 the eval's competitive selection (`runBatteryCases`,
 candidate excluded from its own distractor field, `platform`-tagged) and
 three deterministic dimensions compare lint grade/finding codes or safety
-verdict/policy codes. The fourth named dimension, `taskOutcome`, makes
-platform-tagged model calls through the shared `runBatteryCases` JSON grader
-and fails `model_unavailable` honestly offline. It preserves attempts, passed
+verdict/policy codes. Two named dimensions are model-bearing and fail
+`model_unavailable` honestly offline. `taskOutcome` makes
+platform-tagged model calls through the shared `runBatteryCases` JSON grader.
+`safetyJudge` runs `runSafetyReview` itself — the layer that decides the safety
+badge, so the static `safety` dimension cannot stand in for it — over two
+cohorts: the adversarial battery, where a verdict passes at or above the
+expected severity, and the baseline corpus as benign controls, where it passes
+at or below, so over-blocking costs what it should. The latent-payload cases
+are observed and recorded but never scored, per §9.1's accepted residual. Both
+preserve attempts, passed
 attempts, pass rate, and the versioned full-precision Wilson 95% interval;
 method metadata pins attempts per case so configurations remain distinct,
 without effect language. All scores, method metadata,

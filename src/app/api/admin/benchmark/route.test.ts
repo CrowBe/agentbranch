@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BenchmarkRunId, HarnessVersionId, ok, UserId } from "@/shared";
-import { regressionBenchmarkSetHash } from "@/modules/regression-benchmark";
+import {
+  regressionBenchmarkSetHash,
+  safetyJudgeBenchmarkSetHash,
+} from "@/modules/regression-benchmark";
 import { GET, POST } from "./route";
 
 const currentIdentity = vi.fn();
@@ -34,7 +37,22 @@ beforeEach(() => {
     );
   // Always silent: negatives pass, positives fail — a deterministic half score.
   classify.mockReset().mockResolvedValue(ok({ choice: null, rationale: "silent" }));
-  generate.mockImplementation(async ({ prompt, schema }) => {
+  generate.mockImplementation(async ({ system, prompt, schema }) => {
+    // The safety judge runs live in the benchmark: a judge that finds nothing.
+    if (system.includes("security reviewer")) {
+      return ok(
+        schema.parse({
+          scores: ["injection", "exfiltration", "deception"].map((kind) => ({
+            class: kind,
+            score: 0.02,
+            rationale: "nothing found",
+          })),
+        }),
+      );
+    }
+    if (system.includes("explain a skill safety review result")) {
+      return ok(schema.parse({ verdict: "good", summary: "Reviewed.", findings: [], watch: [] }));
+    }
     const output = prompt.includes("Acme owes")
       ? { customer: "Acme", currency: "AUD", totalOutstanding: 2450, overdueInvoices: 2, priority: "high" }
       : prompt.includes("Jamie requests")
@@ -94,6 +112,12 @@ describe("benchmark route", () => {
     expect(recordRun).toHaveBeenCalledWith(
       expect.objectContaining({ harnessVersionId: "h1" }),
     );
+    // The badge's judge is scored live and recorded with the run.
+    expect(body.dimensions.safetyJudge).toMatchObject({
+      benchmarkSetHash: safetyJudgeBenchmarkSetHash,
+      method: { kind: "model", grader: "safety-verdict", method: "cohort-severity-bound" },
+    });
+    expect(body.dimensions.safetyJudge.cohorts["benign-control"].score).toBe(1);
   });
 
   it("POST fails 503 offline before any recording", async () => {

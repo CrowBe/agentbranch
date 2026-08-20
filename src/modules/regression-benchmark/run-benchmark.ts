@@ -33,6 +33,7 @@ import type {
   BenchmarkScore,
   BenchmarkSkillScore,
 } from "./benchmark.types";
+import { runSafetyJudgeBenchmarkDimension } from "./run-safety-judge-dimension";
 import { runTaskOutcomeBenchmarkDimension } from "./run-task-outcome-dimension";
 
 /**
@@ -95,6 +96,8 @@ export async function runRegressionBenchmark(
   );
   const totalAttempts = perSkill.reduce((sum, skill) => sum + skill.totalAttempts, 0);
   const passedAttempts = perSkill.reduce((sum, skill) => sum + skill.passedAttempts, 0);
+  const safetyJudge = await runSafetyJudgeBenchmarkDimension(gateway, options);
+  if (isErr(safetyJudge)) return safetyJudge;
   const taskOutcome = await runTaskOutcomeBenchmarkDimension(gateway, options);
   if (isErr(taskOutcome)) return taskOutcome;
   return ok({
@@ -122,6 +125,7 @@ export async function runRegressionBenchmark(
         (entry) => createToolContractLintReport(entry.source),
       ),
       safety: scoreSafetyDimension(),
+      safetyJudge: safetyJudge.value,
       taskOutcome: taskOutcome.value,
     },
   });

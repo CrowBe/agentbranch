@@ -7,7 +7,7 @@
  * ground. Admin-only, `platform`-tagged; not a capability on the seam — it
  * scores the seam's triggering eval from outside.
  */
-export type { BenchmarkEntry } from "./benchmark-set";
+export type { BenchmarkEntry, SafetyJudgeBenchmarkEntry } from "./benchmark-set";
 export {
   regressionBenchmarkSet,
   regressionBenchmarkSetHash,
@@ -17,6 +17,8 @@ export {
   toolContractBenchmarkSetHash,
   safetyBenchmarkSet,
   safetyBenchmarkSetHash,
+  safetyJudgeBenchmarkSet,
+  safetyJudgeBenchmarkSetHash,
   canonicalBenchmarkCase,
 } from "./benchmark-set";
 export type {
@@ -25,8 +27,15 @@ export type {
   BenchmarkRun,
   BenchmarkScore,
   BenchmarkSkillScore,
+  SafetyJudgeBenchmarkDimensionScore,
+  SafetyJudgeCohort,
+  SafetyJudgeCohortScore,
+  SafetyJudgeEntryScore,
+  SafetyJudgeNonDetection,
+  SafetyJudgeObservation,
   TaskOutcomeBenchmarkDimensionScore,
 } from "./benchmark.types";
 export type { BenchmarkRunRepository } from "./benchmark.repository";
 export { runRegressionBenchmark } from "./run-benchmark";
+export { runSafetyJudgeBenchmarkDimension } from "./run-safety-judge-dimension";
 export { runTaskOutcomeBenchmarkDimension } from "./run-task-outcome-dimension";
