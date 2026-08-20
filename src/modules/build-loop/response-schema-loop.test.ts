@@ -100,7 +100,7 @@ describe("response-schema authoring prompt", () => {
 
   it("uses approved domain language throughout", () => {
     // "composable" may appear only inside the instruction that bans it —
-    // the same shape the skill prompt carries (CONTEXT.md).
+    // the same shape the skill prompt carries (GLOSSARY.md).
     const withoutBanInstruction = content.replace('not "composable"', "");
     expect(withoutBanInstruction).not.toMatch(/\bcomposable\b/i);
     expect(content).not.toMatch(/\bsandbox\b/i);

@@ -71,7 +71,7 @@ export type TranscriptStep =
 
 /**
  * The test run's **evaluation result** — the run-record Artifact on the seam
- * (CONTEXT.md → Evaluation result). The transcript of what the skill did against
+ * (GLOSSARY.md → Evaluation result). The transcript of what the skill did against
  * the mock-tool registry. Ephemeral; renders to Insights (step d). Distinct from
  * the persisted `TestRun` record below (split is step e).
  */
@@ -80,7 +80,7 @@ export type TestRunResult = Artifact<"test-run"> & {
   readonly transcript: readonly TranscriptStep[];
   /** Per-contract call validation when the input was a bundle; empty otherwise. */
   readonly contractChecks: readonly ContractCheck[];
-  /** The model-written interpretation (CONTEXT.md → Insight); renders to Insights. */
+  /** The model-written interpretation (GLOSSARY.md → Insight); renders to Insights. */
   readonly insight: Insight;
 };
 

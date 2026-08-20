@@ -69,7 +69,7 @@ export type EvaluationComparisonMetadata = {
 
 /**
  * The triggering eval's **evaluation result** — the run-record Artifact on the
- * seam (CONTEXT.md → Evaluation result). Ephemeral; renders to Insights (step
+ * seam (GLOSSARY.md → Evaluation result). Ephemeral; renders to Insights (step
  * d). Distinct from the persisted `EvalRun` record below (split is step e).
  */
 export type TriggeringResult = Artifact<"triggering-eval"> & {
@@ -80,7 +80,7 @@ export type TriggeringResult = Artifact<"triggering-eval"> & {
   readonly passedAttempts: number;
   /** Absent on legacy runs and non-selection graders, which are incomparable. */
   readonly comparisonMetadata?: EvaluationComparisonMetadata;
-  /** The model-written interpretation (CONTEXT.md → Insight); renders to Insights. */
+  /** The model-written interpretation (GLOSSARY.md → Insight); renders to Insights. */
   readonly insight: Insight;
 };
 

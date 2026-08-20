@@ -35,7 +35,7 @@ export type ArtifactKind =
   | "harness-recommendation";
 
 /**
- * The plain-language interpretation of an Evaluation result (CONTEXT.md →
+ * The plain-language interpretation of an Evaluation result (GLOSSARY.md →
  * Insight). The evaluator produces this via `gateway.generate` *after* its raw
  * run and stores it on the result; the Insights renderer (pure) shapes it for
  * display. This is the seam's interpretation layer — shared by every evaluation
@@ -118,7 +118,7 @@ export type EvaluationOutcome<A extends Artifact, Body> = {
  * Step one of an EVALUATION capability: run the input through a model and emit
  * a structured result. Owns its *method* — it builds its own conditions
  * (scenario / distractors / battery) — but is handed its *resource*: model
- * access, via the `gateway` (CONTEXT.md → Model gateway). The evaluator composes
+ * access, via the `gateway` (GLOSSARY.md → Model gateway). The evaluator composes
  * its method from the gateway's fine primitives (`classify` / `runAgent`); it
  * never touches the raw model, the key, or token accounting. Fails
  * `model_unavailable` when the gateway has no model; that guard lives once in

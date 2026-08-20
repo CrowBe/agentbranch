@@ -7,12 +7,12 @@ export const CONCEPT_GLOSSARY_TERMS = [
 
 export type ConceptGlossaryTerm = (typeof CONCEPT_GLOSSARY_TERMS)[number];
 
-/** Reviewed definitions copied verbatim from CONTEXT.md. Concept-context
+/** Reviewed definitions copied verbatim from GLOSSARY.md. Concept-context
  * envelopes validate against this map so "reviewed evidence" is a closed,
  * repo-tracked claim rather than caller-supplied prose. */
 export const CONCEPT_GLOSSARY: Readonly<Record<ConceptGlossaryTerm, string>> = {
   Skill:
-    "The product's unit of work — a reusable, instruction-only instruction set for a Claude agent. No bundled runnable code.",
+    "The most common primitive in a harness, and the product's entry rung — a reusable, instruction-only instruction set for a Claude agent. No bundled runnable code.",
   "Response schema":
     "The first equipment primitive beyond Skill (§9.2) — a structured output definition, authored as a JSON Schema document. Lossless source model + pure offline lint; its schema subset validates tool-contract examples and test-run calls.",
   "Tool contract":
@@ -22,7 +22,7 @@ export const CONCEPT_GLOSSARY: Readonly<Record<ConceptGlossaryTerm, string>> = {
 };
 
 export type ConceptCitation = {
-  readonly source: "CONTEXT.md" | "docs/ARCHITECTURE.md";
+  readonly source: "GLOSSARY.md" | "docs/ARCHITECTURE.md";
   readonly section: string;
 };
 
@@ -67,7 +67,7 @@ export type Concept = (DefinitionConcept | DecisionAidConcept) & {
 type ConceptSeed = DefinitionConcept | DecisionAidConcept;
 
 const glossaryCitation = (term: ConceptGlossaryTerm): ConceptCitation => ({
-  source: "CONTEXT.md",
+  source: "GLOSSARY.md",
   section: `**${term}**:`,
 });
 
@@ -150,13 +150,13 @@ const seeds = [
 ] as const satisfies readonly ConceptSeed[];
 
 const contentHashes = {
-  skill: "713374466b24b9d7b3b6701358da888493b78c4bee898d7c14d0c949f4f51aa8",
-  "response-schema": "291a656a58b7417a469291e7343c9acf2f6db35c14dd68548797e2cc1d439eeb",
-  "tool-contract": "49433f3639b7ed448eaf90993b7374ff49d59f312cac307402445d5a0f26ef19",
+  skill: "95e1c8e5b40636d546d44b9f4793e7bdd2ae11f3bf82eba7b45ebe5afe9249fd",
+  "response-schema": "4c64bad10cf7738374877168670c06cac0913099d6dfad7b70be0c837334a15d",
+  "tool-contract": "378e141c9de49e73ecf62d2400dbf0b5422bf12089b82ac4c11dd051064fa547",
   "subagent-definition":
-    "b2de352a19059164111b907eb8044241470892150630d7e8c716f04388471039",
+    "4f4fc47e0a9f82315045e87f1118986b2db08c99fe2763297713413bb48dcf69",
   "equipment-primitive-decision":
-    "3971cb6ff77e44962183099ca9325e5e06bb50fb57aa652dcb7e2fba6c9ecb0f",
+    "53dca5cc652eb1caf968ac4ddd986f506591aa2a04baa0ffaaa0f5e834043d58",
 } as const satisfies Readonly<Record<(typeof seeds)[number]["id"], string>>;
 
 export const conceptLibrary: readonly Concept[] = seeds.map((seed) => ({

@@ -5,7 +5,7 @@ import type { Result, DomainError, UserId } from "@/shared";
 
 /**
  * Who pays for a model call. The *caller* declares this on every call, because
- * only the caller knows *why* it is spending (CONTEXT.md → Accounting tag):
+ * only the caller knows *why* it is spending (GLOSSARY.md → Accounting tag):
  *
  * - `account`  — user-attributable work, subject to tier policy (the build
  *   loop's turns, a user's triggering eval). Runs through the usage authority.
@@ -116,7 +116,7 @@ export type GenerateInput<T> = {
 };
 
 /**
- * The platform's single, controlled entry to the model (CONTEXT.md → Model
+ * The platform's single, controlled entry to the model (GLOSSARY.md → Model
  * gateway). Pure *mechanism*: it owns the key + AI-SDK plumbing and exposes fine
  * intent-level primitives that callers compose into their own method. It knows
  * nothing about "selection", "scenario", a build turn, or any capability kind.

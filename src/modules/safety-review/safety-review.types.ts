@@ -24,7 +24,7 @@ export type SafetyReviewInput = {
   readonly referenceFiles?: readonly SafetyReviewReferenceFile[];
   /**
    * Who pays for the review — declared by the caller because only it knows why
-   * it is spending (CONTEXT.md → Accounting tag). The user's opt-in safety
+   * it is spending (GLOSSARY.md → Accounting tag). The user's opt-in safety
    * rating passes `account` (capability `safety-review`, tier policy applies);
    * the publication gate (ARCHITECTURE §9.1) passes `platform`.
    */

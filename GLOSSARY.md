@@ -9,7 +9,7 @@ rationale. Keep definitions there, not here.
 ## Language
 
 **Skill**:
-The product's unit of work — a reusable, instruction-only instruction set for a Claude agent. No bundled runnable code.
+The most common primitive in a harness, and the product's entry rung — a reusable, instruction-only instruction set for a Claude agent. No bundled runnable code.
 _Avoid_: prompt, agent, bot, automation
 
 **`SKILL.md`**:

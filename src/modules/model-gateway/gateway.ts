@@ -44,7 +44,7 @@ type Admission = {
 
 /**
  * The domain accounting shell over the raw model-calls port (#160) — the
- * platform's single metered entry to the model (CONTEXT.md → Model gateway).
+ * platform's single metered entry to the model (GLOSSARY.md → Model gateway).
  * Admission (free quota, request rate limit, byte budget) and token + cost
  * recording live *here*, applied to every `RawModelCalls` adapter by
  * construction; the adapter owns SDK translation only. The shell resolves the
@@ -52,7 +52,7 @@ type Admission = {
  * keeps working) and depends on the **usage** authority for policy — the
  * gateway is mechanism, usage is policy.
  *
- * v1 accounting (CONTEXT.md → v1 accounting behaviour): `account` calls run
+ * v1 accounting (GLOSSARY.md → v1 accounting behaviour): `account` calls run
  * `checkQuota` before spending and record tokens (priced at record time)
  * after; the `platform` cost ledger is deferred — that tag is carried and
  * otherwise no-op.
@@ -92,7 +92,7 @@ export function createModelGateway(deps: {
       // One admission question, capability-blind: is there quota left
       // (ARCHITECTURE §8). The capability on the tag still scopes the request
       // rate limit below and cost attribution — the gateway forwards it and
-      // never names an evaluation kind itself (CONTEXT.md → Model gateway).
+      // never names an evaluation kind itself (GLOSSARY.md → Model gateway).
       const decision = checkQuota(snapshot.value);
       if (!decision.allowed) {
         return err(domainError("cap_reached", decision.reason));

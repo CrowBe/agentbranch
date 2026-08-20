@@ -6,15 +6,19 @@ description: Operate the removable validation-harness smevals PoC (issue #301) �
 # Validation-harness smevals PoC (issue #301)
 
 The repository carries a removable, offline-safe proof of concept that evaluates
-AgentBranch's validation-harness behaviour through the pinned third-party
+AgentBranch's own meta-harness behaviour through the pinned third-party
 orchestrator `smevals==0.2.0`. All orchestration lives in
 `scripts/smevals-poc.mjs`; this skill only names the supported operator path.
 
 ## Invariants (from the canonical docs)
 
-- **Harness** always means AgentBranch's versioned validation harness
-  (`harness_versions`) — never the model gateway, never a user's imported setup
-  (that is an **agent configuration**). See `CONTEXT.md` → *Distinctions*.
+- **Meta-harness** is what this PoC grades — AgentBranch's own versioned set of
+  prompts, rules, generators, batteries and judges (`harness_versions`). Bare
+  **harness** means the layer under test, the one a user brings us; what we
+  persist when a whole one is imported is an **agent configuration**. Neither is
+  the model gateway. The `eval/validation-harness/` path and the `harness_*`
+  schema names predate the term and keep the bare word; prose does not. See
+  `GLOSSARY.md` → *Distinctions*.
 - smevals Task / Config / Run / Grade vocabulary stays inside
   `eval/validation-harness/` and this skill. It never enters product modules.
 - The evaluator sits outside the loop it judges (`docs/ARCHITECTURE.md` §10):
