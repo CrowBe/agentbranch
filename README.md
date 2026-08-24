@@ -21,6 +21,8 @@ agent.branch closes that gap. Most tools stop at editing — here a skill leaves
 
 You can also **bring in what you already have**, at whatever size it comes in: one building block (a skill, an output shape, a tool contract, a specialist definition), a few that work together, or a whole agent setup as an archive — which is read, shown to you in full with any secrets stripped out, and saved only once you say so.
 
+**Why it exists:** [`VISION.md`](VISION.md) is the durable statement of what agent.branch is for and what it deliberately is not — the tiebreaker when a scoping question turns out to be a question about product identity. [`VISION-ANSWERS.md`](VISION-ANSWERS.md) records the reasoning behind it: the stress-test hypotheticals and the verdicts they produced. Read both before re-opening a settled question.
+
 ## Who it's for
 
 Two kinds of people, one tool:

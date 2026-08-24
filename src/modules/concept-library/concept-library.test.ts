@@ -48,8 +48,8 @@ describe("concept library", () => {
     }
   });
 
-  it("uses only glossary terms that exist verbatim in CONTEXT.md", () => {
-    const context = readFileSync(resolve(root, "CONTEXT.md"), "utf8");
+  it("uses only glossary terms that exist verbatim in GLOSSARY.md", () => {
+    const context = readFileSync(resolve(root, "GLOSSARY.md"), "utf8");
 
     for (const term of CONCEPT_GLOSSARY_TERMS) {
       expect(context).toContain(`**${term}**:`);
@@ -63,8 +63,8 @@ describe("concept library", () => {
     }
   });
 
-  it("keeps the reviewed glossary definitions verbatim with CONTEXT.md", () => {
-    const context = readFileSync(resolve(root, "CONTEXT.md"), "utf8");
+  it("keeps the reviewed glossary definitions verbatim with GLOSSARY.md", () => {
+    const context = readFileSync(resolve(root, "GLOSSARY.md"), "utf8");
     for (const term of CONCEPT_GLOSSARY_TERMS) {
       const marker = `**${term}**:\n`;
       const start = context.indexOf(marker);

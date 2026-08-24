@@ -146,7 +146,7 @@ describe("concept", () => {
     },
     distinction: {
       text: "These primitives compose without replacing each other.",
-      citations: [{ source: "CONTEXT.md" as const, section: "Equipment" }] as const,
+      citations: [{ source: "GLOSSARY.md" as const, section: "Equipment" }] as const,
     },
     options: [
       ["Skill", "Use for reusable instructions, workflow, and judgement."],
@@ -157,7 +157,7 @@ describe("concept", () => {
       term: term as "Skill" | "Response schema" | "Tool contract" | "Subagent definition",
       useWhen: {
         text: text!,
-        citations: [{ source: "CONTEXT.md" as const, section: term! }] as const,
+        citations: [{ source: "GLOSSARY.md" as const, section: term! }] as const,
       },
     })),
   };

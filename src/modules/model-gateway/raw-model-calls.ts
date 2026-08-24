@@ -68,7 +68,7 @@ export type RawAgentStream = {
 
 /**
  * Raw model-calls port — *unmetered* model access, one method per gateway
- * primitive (CONTEXT.md → Model gateway; #160). The infra adapter owns SDK
+ * primitive (GLOSSARY.md → Model gateway; #160). The infra adapter owns SDK
  * translation only: message/tool mapping, stream-part mapping, token-usage
  * shape reading, provider cap-error detection. Everything about *whether* a
  * call may happen and *who pays* lives above this port, in the accounting

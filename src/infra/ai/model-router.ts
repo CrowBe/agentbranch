@@ -25,7 +25,7 @@ export type ServerKey = { readonly apiKey?: string; readonly baseUrl?: string };
 
 /**
  * The model router adapter — the platform's provider/model selection authority
- * (CONTEXT.md → Model router). It holds the registry, the server-pool keys, and
+ * (GLOSSARY.md → Model router). It holds the registry, the server-pool keys, and
  * the runtime-mutable state (active selection + bring-your-own overrides), and
  * builds AI-SDK providers on demand. The model gateway consumes it for a
  * `LanguageModel` per call; the model-console route drives its mutators.

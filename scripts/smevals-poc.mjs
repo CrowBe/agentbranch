@@ -23,8 +23,8 @@
  *   build      static HTML report site into .poc/reports/site
  *
  * smevals vocabulary (Task / Config / Run / Grade) stays inside this PoC. The
- * production terms it maps to are: agent configuration and validation harness
- * (CONTEXT.md → Distinctions), and the provider-neutral trace envelope
+ * production terms it maps to are: agent configuration and meta-harness version
+ * (GLOSSARY.md → Distinctions), and the provider-neutral trace envelope
  * (TranscriptStep in src/modules/test-run).
  */
 import { execFileSync, spawnSync } from "node:child_process";

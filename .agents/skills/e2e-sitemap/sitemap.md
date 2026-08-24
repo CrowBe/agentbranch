@@ -382,7 +382,7 @@ Screenshot each nav mode's panel plus the hero in both views, and judge:
 
 - **Domain language** — glossary terms only in user copy: "test run" never
   "sandbox", "draft" never "branch", "Set as main version" never "promote"
-  (CONTEXT.md).
+  (GLOSSARY.md).
 - **Tone** — warm-pro, sentence case, no data walls (DESIGN §1); numbers are
   always accompanied by meaning.
 - **Empty states** — every mode's empty state says what to do next, not just

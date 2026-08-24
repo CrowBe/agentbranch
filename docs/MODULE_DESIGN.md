@@ -147,7 +147,7 @@ throughout.
 | Effective configuration | analysis | `effective-configuration` | imported snapshot + runtime-adapter resolution rules → typed runtime-neutral graph, effective-component answers, and explicit structural findings (pure) | `outline` | real, accessible outline/table source of truth |
 | Test run | evaluation | `test-run` | composes `gateway.runAgent` + mock-tool registry over a `TestRunInput` bundle; contracts drive the mocks + per-call validation | `insights`, `breakdown` | run + world generation real (scenario + mock tools generated, cached); contract-driven mocks + checks real; email mock = offline fallback |
 | Triggering eval | evaluation | `triggering-eval` | closed case union: selection composes `gateway.classify` over the field; JSON-output composes `gateway.generate` then validates offline; either may repeat by an odd attempt count (1–9) and decide by strict majority | `insights`, `breakdown` | run + battery generation real (cached); distractor library a static v1 seed; case ids are content-derived, attempt failures abort atomically, and no judge-model grader is used |
-| Harness recommendation | analysis | `harness-recommendation` | Tier-1 correlation over independent eval-run cohorts (fired lint rules × eval failures), with 95% Newcombe/Wilson difference intervals and explicit no-evidence outcomes | `report` | real; reconstructible cohort counts + run ids; the first capability whose `Input` is not a `Skill` |
+| Meta-harness recommendation | analysis | `harness-recommendation` | Tier-1 correlation over independent eval-run cohorts (fired lint rules × eval failures), with 95% Newcombe/Wilson difference intervals and explicit no-evidence outcomes | `report` | real; reconstructible cohort counts + run ids; the first capability whose `Input` is not a `Skill` |
 
 Run an analysis: `runCapability(heroCapability, "rendered", skill)` →
 `Result<RenderedDoc, DomainError>`. Run an evaluation:
@@ -156,8 +156,8 @@ Run an analysis: `runCapability(heroCapability, "rendered", skill)` →
 The outcome carries the raw Evaluation result alongside the rendered surface —
 recording and eval feedback need the artifact, and handing it back here is what
 keeps callers on this interface instead of reaching for the evaluator. The seam
-stays persistence-free (a result is *ephemeral* here, CONTEXT.md); the
-choreography around a production run — pin the version, stamp the harness
+stays persistence-free (a result is *ephemeral* here, GLOSSARY.md); the
+choreography around a production run — pin the version, stamp the meta-harness
 version, record the Evaluation record, shape the HTTP response — lives once in
 the server's recorded-evaluation driver (`src/server/evaluation-run.ts`, §4).
 
@@ -196,7 +196,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **tool-contract** | `toolContractCapability`, `parseToolContract`, `serializeToolContract`, `toolContractRenderedRenderer`, `toolContractSourceRenderer` + types | — | real (second equipment primitive: lossless source model + pure lint + Rendered/Source hero views; I/O `$ref`s response schemas) |
 | **equipment** | `EQUIPMENT_COUNT_MAX`, `EQUIPMENT_CAP_MESSAGE`, `Equipment`, `EquipmentKind`, `EquipmentRepository`, `SaveEquipmentInput` | `EquipmentRepository` | real (account-scoped saved equipment; upsert-by-kind/name with content hash and structural cap) |
 | **subagent-definition** | `subagentDefinitionCapability`, `parseSubagentDefinition`, `serializeSubagentDefinition`, `createSubagentDefinitionLintReport`, `subagentDefinitionLintAnalyzer`, `SUBAGENT_DEFINITION_LINT_RULESET_VERSION`, `renderSubagentDefinition`, `renderSubagentDefinitionSource`, `subagentDefinitionInsightsRenderer`, `subagentDefinitionBreakdownRenderer` + types | — | real (third equipment primitive: lossless frontmatter + body source model, pure delegation-quality lint, and seam renderers; no execution or routing) |
-| **concept-library** | `conceptLibrary`, `CONCEPT_GLOSSARY`, `CONCEPT_GLOSSARY_TERMS`, `Concept`, `DefinitionConcept`, `DecisionAidConcept`, `ConceptClaim`, `ConceptCitation` + types | — | real (repo-tracked, content-hashed thin concept kernels; every bounded claim cites a primary source and glossary terms and reviewed definitions are checked verbatim against `CONTEXT.md`) |
+| **concept-library** | `conceptLibrary`, `CONCEPT_GLOSSARY`, `CONCEPT_GLOSSARY_TERMS`, `Concept`, `DefinitionConcept`, `DecisionAidConcept`, `ConceptClaim`, `ConceptCitation` + types | — | real (repo-tracked, content-hashed thin concept kernels; every bounded claim cites a primary source and glossary terms and reviewed definitions are checked verbatim against `GLOSSARY.md`) |
 | **import** | `IMPORT_TIERS`, `ImportTier`, `ImportPrimitiveKind`, `ImportClassification`, `classifyImportDocument`, `readableKind`, `SkillImportFetcher`, `SkillImportFetchError` | `SkillImportFetcher` | real (the import ladder's shape + the pure primitive classifier, which defers to each primitive's own source model and reports competing readings rather than guessing) + the GitHub fetch port |
 | **portability** | `portabilityCapability`, `runCrossRuntimeValidation`, runtime-target/result types | — | real cross-runtime validation engine — **but nothing imports it**: no route, no server driver, no component. Built and tested, unreachable from `src/app` (ARCHITECTURE §5.9) |
 | **build-loop** | `runBuildLoop`, `buildTools`, `BuildToolName`, `BuildLoopEvent`, `formatConceptContext`, `isConceptContextMessage`, `ConceptGlossary`, `formatTestRunFeedback`, `formatTriggeringEvalFeedback`, `runResponseSchemaLoop`, `responseSchemaTools`, `RESPONSE_SCHEMA_AUTHORING_PROMPT`, `formatResponseSchemaLintFeedback` | — (consumes `ModelGateway`) | real (concept interrogation is a pure, closed evidence formatter; canonical-envelope validation requires byte-equality with repo-tracked concept claims, citations, options, content hash, and glossary definitions before write/edit tools are withheld) |
@@ -213,7 +213,7 @@ interface (marked `STUB` in-file) · **port** = interface only.
 | **harness-recommendation** | `harnessRecommendationCapability`, `CorpusCohort`, `HarnessRecommendationReport` + types | — | real (Tier-1 static correlation) |
 | **regression-benchmark** | `regressionBenchmarkSet`, its named dimension sets, `runRegressionBenchmark`, `runSafetyJudgeBenchmarkDimension`, `runTaskOutcomeBenchmarkDimension`, `BenchmarkRun` + types | `BenchmarkRunRepository` | real; `responseSchema`, `toolContract`, and `safety` are deterministic and interval-free; `safetyJudge` and `taskOutcome` are model-bearing — the judge runs `runSafetyReview` itself, the outcome dimension the shared versioned JSON-output grader |
 
-**Harness improvement loop (admin).** ARCHITECTURE §9 carries the design; the
+**Meta-harness improvement loop (admin).** ARCHITECTURE §9 carries the design; the
 build spans three seams. The **aggregate read** is `listForAnalysis` on
 `EvalRunRepository` / `TestRunRepository` — the one read on those ports not
 scoped to a user, implemented in both Prisma and memory adapters against a
@@ -241,17 +241,17 @@ preserve attempts, passed
 attempts, pass rate, and the versioned full-precision Wilson 95% interval;
 method metadata pins attempts per case so configurations remain distinct,
 without effect language. All scores, method metadata,
-and set hashes are recorded per harness version behind
+and set hashes are recorded per meta-harness version behind
 `BenchmarkRunRepository`. All three surface
 only through the admin routes (below), gated by `isAdmin`.
 
-**Third-party harness benchmark (built as a removable PoC, [#301](https://github.com/CrowBe/agentbranch/issues/301)).** This is deliberately
+**Third-party meta-harness benchmark (built as a removable PoC, [#301](https://github.com/CrowBe/agentbranch/issues/301)).** This is deliberately
 outside the production module graph. A pinned `smevals` development/CI tool
 drives repository-owned evaluation cases through a thin executable runner into the same
 runtime-adapter and provider-neutral trace seams used by whole-agent evaluation.
 Inside the removable PoC, a smevals `Config` maps explicitly to AgentBranch's
 two existing attribution axes: the complete resolved agent configuration and
-the harness version that produced the outcome. The external Task / Config / Run
+the meta-harness version that produced the outcome. The external Task / Config / Run
 / Grade vocabulary does not enter product modules. A checked-in skill under
 `.agents/skills/` is the human/agent operator surface; it delegates validation,
 smoke/full execution, resume, regrade, and report operations to pinned scripts.
@@ -286,7 +286,7 @@ immutable-evidence store of
 its defaults.
 
 The storage boundary proven by that benchmark becomes a product seam in #303:
-immutable execution evidence holds the resolved agent configuration, harness
+immutable execution evidence holds the resolved agent configuration, meta-harness
 version, provider-neutral trace, output, artifacts, timing, usage/cost, and
 completion status; one or more versioned evaluation results interpret it later.
 Infrastructure failure, cancellation, and grader
@@ -400,7 +400,7 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
 - `evaluation-run.ts` — `evaluationResponse({kind, surface, sse, skill, pin, deps})`:
   the recorded-evaluation driver the evaluation routes share. Runs the seam's
   `runEvaluation`, then the persistence choreography — resolve the pinned
-  version, stamp the harness version, record via a kind-keyed dispatch
+  version, stamp the meta-harness version, record via a kind-keyed dispatch
   (`test-run` → `TestRunRepository`, `triggering-eval` → `EvalRunRepository`,
   `safety-review` → `SafetyRatingRepository`, exhaustively checked) — and
   shapes the response: 503 offline *before* any stream opens, SSE (observer
@@ -522,13 +522,13 @@ they become chat-buildable (ARCHITECTURE §9.2 order).
   helper.
 - `app/api/admin/harness-report/route.ts` — **admin-gated** (same gate): GET
   assembles the corpus cohort from the two `listForAnalysis` reads and renders
-  the harness-recommendation report. Offline-safe (static correlation);
+  the `harness-recommendation` report. Offline-safe (static correlation);
   `?limit=` / `?since=` bound the cohort; the response carries
   outcomes/features, never skill or prompt content.
 - `app/api/admin/benchmark/route.ts` — **admin-gated** (same gate): GET the
-  score-over-harness-versions view of recorded benchmark runs; POST scores the
-  frozen set now (`platform`-tagged spend) and records the run pinned to the
-  current harness version. 503 offline, like every evaluation surface.
+  score-over-meta-harness-versions view of recorded benchmark runs; POST scores
+  the frozen set now (`platform`-tagged spend) and records the run pinned to the
+  current meta-harness version. 503 offline, like every evaluation surface.
 - `app/layout.tsx` — next/font + conditional `ClerkProvider`; `globals.css`
   holds the DESIGN tokens as CSS variables; `proxy.ts` is Clerk/passthrough.
 - `components/` — `app-shell`, `top-bar`, `side-rail`, `hero-panel`,

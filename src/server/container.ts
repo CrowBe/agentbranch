@@ -136,7 +136,7 @@ export function getContainer(): AppContainer {
   // the domain accounting shell over the raw SDK-translation adapter (#160).
   // It resolves through the router, so `hasModel` reflects the active selection
   // and an unconfigured router fails cleanly with `model_unavailable`
-  // (CONTEXT.md → Model gateway) — no separate offline stub needed.
+  // (GLOSSARY.md → Model gateway) — no separate offline stub needed.
   const modelGateway: ModelGateway = createModelGateway({
     router: modelRouter,
     calls: createDispatchingModelCalls({

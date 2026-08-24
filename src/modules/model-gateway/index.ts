@@ -1,6 +1,6 @@
 /**
  * model-gateway — the platform's single, controlled entry to the model
- * (CONTEXT.md → Model gateway; ARCHITECTURE §3, §4).
+ * (GLOSSARY.md → Model gateway; ARCHITECTURE §3, §4).
  *
  * Pure *mechanism*: exposes the fine intent-level primitives `classify` /
  * `runAgent` / `streamAgent` / `generate`. Callers compose their own *method*

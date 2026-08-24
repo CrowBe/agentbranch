@@ -4,7 +4,7 @@ Calibration material for `VISION.md`. Keep it next to the vision: the verdicts h
 the vision reads the way it does, and they are the record to check a future change against.
 
 Produced by the `/vision` skill against 167 merged pull requests, `docs/ARCHITECTURE.md`,
-`docs/DESIGN.md`, `CONTEXT.md` and `README.md`.
+`docs/DESIGN.md`, `GLOSSARY.md` and `README.md`.
 
 ## Round 1 - from-scratch draft (2026-08-20)
 
@@ -40,7 +40,7 @@ No hypothetical verdicts were recorded in this round; the identity itself was th
 - **The evaluator sits outside the loop it judges** retitled **The human is the loop's gate**
   and given the line "the system may propose, measure, rank and explain, and a person
   accepts", so self-improvement is stated as the goal and the human as its safety property.
-- Scope gained the word-collision line. This is a live conflict with `CONTEXT.md`, which
+- Scope gained the word-collision line. This is a live conflict with `GLOSSARY.md`, which
   reserves "harness" for our side only and forbids the user-side sense - carried into the
   board as H-12.
 - Closing tests rewritten around assembled harnesses, a human holding the gate, and "a bigger
@@ -81,7 +81,7 @@ No hypothetical verdicts were recorded in this round; the identity itself was th
   judge and the judged makes neither axis mean anything."
 - H-12 was rewritten to put the remaining choice on the board: adopt `meta-harness` as a
   distinct noun for our side (In vision), or keep qualification (Off mission). Either verdict
-  requires rewriting `CONTEXT.md`'s harness entry, which currently forbids the user-side sense
+  requires rewriting `GLOSSARY.md`'s harness entry, which currently forbids the user-side sense
   the vision now depends on.
 
 ### Changelog - round 3, H-1 to H-4 folded in
@@ -134,7 +134,7 @@ No hypothetical verdicts were recorded in this round; the identity itself was th
   sustained execution under real context pressure rather than a handful of turns, and that cost
   is the price of claiming those subjects at all."
 - H-12 (Conditional, leaning meta-harness) -> applied. Bare **harness** now means the one under
-  test; **meta-harness** is ours. Scope carries the rule and the reason. `CONTEXT.md`'s harness
+  test; **meta-harness** is ours. Scope carries the rule and the reason. `GLOSSARY.md`'s harness
   entry still says the opposite and needs rewriting to match.
 
 ## Round 4 - follow-ups the answers opened
@@ -182,7 +182,7 @@ Sixteen hypotheticals, sixteen recorded verdicts, no unanswered cards.
 
 ## Follow-up, resolved
 
-H-12's naming decision landed in `CONTEXT.md` in the same change: bare **harness** is now the
+H-12's naming decision landed in `GLOSSARY.md` in the same change: bare **harness** is now the
 one under test, **meta-harness** is ours, both carry a Language entry, and the *Distinctions*
 rule states the two-axis reason. `docs/ARCHITECTURE.md` and `docs/MODULE_DESIGN.md` still use
 the old sense and are the remaining work.
